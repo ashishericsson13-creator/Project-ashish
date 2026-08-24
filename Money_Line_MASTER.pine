@@ -57,12 +57,43 @@
 //   95.44. Solving both lines against the same ATR puts that reference's
 //   implied short multiplier at 1.36–1.66; at 1.5 this script's trigger lands
 //   on 96.36, which is the same call.
-//   So atrMultS now defaults to 1.5 while atrMultL stays at 3.0. An exit and an
+//   So atrMultS now defaults to 2.0 while atrMultL stays at 3.0. An exit and an
 //   entry are different objects and do not share a distance. The BUY TRIGGER
 //   row also quotes the gap in ATR units now and flags it beyond 2.5 ATR, so
 //   an unreachable trigger cannot sit there looking like a normal reading.
+//   The 2.0 figure is solved against the flip both this script and the
+//   reference took on the 17 Aug 2026 weekly bar — reference 93.00, this
+//   script 86.48 at a multiplier of 1.5 — which pins it to 1.93-2.02.
+//
+// WHAT CHANGED IN v63 — the line no longer moves when you zoom
+//   The flip rule is recursive, so its levels depend on which bar the
+//   calculation started on. TradingView loads history lazily, so scrolling or
+//   zooming out fed the script more bars and every level shifted underneath
+//   price. Every Focus List request already guarded against this with
+//   calc_bars_count; the chart's own line did not, which is also why the panel
+//   and the Focus List row for one symbol could disagree. Both are pinned to
+//   750 bars now. See the note above the indicator() call for the cost.
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Money Line MASTER v63", overlay = true, max_labels_count = 500, max_lines_count = 500)
+// calc_bars_count PINS THE CALCULATION WINDOW. Read this before changing it.
+//
+// A trailing stop is recursive: today's level is built from yesterday's, all the
+// way back to whatever bar the calculation happened to start on. TradingView
+// loads history lazily, so scrolling or zooming out hands the script MORE bars,
+// the recursion starts somewhere new, and every level shifts. That is the money
+// line moving up and down while price has not changed.
+//
+// The Focus List never had this problem because every request.security below
+// already passes calc_bars_count = scanBars. The chart's own line was the one
+// place the guard was missing, so the panel and the Focus List row for the SAME
+// symbol could legitimately disagree. Both now use 750 bars.
+//
+// COST, stated plainly: only the last 750 bars are calculated. On weekly that is
+// about 14 years, so the "from 2010" backtest window effectively starts nearer
+// 2012 and the oldest BUY/SELL labels stop being drawn. Raise the number for a
+// deeper record, lower it for a lighter script — but keep it EQUAL to the
+// "History window per symbol" input in group 3, or the chart and the Focus List
+// go back to disagreeing.
+indicator("Money Line MASTER v63", overlay = true, max_labels_count = 500, max_lines_count = 500, calc_bars_count = 750)
 
 // ═══════════════════════════════════════════════════════════════
 //  THE SYNTHESIS (from everything we tested):
@@ -79,7 +110,7 @@ longLen   = input.int(5, "Long (Bullish) Lookback", minval = 1, group = "1. Line
 shortLen  = input.int(3, "Short (Bearish) Lookback", minval = 1, group = "1. Line Settings")
 atrLen    = input.int(21, "ATR Length", minval = 1, group = "1. Line Settings")
 atrMultL  = input.float(3.0, "ATR Multiplier — LONG stop (the EXIT)", minval = 0.1, step = 0.05, tooltip = "How far below the recent HIGH the exit sits while you are long. Wide is correct here: an exit's job is to survive noise and stay in the trend, and 3 ATR is the conventional trailing-stop distance.", group = "1. Line Settings")
-atrMultS  = input.float(1.5, "ATR Multiplier — SHORT stop (the ENTRY trigger)", minval = 0.1, step = 0.05, tooltip = "How far above the recent LOW price must close to turn bullish. This is an ENTRY, not a stop, and it must not share the exit's multiplier.\n\nWhy it changed from 3.0 to 1.5 in v63: the two sides measure from opposite ends. The exit asks price to fall 3 ATR below the 5-bar HIGH; the entry asked price to rise 3 ATR above the 3-bar LOW. After a crash those are nowhere near the same distance, and the low itself rises as the recovery runs, so the trigger keeps retreating. On SOLUSD weekly (24 Aug 2026) that put the BUY trigger at 112.86 with price at 96.34 — a single weekly close would have had to gain 17.1%. The panel said STAY OUT through the whole turn.\n\n1.5 was not picked by feel. Solving both lines against the same ATR puts the reference indicator's implied short multiplier between 1.36 and 1.66, and 1.5 reproduces its flip level to within 0.02.\n\nTHE TRADE-OFF, STATED HONESTLY: entering earlier means entering more often and being wrong more often. On randomised price series a 1.5 entry roughly doubles the trade count and cuts the win rate from about 55% to about 35% versus 3.0. That test cannot tell you what happens on a real recovery — a random walk has no trend to catch, which is the entire thing this setting is trying to catch — so treat it as the cost side only. The WHIPSAW and HOLD vs TRADE rows measure the real answer on YOUR symbols. Watch them. If whipsaw climbs past about 25% of exits, try 2.0 as the middle setting before going back to 3.0.", group = "1. Line Settings")
+atrMultS  = input.float(2.0, "ATR Multiplier — SHORT stop (the ENTRY trigger)", minval = 0.1, step = 0.05, tooltip = "How far above the recent LOW price must close to turn bullish. This is an ENTRY, not a stop, and it must not share the exit's multiplier.\n\nWhy it changed from 3.0 to 2.0 in v63: the two sides measure from opposite ends. The exit asks price to fall 3 ATR below the 5-bar HIGH; the entry asked price to rise 3 ATR above the 3-bar LOW. After a crash those are nowhere near the same distance, and the low itself rises as the recovery runs, so the trigger keeps retreating. On SOLUSD weekly (24 Aug 2026) that put the BUY trigger at 112.86 with price at 96.34 — a single weekly close would have had to gain 17.1%. The panel said STAY OUT through the whole turn.\n\n2.0 was not picked by feel. It is solved from the flip this script and the reference indicator both took on the 17 Aug 2026 weekly bar: the reference triggered at 93.00, this script at 86.48 with the multiplier at 1.5. Since a trigger is lowest(low,3) + mult*ATR, the gap of 6.52 is purely a multiplier difference, and across every plausible ATR at that bar it solves to 1.93-2.02. The BUY itself survives up to 2.14, so 2.0 moves the level onto the reference's without costing the signal.\n\nTHE TRADE-OFF, STATED HONESTLY: entering earlier means entering more often and being wrong more often. On randomised price series a 2.0 entry raises the trade count by about half versus 3.0; a 1.5 entry doubles it and cuts the win rate from about 55% to about 35%. That test cannot tell you what happens on a real recovery — a random walk has no trend to catch, which is the entire thing this setting is trying to catch — so treat it as the cost side only. The WHIPSAW and HOLD vs TRADE rows measure the real answer on YOUR symbols. Watch them. If whipsaw climbs past about 25% of exits, go to 2.5 before returning to 3.0.", group = "1. Line Settings")
 exitConfirm  = input.int(1, "Bar closes needed to SELL (chart TF)", minval = 1, maxval = 4, tooltip = "1 = sell on the FIRST close below the flip level. 2 = the break must hold for two consecutive closes BELOW THE SAME PRICE — the level that was broken is held still while the count runs, so the second close is measured against the first one's trigger and not against a stop that has since moved. Before v63 this setting was close to inert: the stop collapsed away from price the moment the first close broke it, so the count reset every time and 2 or more meant 'almost never sell'. It works now, which also means 2 will genuinely give back more before you exit. Try it on assets where the HOLD vs TRADE row says HOLD.", group = "1. Line Settings")
 entryConfirm = input.int(1, "Bar closes needed to BUY (chart TF)", minval = 1, maxval = 4, tooltip = "Same idea for entries, and it had the same fault before v63. 1 = buy on the first close above the flip level.", group = "1. Line Settings")
 btUseStart = input.bool(true, "Limit stats to a start year", tooltip = "OFF = measure from the first bar TradingView loads, which is 1891 on GOLD and 1986 on MSFT. That makes Track Record, ASSET FIT and the return figures non-comparable between symbols, and on GOLD it includes the decades when the price was pegged by law. ON = every stat below is measured from your chosen year.", group = "4. Backtest Window")
@@ -115,7 +146,7 @@ scanTF       = scanUseChart ? timeframe.period : scanTFin
 scanPos     = input.string("Bottom Right", "Focus List Position", options = ["Bottom Right", "Top Right", "Middle Right", "Bottom Left"], group = "3. Focus List")
 maxShow     = input.int(20, "Max rows to display (most urgent first)", minval = 3, maxval = 32, group = "3. Focus List")
 scanConfirmed = input.bool(true, "Confirmed bars only (identical on every chart)", tooltip = "ON = each symbol is read at its own last CLOSED weekly bar. This is what makes the Focus List give the same answer whether you are on an NSE chart or a NASDAQ chart. OFF = live/forming bar, which drifts between charts because sessions and holidays differ.", group = "3. Focus List")
-scanBars      = input.int(750, "History window per symbol (bars)", minval = 100, maxval = 2000, tooltip = "Fixes how many bars each symbol is calculated over so the trailing-stop state cannot depend on how much history your current chart happens to have loaded. Keep this the same on every chart.", group = "3. Focus List")
+scanBars      = input.int(750, "History window per symbol (bars)", minval = 100, maxval = 2000, tooltip = "Fixes how many bars each symbol is calculated over so the trailing-stop state cannot depend on how much history your current chart happens to have loaded. Keep this the same on every chart.\n\nIt must also match the calc_bars_count value in the indicator() declaration at the top of the source (750). The chart line and the Focus List are the same rule on the same symbol; give them different windows and they will report different states for it.", group = "3. Focus List")
 scanNoFx      = input.bool(true, "Ignore chart currency conversion", tooltip = "Stops an INR chart from converting USD symbols (and vice versa).", group = "3. Focus List")
 addChartSym   = input.bool(true, "Always scan the chart's own symbol", tooltip = "Puts whatever symbol you have open into slot 32, so a chart that is not in the market set still gets a scanner row. Turn off to keep the fixed 32nd symbol instead.", group = "3. Focus List")
 mktFilter     = input.bool(false, "Show only symbols from the chart's market", tooltip = "ON = an NSE chart lists only NSE/BSE symbols, a US chart only US symbols, and so on. This removes the one-bar offset that appears when a symbol's exchange closes later than the chart's, which is the honest fix for it. Symbols entered without an exchange prefix always show. OFF = all 32 symbols, with the offset present on cross-market rows.", group = "3. Focus List")
