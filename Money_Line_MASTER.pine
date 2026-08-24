@@ -61,31 +61,27 @@
 //   entry are different objects and do not share a distance. The BUY TRIGGER
 //   row also quotes the gap in ATR units now and flags it beyond 2.5 ATR, so
 //   an unreachable trigger cannot sit there looking like a normal reading.
-// CALIBRATION AGAINST THE REFERENCE — the band is PERCENT, not ATR
-//   Several rounds of multiplier tuning each fixed one symbol and broke the
-//   next. That was not bad luck. Read straight off the CALIBRATION row on the
-//   same weekly bar, 24 Aug 2026:
-//       SOL  ATR 14.39 (15.0% of price)   low(3) 74,09   price 95.68
-//       BTC  ATR 6827.57 (8.7% of price)  low(3) 62,500  price 78,928
-//   The reference was BULLISH on SOL and BEARISH on BTC, so its entry trigger
-//   sat BELOW price on one and ABOVE it on the other:
-//       SOL bullish needs an ATR multiple < 1.50
-//       BTC bearish needs an ATR multiple > 2.41
-//   No single multiple is both. No ATR setting can reproduce the reference on
-//   both symbols at once — the search was over a parameter that cannot hold
-//   the answer.
-//   As PERCENTAGES the same two readings agree: the reference's trigger is
-//   27.1% above low(3) on BTC and 25.5-28.8% on SOL, despite ATR being 8.7%
-//   of price on one and 15.0% on the other. Any value in 26.3%-29.1% puts both
-//   on the correct side; the default is 27.5%.
-//   A percent band scales with price, an ATR band with recent range. Those
-//   coincide only when volatility is a constant fraction of price, which is
-//   why the two models agreed on one symbol at a time and never on two.
-//   NOTE the exit side is NOT settled: the single exit reading available
-//   (SOL 65.89 against high(5) 102.70 = 35.8%) is also 2.5 ATR on that symbol,
-//   so it fits both models and discriminates between neither.
+// CALIBRATION AGAINST THE REFERENCE — two differences, both now settled
+//   1. THE BAND IS A PERCENTAGE, NOT AN ATR MULTIPLE. Read off the CALIBRATION
+//      row, same weekly bar: SOL ATR is 15.0% of price, BTC 8.7%. The reference
+//      was BULLISH on SOL and BEARISH on BTC, so its entry sat below price on
+//      one and above it on the other — needing an ATR multiple under 1.50 and
+//      over 2.41 at the same time. No multiplier is both, which is why several
+//      rounds of tuning each fixed one symbol and broke the other. As
+//      percentages the readings agree: 27.1% above low(3) on BTC, 25.5-28.8%
+//      on SOL. Anything in 26.3%-29.1% gives the correct state on both.
+//   2. THE REFERENCE DOES NOT RATCHET. Against its levels:
+//        SOL exit  65.89   vs our raw 65.93     (0.06%)  vs ratcheted 65.93
+//        BTC entry 79,463.76 vs our raw 79,687.50 (0.28%) vs ratcheted 73,639.72 (7.33%)
+//      The ratcheted BTC entry was a running minimum held over from a low of
+//      57,757 while low(3) had recovered to 62,500. That stale minimum is what
+//      made this script turn bullish on BTC on 17 Aug while the reference
+//      stayed bearish. With the ratchet off, SOL is bullish and BTC bearish —
+//      both matching.
+//   The exit side still rests on one reading (SOL), where 35.8% and 2.5 ATR
+//   happen to coincide, so that number is provisional.
 //
-//   Defaults: Percent basis, entry 27.5%, exit 35.8% (exit provisional).
+//   Defaults: Percent basis, entry 27.5%, exit 35.8%, ratchet OFF.
 //
 // WHAT CHANGED IN v63 — the line no longer moves when you zoom
 //   The flip rule is recursive, so its levels depend on which bar the
@@ -131,6 +127,7 @@ indicator("Money Line MASTER v63", overlay = true, max_labels_count = 500, max_l
 longLen   = input.int(5, "Long (Bullish) Lookback", minval = 1, group = "1. Line Settings")
 shortLen  = input.int(3, "Short (Bearish) Lookback", minval = 1, group = "1. Line Settings")
 atrLen    = input.int(21, "ATR Length", minval = 1, group = "1. Line Settings")
+useRatchet = input.bool(false, "Ratchet the line (never let it loosen)", tooltip = "ON  — the level is carried forward as a running extreme: the exit may only rise while long, the entry may only fall while short. This is how a classic trailing stop behaves and is what this script did through v62.\n\nOFF (default) — the flip is tested against the band computed from the CURRENT window, so the level moves with the recent high or low in both directions.\n\nWHY OFF IS THE DEFAULT. Measured against the reference indicator on the same weekly bar:\n  SOL, reference exit stop 65.89 — our raw band 65.93 (0.06% apart)\n  BTC, reference entry trigger 79,463.76 — our raw band 79,687.50 (0.28% apart)\nOur RATCHETED BTC entry was 73,639.72, which is 7.33% away and matches nothing. It was a running minimum left over from a low of 57,757 earlier in the decline, while low(3) had since recovered to 62,500. That stale minimum is exactly what made this script flip bullish on BTC on 17 Aug while the reference stayed bearish.\n\nThe trade-off is real: without the ratchet the exit can move DOWN during an uptrend if the recent high rolls over, so it is a channel rather than a true trailing stop. Turn it ON if you want a stop that never loosens, and accept that entries will then fire earlier than the reference after a deep decline.", group = "1. Line Settings")
 bandMode  = input.string("Percent", "Band basis", options = ["Percent", "ATR"], tooltip = "How far the line sits from the recent extreme.\n\nPERCENT (default) — a fixed % of the extreme. ATR — a multiple of ATR(21), which is what this script used through v62.\n\nWHY THE DEFAULT CHANGED. Solved against the reference indicator on two symbols on the same weekly bar, 24 Aug 2026, using the CALIBRATION row rather than inference:\n  SOL  ATR 14.39 (15.0% of price)  low(3) 74.09  price 95.68  reference BULLISH\n  BTC  ATR 6827.57 (8.7% of price) low(3) 62500  price 78928  reference BEARISH\nFor SOL to be bullish the entry trigger must be under price, which needs an ATR multiple below 1.50. For BTC to be bearish it must be above price, which needs one above 2.41. No single multiplier is both, so no ATR setting can reproduce the reference on both symbols at once — which is why several rounds of multiplier tuning each fixed one symbol and broke the other.\n\nAs percentages the same two readings agree: the reference's trigger is 27.1% above low(3) on BTC and 25.5-28.8% on SOL, even though ATR is 8.7% of price on one and 15.0% on the other. Any value between 26.3% and 29.1% gives the correct state on both.\n\nSwitch to ATR to restore the old behaviour.", group = "1. Line Settings")
 pctL      = input.float(35.8, "Percent — EXIT, % below the recent high", minval = 0.5, step = 0.1, tooltip = "Used when Band basis is Percent. 35.8% is taken from the one exit reading available: the reference's stop at 65.89 against a high(5) of 102.70 on SOL. On that symbol ATR*2.5 comes to 37.5%, so both models fit this single point and it does NOT discriminate between them — unlike the entry side, where they disagree sharply. Treat this number as provisional until a second exit reading on another symbol confirms it.", group = "1. Line Settings")
 pctS      = input.float(27.5, "Percent — ENTRY, % above the recent low", minval = 0.5, step = 0.1, tooltip = "Used when Band basis is Percent. The reference implies 27.1% on BTC and 25.5-28.8% on SOL. The band that gives the correct state on both is 26.3% to 29.1%; 27.5 sits in the middle of it.", group = "1. Line Settings")
@@ -293,8 +290,12 @@ f_flip() =>
     // bar's close, and the only ones it may legitimately be judged against
     _lsPrev = nz(_ls[1], _lsB)
     _ssPrev = nz(_ss[1], _ssB)
-    _ls := close[1] > _lsPrev ? math.max(_lsB, _lsPrev) : _lsB
-    _ss := close[1] < _ssPrev ? math.min(_ssB, _ssPrev) : _ssB
+    // With the ratchet off these collapse to the raw band, so _lsPrev/_ssPrev
+    // above become last bar's RAW band — the flip is still judged against a
+    // level that existed before this bar opened, which is the separate
+    // correctness rule and is not affected by this switch.
+    _ls := not useRatchet ? _lsB : close[1] > _lsPrev ? math.max(_lsB, _lsPrev) : _lsB
+    _ss := not useRatchet ? _ssB : close[1] < _ssPrev ? math.min(_ssB, _ssPrev) : _ssB
     var int   _t   = 1
     var int   _bn  = 0
     var int   _an  = 0
