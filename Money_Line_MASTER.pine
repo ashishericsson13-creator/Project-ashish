@@ -335,12 +335,26 @@ f_flip() =>
         _bn  := 0
         _an  := 0
         _brk := na
-    [_t, _t == 1 ? _refL : _refS, _tested]
+    // WHAT IS RETURNED AS THE LINE, and why it is not _refL/_refS.
+    // _refL/_refS are the levels THIS bar's close was judged against, i.e. the
+    // ones carried in from the previous bar. Testing against them is the
+    // correctness rule and is untouched below. But DRAWING them puts the line a
+    // bar behind the band that produced it: every step lands on the candle
+    // AFTER the one that caused it, and over a few hundred bars the line reads
+    // as visibly out of step with the chart. On CRM the row showed raw exit
+    // 169.38 against an in-force 165.81 — two different numbers for one bar.
+    // So the line drawn, and the level quoted in the table, is the band as of
+    // THIS bar: the level the NEXT close will be judged against. Line, table
+    // and candles then all describe the same bar.
+    // Signals are byte-identical either way — _bn, _an and _t above are still
+    // decided by _refL/_refS, so nothing about when a flip fires changes.
+    [_t, _t == 1 ? _ls : _ss, _tested]
 
-// moneyLine is the level the CURRENT bar's close is measured against, so it is
-// fixed for the whole bar. The old line was the stop recomputed from the forming
-// bar, which meant "Flip Level: 1234.5" moved while you were reading it and
-// could not be left as a resting order.
+// moneyLine is the band as of THIS bar — the level the NEXT close is judged
+// against, and the level drawn on the chart. It updates while the live bar
+// forms, which is simply what a trailing stop does; the alternative was to
+// quote the previous bar's level, and that made the drawn line sit one candle
+// behind the band and out of step with the candles.
 [trend, moneyLine, testedLevel] = f_flip()
 isFlip = not na(trend[1]) and trend != trend[1]
 
