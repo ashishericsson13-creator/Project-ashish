@@ -1,0 +1,547 @@
+<title>The All-BeES Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..600&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --paper:#f1f4f2;
+  --surface:#fbfcfb;
+  --surface-2:#e7ece9;
+  --ink:#111a18;
+  --ink-2:#3b4845;
+  --muted:#67736f;
+  --rule:#d3dbd7;
+  --rule-soft:#e2e8e5;
+  --accent:#0f6b57;
+  --accent-soft:#d3e6df;
+  --brass:#9a6b16;
+  --brass-soft:#eee0c4;
+  --slate:#3d5670;
+  --slate-soft:#dbe2ea;
+  --warn:#a03a24;
+  --shadow:0 1px 2px rgba(17,26,24,.05), 0 8px 24px -16px rgba(17,26,24,.35);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0d1312;
+    --surface:#141c1a;
+    --surface-2:#1b2523;
+    --ink:#e2e9e5;
+    --ink-2:#b3c0bb;
+    --muted:#8b9a95;
+    --rule:#28332f;
+    --rule-soft:#1f2a27;
+    --accent:#57c2a4;
+    --accent-soft:#173630;
+    --brass:#d6a749;
+    --brass-soft:#332714;
+    --slate:#8fadc9;
+    --slate-soft:#1b2733;
+    --warn:#e08a6c;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0d1312;
+  --surface:#141c1a;
+  --surface-2:#1b2523;
+  --ink:#e2e9e5;
+  --ink-2:#b3c0bb;
+  --muted:#8b9a95;
+  --rule:#28332f;
+  --rule-soft:#1f2a27;
+  --accent:#57c2a4;
+  --accent-soft:#173630;
+  --brass:#d6a749;
+  --brass-soft:#332714;
+  --slate:#8fadc9;
+  --slate-soft:#1b2733;
+  --warn:#e08a6c;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Newsreader",Georgia,"Times New Roman",serif;
+  font-size:18px;
+  line-height:1.62;
+  margin:0;
+  padding:0 24px 96px;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto}
+.col{max-width:660px}
+p{margin:0 0 1.1em}
+a{color:var(--accent);text-underline-offset:3px;text-decoration-thickness:1px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+strong{font-weight:600}
+
+.eyebrow{
+  font-family:"Karla",system-ui,sans-serif;
+  font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 14px;
+}
+h1{
+  font-family:"Newsreader",serif;
+  font-size:clamp(40px,7vw,68px);
+  font-weight:400;line-height:1.02;letter-spacing:-.02em;
+  text-wrap:balance;margin:0 0 20px;
+}
+h1 em{font-style:italic;color:var(--accent)}
+h2{
+  font-family:"Newsreader",serif;
+  font-size:clamp(25px,3.4vw,33px);
+  font-weight:500;line-height:1.15;letter-spacing:-.015em;
+  text-wrap:balance;margin:0 0 8px;
+}
+h3{
+  font-family:"Karla",system-ui,sans-serif;
+  font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:0 0 10px;
+}
+.standfirst{
+  font-size:clamp(19px,2.3vw,22px);line-height:1.5;color:var(--ink-2);
+  max-width:600px;margin:0 0 40px;
+}
+
+header.masthead{padding:72px 0 0}
+.rule-top{height:3px;background:var(--ink);margin-bottom:26px;max-width:1080px}
+
+/* spec strip */
+.spec{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);
+  margin:0 0 76px;border-radius:3px;overflow:hidden;
+}
+.spec div{background:var(--surface);padding:16px 18px}
+.spec dt{
+  font-family:"Karla",system-ui,sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin:0 0 6px;
+}
+.spec dd{
+  margin:0;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:19px;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums;
+}
+
+section{padding:0 0 68px}
+.sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:26px;border-bottom:1px solid var(--rule);padding-bottom:14px}
+.sec-head .eyebrow{margin:0;white-space:nowrap}
+.sec-head h2{margin:0}
+
+/* tables */
+.scroll{overflow-x:auto;margin:0 0 20px;-webkit-overflow-scrolling:touch}
+table{
+  border-collapse:collapse;width:100%;min-width:520px;
+  font-family:"Karla",system-ui,sans-serif;font-size:14.5px;line-height:1.45;
+}
+th{
+  text-align:left;font-weight:700;font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);
+  padding:0 14px 9px 0;border-bottom:1px solid var(--ink);vertical-align:bottom;
+}
+td{padding:11px 14px 11px 0;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+tr:last-child td{border-bottom:none}
+.num{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;padding-right:0}
+th.num{padding-right:0}
+.tick{
+  font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:600;letter-spacing:.01em;
+  white-space:nowrap;
+}
+tr.total td{border-top:1px solid var(--ink);border-bottom:none;font-weight:700;padding-top:12px}
+td.note{color:var(--muted);font-size:13.5px}
+
+/* allocation bar */
+.allocbar{display:flex;width:100%;height:52px;border-radius:3px;overflow:hidden;gap:1px;margin:0 0 10px;background:var(--rule)}
+.allocbar span{
+  display:block;position:relative;transition:opacity .18s ease;
+  min-width:3px;
+}
+.allocbar span::after{
+  content:attr(data-w);position:absolute;inset:0;display:grid;place-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;color:var(--surface);
+}
+:root[data-theme="dark"] .allocbar span::after{color:#0d1312}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .allocbar span::after{color:#0d1312}}
+.allocbar span[data-w=""]::after{content:""}
+.legend{
+  display:flex;flex-wrap:wrap;gap:8px 22px;margin:0 0 34px;
+  font-family:"Karla",system-ui,sans-serif;font-size:12.5px;color:var(--muted);
+}
+.legend b{display:inline-flex;align-items:center;gap:7px;font-weight:500;color:var(--ink-2)}
+.dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+.f-eq{background:var(--accent)}
+.f-metal{background:var(--brass)}
+.f-global{background:var(--slate)}
+.f-cash{background:var(--muted)}
+
+/* fee bars */
+.bars{display:flex;flex-direction:column;gap:18px;margin:0 0 8px}
+.bar-row{display:grid;grid-template-columns:minmax(140px,190px) 1fr auto;gap:16px;align-items:center}
+.bar-label{font-family:"Karla",sans-serif;font-size:13.5px;line-height:1.3;color:var(--ink-2)}
+.bar-label small{display:block;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);margin-top:3px}
+.bar-track{height:26px;background:var(--surface-2);border-radius:2px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px}
+.bar-val{
+  font-family:"IBM Plex Mono",monospace;font-size:16px;font-weight:600;
+  font-variant-numeric:tabular-nums;white-space:nowrap;min-width:82px;text-align:right;
+}
+
+/* callouts */
+.pull{
+  border-left:3px solid var(--accent);padding:4px 0 4px 22px;margin:34px 0;
+  font-size:clamp(20px,2.6vw,25px);line-height:1.34;font-style:italic;color:var(--ink);
+  max-width:640px;
+}
+.flag{
+  background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  padding:18px 22px;margin:0 0 24px;box-shadow:var(--shadow);
+}
+.flag.warn{border-left:3px solid var(--warn)}
+.flag p:last-child{margin-bottom:0}
+.flag .eyebrow{color:var(--warn)}
+
+/* rules */
+ol.rules{list-style:none;counter-reset:r;padding:0;margin:0;display:grid;gap:2px}
+ol.rules li{
+  counter-increment:r;display:grid;grid-template-columns:52px 1fr;gap:20px;
+  padding:20px 0;border-top:1px solid var(--rule-soft);
+}
+ol.rules li:first-child{border-top:1px solid var(--ink)}
+ol.rules li::before{
+  content:counter(r,decimal-leading-zero);
+  font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:600;color:var(--accent);
+  padding-top:5px;
+}
+ol.rules h4{
+  font-family:"Karla",sans-serif;font-size:15px;font-weight:700;letter-spacing:0;
+  margin:0 0 6px;color:var(--ink);
+}
+ol.rules p{font-size:16.5px;margin:0;color:var(--ink-2);max-width:600px}
+
+ul.plain{list-style:none;padding:0;margin:0;display:grid;gap:16px;max-width:660px}
+ul.plain li{display:grid;grid-template-columns:auto 1fr;gap:14px;font-size:16.5px;color:var(--ink-2)}
+ul.plain li span.mk{color:var(--warn);font-family:"IBM Plex Mono",monospace;font-size:13px;padding-top:4px}
+
+.tag{
+  display:inline-block;font-family:"Karla",sans-serif;font-size:10.5px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:2px;white-space:nowrap;
+}
+.tag.in{background:var(--accent-soft);color:var(--accent)}
+.tag.out{background:var(--surface-2);color:var(--muted)}
+.tag.cond{background:var(--brass-soft);color:var(--brass)}
+
+footer{border-top:3px solid var(--ink);padding-top:26px;margin-top:20px}
+footer p, footer li{font-family:"Karla",sans-serif;font-size:13px;line-height:1.6;color:var(--muted)}
+footer ul{padding-left:18px;margin:0 0 20px;display:grid;gap:5px}
+footer a{color:var(--muted)}
+
+@media (max-width:640px){
+  body{font-size:17px;padding:0 18px 64px}
+  .sec-head{flex-direction:column;gap:8px}
+  .bar-row{grid-template-columns:1fr;gap:6px}
+  .bar-val{text-align:left;min-width:0}
+  .allocbar{height:40px}
+  .allocbar span::after{font-size:9px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="rule-top"></div>
+  <p class="eyebrow">Portfolio construction &middot; India &middot; August 2026</p>
+  <h1>The All&#8209;BeES<br><em>Portfolio</em></h1>
+  <p class="standfirst">Eleven exchange-traded funds from a single family, ₹1 crore, and a twenty-year holding period — built so that the thing doing the work is arithmetic rather than a forecast.</p>
+
+  <dl class="spec">
+    <div><dt>Capital</dt><dd>₹1,00,00,000</dd></div>
+    <div><dt>Horizon</dt><dd>20 years</dd></div>
+    <div><dt>Holdings</dt><dd>11 BeES</dd></div>
+    <div><dt>Blended cost</dt><dd>≈0.32%</dd></div>
+    <div><dt>Equity</dt><dd>75%</dd></div>
+    <div><dt>Base case</dt><dd>₹9.96 Cr</dd></div>
+  </dl>
+</header>
+
+<section>
+  <div class="sec-head"><p class="eyebrow">The goal</p><h2>What &ldquo;beat 99%&rdquo; can and cannot mean</h2></div>
+  <div class="col">
+    <p>The target only becomes answerable once you name the peer set. Against three different fields, the same portfolio has three very different sets of odds — and only honesty about that makes the rest of this document useful.</p>
+  </div>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Peer set</th><th>Odds for this portfolio</th></tr></thead>
+    <tbody>
+      <tr>
+        <td style="width:34%"><strong>Active large-cap funds</strong><br><span class="note" style="font-size:13px;color:var(--muted)">where most Indian retail money sits</span></td>
+        <td><strong>Very high.</strong> 76.3% of them lost to their benchmark over the ten years to December 2025 — before counting the funds quietly merged away. Add the fee gap and a size tilt and top-percentile here is structural, not a prediction.</td>
+      </tr>
+      <tr>
+        <td><strong>Flexi-cap and large-&amp;-mid funds</strong></td>
+        <td><strong>High.</strong> Same fee arithmetic, and this portfolio's mid-cap weight removes the main reason a flexi-cap beats a plain Nifty tracker in the first place.</td>
+      </tr>
+      <tr>
+        <td><strong>The entire fund universe</strong><br><span style="font-size:13px;color:var(--muted)">including small-cap and thematic</span></td>
+        <td><strong>Not certain, and nobody can make it certain.</strong> The literal top 1% of a twenty-year table is filled by concentrated small-cap funds that ran hot. You cannot buy that in advance. You can buy a high-probability seat in the top decile.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <blockquote class="pull">The promise here isn't a return. It's a ~1.5% per year head start that nobody can take away — worth roughly ₹2.4 crore over twenty years, with no manager risk and no fund-selection decision left to get wrong.</blockquote>
+</section>
+
+<section>
+  <div class="sec-head"><p class="eyebrow">Allocation</p><h2>Where the ₹1 crore goes</h2></div>
+
+  <div class="allocbar" role="img" aria-label="Allocation: 75 percent equity, 15 percent precious metals, 3 percent global, 7 percent cash">
+    <span class="f-eq"    style="flex:22" data-w="22"></span>
+    <span class="f-eq"    style="flex:20;opacity:.88" data-w="20"></span>
+    <span class="f-eq"    style="flex:14;opacity:.76" data-w="14"></span>
+    <span class="f-eq"    style="flex:6;opacity:.64"  data-w="6"></span>
+    <span class="f-eq"    style="flex:5;opacity:.54"  data-w="5"></span>
+    <span class="f-eq"    style="flex:4;opacity:.44"  data-w="4"></span>
+    <span class="f-eq"    style="flex:4;opacity:.34"  data-w="4"></span>
+    <span class="f-metal" style="flex:10" data-w="10"></span>
+    <span class="f-metal" style="flex:5;opacity:.7" data-w="5"></span>
+    <span class="f-global" style="flex:3" data-w="3"></span>
+    <span class="f-cash"  style="flex:7" data-w="7"></span>
+  </div>
+  <div class="legend">
+    <b><i class="dot f-eq"></i>Equity &mdash; 75%</b>
+    <b><i class="dot f-metal"></i>Gold &amp; silver &mdash; 15%</b>
+    <b><i class="dot f-global"></i>Global &mdash; 3%</b>
+    <b><i class="dot f-cash"></i>Cash buffer &mdash; 7%</b>
+  </div>
+
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr><th>Ticker</th><th>Role</th><th class="num">Weight</th><th class="num">Amount</th><th class="num">TER</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="tick">NIFTYBEES</td><td>Core large-cap anchor</td><td class="num">22%</td><td class="num">22,00,000</td><td class="num">0.04%</td></tr>
+      <tr><td class="tick">MID150BEES</td><td>Mid-cap growth &mdash; the return engine</td><td class="num">20%</td><td class="num">20,00,000</td><td class="num">0.23%</td></tr>
+      <tr><td class="tick">JUNIORBEES</td><td>Next 50 &mdash; the large-mid bridge</td><td class="num">14%</td><td class="num">14,00,000</td><td class="num">~0.15%</td></tr>
+      <tr><td class="tick">DIVOPPBEES</td><td>Value / dividend factor tilt</td><td class="num">6%</td><td class="num">6,00,000</td><td class="num">~0.35%</td></tr>
+      <tr><td class="tick">BANKBEES</td><td>Financials, deliberately modest</td><td class="num">5%</td><td class="num">5,00,000</td><td class="num">~0.19%</td></tr>
+      <tr><td class="tick">PSUBNKBEES</td><td>Deep cyclical &mdash; volatility harvest</td><td class="num">4%</td><td class="num">4,00,000</td><td class="num">~0.49%</td></tr>
+      <tr><td class="tick">INFRABEES</td><td>Capex cycle &mdash; volatility harvest</td><td class="num">4%</td><td class="num">4,00,000</td><td class="num">~0.51%</td></tr>
+      <tr><td class="tick">GOLDBEES</td><td>Gold &mdash; the crash currency</td><td class="num">10%</td><td class="num">10,00,000</td><td class="num">~0.79%</td></tr>
+      <tr><td class="tick">SILVERBEES</td><td>Silver &mdash; higher-beta real asset</td><td class="num">5%</td><td class="num">5,00,000</td><td class="num">~0.51%</td></tr>
+      <tr><td class="tick">HNGSNGBEES</td><td>Global diversifier &mdash; <em>conditional</em></td><td class="num">3%</td><td class="num">3,00,000</td><td class="num">~0.93%</td></tr>
+      <tr><td class="tick">LIQUIDBEES</td><td>Rebalancing ammunition, not an investment</td><td class="num">7%</td><td class="num">7,00,000</td><td class="num">~0.65%</td></tr>
+      <tr class="total"><td colspan="2">Total</td><td class="num">100%</td><td class="num">1,00,00,000</td><td class="num">≈0.32%</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="flag warn">
+    <p class="eyebrow">Condition on HNGSNGBEES</p>
+    <p>It is the family's only real currency and geography diversifier, but the industry-wide US$7&nbsp;billion overseas investment cap has repeatedly forced Nippon to suspend fresh creation — and a suspended ETF drifts to a premium over its indicative NAV. <strong>Buy only if the premium is under 2%. Otherwise route the 3% to GOLDBEES and move on.</strong> Paying a 6% premium for diversification is lighting 6% on fire.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><p class="eyebrow">The family</p><h2>Which BeES earn a place, and which don't</h2></div>
+  <div class="col">
+    <p>Holding literally every BeES would mean paying three separate management fees to own HDFC Bank four times over. The nine sector and thematic products overlap so heavily with the three broad ones that adding them raises cost and reduces diversification at the same time. The family is a menu; eleven items are ordered.</p>
+  </div>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Ticker</th><th>Tracks</th><th>Verdict</th><th>Reasoning</th></tr></thead>
+    <tbody>
+      <tr><td class="tick">NIFTYBEES</td><td>Nifty 50</td><td><span class="tag in">22%</span></td><td>India's first ETF, 2001. Cheapest and deepest book on the exchange.</td></tr>
+      <tr><td class="tick">MID150BEES</td><td>Nifty Midcap 150</td><td><span class="tag in">20%</span></td><td>The size premium in a 150-stock wrapper, not a stock-picker's forty-name bet.</td></tr>
+      <tr><td class="tick">JUNIORBEES</td><td>Nifty Next 50</td><td><span class="tag in">14%</span></td><td>The bench that feeds the Nifty 50 — and the index active large-caps quietly borrow from.</td></tr>
+      <tr><td class="tick">DIVOPPBEES</td><td>Dividend Opportunities 50</td><td><span class="tag in">6%</span></td><td>A cheap value tilt; ballast for when growth de-rates.</td></tr>
+      <tr><td class="tick">BANKBEES</td><td>Nifty Bank</td><td><span class="tag in">5%</span></td><td>Most levered to nominal GDP. Capped, since banks are already ~30% of the Nifty 50.</td></tr>
+      <tr><td class="tick">PSUBNKBEES</td><td>Nifty PSU Bank</td><td><span class="tag in">4%</span></td><td>Included <em>because</em> it mean-reverts violently. Small sleeve, large rebalancing yield.</td></tr>
+      <tr><td class="tick">INFRABEES</td><td>Nifty Infrastructure</td><td><span class="tag in">4%</span></td><td>The capex cycle, same harvest logic, hard cap.</td></tr>
+      <tr><td class="tick">GOLDBEES</td><td>Physical gold</td><td><span class="tag in">10%</span></td><td>Held for negative correlation, not for return. This is what you sell in a crash.</td></tr>
+      <tr><td class="tick">SILVERBEES</td><td>Physical silver</td><td><span class="tag in">5%</span></td><td>Gold's volatility with an industrial-demand leg attached.</td></tr>
+      <tr><td class="tick">LIQUIDBEES</td><td>Nifty 1D Rate</td><td><span class="tag in">7%</span></td><td>Ammunition for Rule 05.</td></tr>
+      <tr><td class="tick">HNGSNGBEES</td><td>Hang Seng</td><td><span class="tag cond">3% if</span></td><td>Only if the premium to iNAV is under 2%. See the flag above.</td></tr>
+      <tr><td class="tick">ITBEES</td><td>Nifty IT</td><td><span class="tag out">Out</span></td><td>Already ~10&ndash;13% of the Nifty 50. Adding it is a currency-and-US-demand bet, not diversification.</td></tr>
+      <tr><td class="tick">PHARMABEES</td><td>Nifty Pharma</td><td><span class="tag out">Out</span></td><td>Owned already, inside MID150BEES and JUNIORBEES.</td></tr>
+      <tr><td class="tick">CONSUMBEES</td><td>India Consumption</td><td><span class="tag out">Out</span></td><td>Heavy overlap with the Nifty 50 and Next 50. Pure fee duplication.</td></tr>
+      <tr><td class="tick">SHARIABEES</td><td>Nifty 50 Shariah</td><td><span class="tag out">Out</span></td><td>A constrained subset of NIFTYBEES at a higher fee — unless you need the screen, in which case it <em>replaces</em> NIFTYBEES, BANKBEES and PSUBNKBEES.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><p class="eyebrow">The arithmetic</p><h2>Why the fee gap is the whole thesis</h2></div>
+  <div class="col">
+    <p>Hold every asset return constant at 12.5% gross and change only what is skimmed off the top. No forecast, no manager, no timing — just what ₹1 crore becomes after twenty years of a different cost line.</p>
+  </div>
+
+  <div class="bars" role="img" aria-label="Terminal value after 20 years: this portfolio 9.96 crore, direct plan active fund 8.99 crore, regular plan active fund 7.57 crore">
+    <div class="bar-row">
+      <div class="bar-label">This portfolio<small>0.32% fee → 12.18% net</small></div>
+      <div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--accent)"></div></div>
+      <div class="bar-val">₹9.96 Cr</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Direct-plan active fund<small>0.90% fee → 11.60% net</small></div>
+      <div class="bar-track"><div class="bar-fill" style="width:90.3%;background:var(--slate)"></div></div>
+      <div class="bar-val">₹8.99 Cr</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Regular-plan active fund<small>1.85% fee → 10.65% net</small></div>
+      <div class="bar-track"><div class="bar-fill" style="width:76%;background:var(--muted)"></div></div>
+      <div class="bar-val">₹7.57 Cr</div>
+    </div>
+  </div>
+
+  <div class="col">
+    <p style="margin-top:26px"><strong>₹2.39 crore of difference</strong>, created by nothing but declining to pay it away. Two further effects sit on top of that and are not in the bars:</p>
+    <ul class="plain" style="margin-bottom:28px">
+      <li><span class="mk">+</span><span><strong>Size tilt.</strong> 34% sits in Next-50 and Midcap-150 against a large-cap fund's ~5%. If that adds just 0.75% a year, the base case moves to <strong>₹11.4 Cr</strong>.</span></li>
+      <li><span class="mk">+</span><span><strong>Rebalancing across uncorrelated assets.</strong> Selling gold at highs to buy PSU banks at lows, mechanically and without an opinion, has historically added 0.3&ndash;0.8% a year to multi-asset portfolios. It also cuts drawdown — which is what actually keeps a person invested for twenty years.</span></li>
+    </ul>
+  </div>
+
+  <div class="scroll">
+  <table style="min-width:420px;max-width:640px">
+    <thead><tr><th>Scenario</th><th class="num">Net CAGR</th><th class="num">After 20 years</th></tr></thead>
+    <tbody>
+      <tr><td>Pessimistic &mdash; India de-rates, metals flat</td><td class="num">9.0%</td><td class="num">₹5.6 Cr</td></tr>
+      <tr><td>Conservative</td><td class="num">11.0%</td><td class="num">₹8.1 Cr</td></tr>
+      <tr style="background:var(--accent-soft)"><td><strong>Base case</strong></td><td class="num"><strong>12.2%</strong></td><td class="num"><strong>₹9.96 Cr</strong></td></tr>
+      <tr><td>Size &amp; rebalancing premium delivers</td><td class="num">13.5%</td><td class="num">₹12.6 Cr</td></tr>
+      <tr><td>Optimistic</td><td class="num">15.0%</td><td class="num">₹16.4 Cr</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="font-family:Karla,sans-serif;font-size:13.5px;color:var(--muted);max-width:600px">Adding ₹1,00,000 a month on top, indexed at 8% annually, roughly doubles the terminal figure in every row.</p>
+</section>
+
+<section>
+  <div class="sec-head"><p class="eyebrow">Execution</p><h2>Placing ₹1 crore without paying for the privilege</h2></div>
+  <div class="col">
+    <p>Do not deploy it in one day. A single bad entry date costs more than a decade of expense-ratio savings.</p>
+  </div>
+
+  <div class="scroll">
+  <table style="min-width:420px;max-width:640px">
+    <thead><tr><th>Tranche</th><th>Timing</th><th class="num">Share</th><th class="num">Amount</th></tr></thead>
+    <tbody>
+      <tr><td>First</td><td>Day 1</td><td class="num">40%</td><td class="num">40,00,000</td></tr>
+      <tr><td>Second</td><td>Month 2</td><td class="num">20%</td><td class="num">20,00,000</td></tr>
+      <tr><td>Third</td><td>Month 4</td><td class="num">20%</td><td class="num">20,00,000</td></tr>
+      <tr><td>Fourth</td><td>Month 6</td><td class="num">20%</td><td class="num">20,00,000</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="flag">
+    <p class="eyebrow" style="color:var(--accent)">Accelerator rule</p>
+    <p>If the Nifty 50 closes more than 12% below its 52-week high, pull the <em>next</em> tranche forward and deploy it immediately. Weakness is the schedule's friend, not its enemy. Undeployed cash waits in LIQUIDBEES, over and above the permanent 7%.</p>
+  </div>
+
+  <h3 style="margin-top:34px">Order mechanics — these matter at this size</h3>
+  <ul class="plain">
+    <li><span class="mk">→</span><span><strong>Limit orders only.</strong> ₹20 lakh of MID150BEES market-ordered into a thin book can cost half a percent instantly.</span></li>
+    <li><span class="mk">→</span><span><strong>Check iNAV first.</strong> NSE publishes it live. If the ask is more than ~0.5% over iNAV — 2% for HNGSNGBEES — wait.</span></li>
+    <li><span class="mk">→</span><span><strong>Skip the first and last fifteen minutes.</strong> Spreads are widest at the open and the close.</span></li>
+    <li><span class="mk">→</span><span><strong>Split the thin legs across two to four days.</strong> NIFTYBEES and BANKBEES absorb ₹20 lakh cleanly; DIVOPPBEES, PSUBNKBEES and INFRABEES need working.</span></li>
+    <li><span class="mk">→</span><span><strong>Above roughly ₹25 lakh in one ETF, ask the AMC about direct creation-unit subscription</strong> — you transact at NAV instead of paying the spread.</span></li>
+    <li><span class="mk">→</span><span>Keep all eleven in one demat account, so the annual review is a single screen.</span></li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><p class="eyebrow">Discipline</p><h2>The six rules that actually produce the result</h2></div>
+  <div class="col">
+    <p>The allocation is the easy part and takes an afternoon. These are the part that fails in practice, so they are written down now — while nothing is happening — to be executed later, when something is.</p>
+  </div>
+
+  <ol class="rules">
+    <li><div><h4>Rebalance on bands, not on feelings</h4><p>Review quarterly, act only when a sleeve drifts more than ±25% relative to target — MID150BEES at a 20% target means acting outside 15&ndash;25%. Plus one mandatory review in the first week of April.</p></div></li>
+    <li><div><h4>Sell nothing inside twelve months</h4><p>Equity short-term gains are taxed at 20%, long-term at 12.5%. Waiting three weeks to cross the anniversary is a guaranteed 7.5% return on the gain.</p></div></li>
+    <li><div><h4>Rebalance with cash before you rebalance with sales</h4><p>LIQUIDBEES income, dividends and fresh savings go to the most underweight sleeve first. Selling is the last resort, because selling is a taxable event.</p></div></li>
+    <li><div><h4>Harvest ₹1.25 lakh of long-term gains every January&ndash;March</h4><p>Sell exactly enough equity ETF to realise ₹1.25 lakh of long-term gain, then buy it straight back. The gain is untaxed and the cost basis resets upward. Roughly ₹15,625 a year in avoided future tax — about ₹8&ndash;10 lakh across twenty years, once compounded.</p></div></li>
+    <li><div><h4>The crash protocol, written now, executed then</h4><p>Nifty 50 down 25% from its high: move three of the seven LIQUIDBEES points into MID150BEES and JUNIORBEES. Down 40%: deploy the rest, and sell GOLDBEES down to 7% to buy more equity. The highest-value rule here, and the hardest to follow.</p></div></li>
+    <li><div><h4>Cap the cyclicals, permanently</h4><p>PSUBNKBEES and INFRABEES are volatility harvesters, not convictions. If either doubles its weight, trim to target regardless of how good the story has become.</p></div></li>
+  </ol>
+
+  <div class="flag" style="margin-top:30px">
+    <p class="eyebrow" style="color:var(--accent)">Optional glide path</p>
+    <p>If the money is needed <em>at</em> year twenty rather than beyond it, from year fifteen shift three percentage points a year out of equity into GOLDBEES and LIQUIDBEES — so the outcome isn't hostage to one bad final year.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><p class="eyebrow">Tax</p><h2>What the exchequer takes</h2></div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Holding</th><th>Short term</th><th>Long term</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>The seven equity ETFs</td><td>20% under 12 months</td><td>12.5% above ₹1.25 lakh a year</td><td>STT applies. The ₹1.25 lakh exemption is what Rule 04 harvests.</td></tr>
+      <tr><td class="tick">GOLDBEES · SILVERBEES</td><td>Slab rate under 12 months</td><td>12.5% flat, no indexation</td><td><strong>The ₹1.25 lakh exemption does not apply here.</strong> No STT, no GST.</td></tr>
+      <tr><td class="tick">LIQUIDBEES</td><td colspan="2">Daily IDCW taxed at your slab rate</td><td>Inefficient in the 30% bracket — if that bites, hold the 7% buffer in an arbitrage fund or sweep FD instead. The portfolio logic is unchanged.</td></tr>
+      <tr><td class="tick">HNGSNGBEES</td><td colspan="2">Not equity-oriented</td><td>Confirm the current treatment with a CA before you sell.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="font-family:Karla,sans-serif;font-size:13.5px;color:var(--muted);max-width:620px">Rules as of August 2026 and changeable in any Finance Act. Confirm with a tax professional before executing Rule 04.</p>
+</section>
+
+<section>
+  <div class="sec-head"><p class="eyebrow">Risk</p><h2>What would make this fail</h2></div>
+  <div class="col">
+    <p>An honest list, because a portfolio document without one is marketing.</p>
+  </div>
+  <ul class="plain">
+    <li><span class="mk">01</span><span><strong>You sell in the drawdown.</strong> 75% equity plus 15% metals can fall 40&ndash;45% peak to trough. This has happened repeatedly and will happen again inside twenty years. Every projection above assumes you did nothing. If you can't hold that, cut equity to 60% and accept the lower expected return — a portfolio you keep beats a better one you abandon.</span></li>
+    <li><span class="mk">02</span><span><strong>India's twenty-year growth story disappoints.</strong> No amount of low-cost structuring saves you from a flat market. This is the irreducible bet, and it is the one you are actually making.</span></li>
+    <li><span class="mk">03</span><span><strong>Metals go nowhere for a decade.</strong> Gold did roughly that from 1980 to 2000. The 15% weight is sized so this is survivable rather than fatal.</span></li>
+    <li><span class="mk">04</span><span><strong>Expense ratios drift upward.</strong> Recheck at every April review. If NIFTYBEES stops being among the cheapest, move — the loyalty is to the cost, not to the brand.</span></li>
+    <li><span class="mk">05</span><span><strong>You rebalance too often.</strong> Every trade is a spread plus a tax event. Bands, not tinkering.</span></li>
+    <li><span class="mk">06</span><span><strong>Concentration you didn't plan for.</strong> ₹1 crore should not be everything you have. Keep six to twelve months of expenses and any five-year goal money entirely outside this portfolio — otherwise Rule 05 becomes impossible to follow at exactly the moment it matters.</span></li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><p class="eyebrow">Day one</p><h2>The order sheet</h2></div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Ticker</th><th class="num">Amount</th><th>Order</th><th>Tranche</th></tr></thead>
+    <tbody>
+      <tr><td class="tick">NIFTYBEES</td><td class="num">22,00,000</td><td>Limit, near iNAV</td><td>First</td></tr>
+      <tr><td class="tick">MID150BEES</td><td class="num">20,00,000</td><td>Limit, split over 2&ndash;3 days</td><td>First</td></tr>
+      <tr><td class="tick">JUNIORBEES</td><td class="num">14,00,000</td><td>Limit, split over 2 days</td><td>First</td></tr>
+      <tr><td class="tick">GOLDBEES</td><td class="num">10,00,000</td><td>Limit, near iNAV</td><td>First</td></tr>
+      <tr><td class="tick">DIVOPPBEES</td><td class="num">6,00,000</td><td>Limit, work the order</td><td>Second</td></tr>
+      <tr><td class="tick">BANKBEES</td><td class="num">5,00,000</td><td>Limit, near iNAV</td><td>Second</td></tr>
+      <tr><td class="tick">SILVERBEES</td><td class="num">5,00,000</td><td>Limit, near iNAV</td><td>Second</td></tr>
+      <tr><td class="tick">PSUBNKBEES</td><td class="num">4,00,000</td><td>Limit, work the order</td><td>Third</td></tr>
+      <tr><td class="tick">INFRABEES</td><td class="num">4,00,000</td><td>Limit, work the order</td><td>Third</td></tr>
+      <tr><td class="tick">HNGSNGBEES</td><td class="num">3,00,000</td><td>Only if premium &lt;2%, else → GOLDBEES</td><td>Fourth</td></tr>
+      <tr><td class="tick">LIQUIDBEES</td><td class="num">7,00,000</td><td>Permanent buffer</td><td>Throughout</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer>
+  <p><strong style="color:var(--ink-2)">Not investment advice.</strong> No assessment has been made of your income, liabilities, existing holdings, tax bracket or risk capacity. Expense ratios move — NIFTYBEES (0.04%), MID150BEES (0.23%), SILVERBEES (~0.51%) and GOLDBEES (~0.79%) were checked against public data in August 2026; the others are indicative and must be verified on the Nippon India factsheet before you execute. Speak to a SEBI-registered investment adviser before committing capital.</p>
+  <p style="color:var(--ink-2);font-weight:600;margin-bottom:8px">Sources</p>
+  <ul>
+    <li><a href="https://www.spglobal.com/spdji/en/documents/spiva/spiva-india-scorecard-mid-year-2025.pdf">SPIVA India Mid-Year 2025 Scorecard — S&amp;P Dow Jones Indices</a></li>
+    <li><a href="https://etf.nipponindiaim.com/">Nippon India ETF — scheme pages and factsheets</a></li>
+    <li><a href="https://www.valueresearchonline.com/funds/1171/nippon-india-etf-nifty-50-bees/">NIFTYBEES — Value Research</a> · <a href="https://www.tickertape.in/etfs/nippon-india-nifty-midcap-150-etf-NTFM">MID150BEES</a> · <a href="https://www.tickertape.in/etfs/nippon-india-junior-bees-etf-JBES">JUNIORBEES</a> · <a href="https://www.tickertape.in/etfs/nippon-india-gold-bees-etf-GBES">GOLDBEES</a> — Tickertape</li>
+    <li><a href="https://www.iifl.com/blogs/gold-loan/gold-etf-tax-in-india-2026-post-finance-act-2024-rules">Gold ETF tax post Finance Act 2024</a> · <a href="https://www.iifl.com/blogs/gold-loan/silver-etf-tax-india-2026-rate-holding-period-and-filing">Silver ETF tax</a> — IIFL</li>
+    <li><a href="https://www.business-standard.com/article/markets/nippon-india-mf-turns-off-inflow-tap-for-5-global-funds-cites-limit-122063001076_1.html">Nippon India MF suspends inflows to global funds, citing the overseas limit — Business Standard</a></li>
+  </ul>
+</footer>
+
+</div>
