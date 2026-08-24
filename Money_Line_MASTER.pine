@@ -43,6 +43,24 @@
 //   Both are fixed in f_flip(), which is now the single copy of the rule. Every
 //   number below it — track record, PF, whipsaw cost, HOLD vs TRADE — is
 //   recomputed from the corrected signals, so expect them to move.
+//
+// WHAT CHANGED IN v63 — entry calibration (the STAY OUT problem)
+//   Separately from the bugs above, the two sides of the line were measured
+//   from opposite ends but shared one multiplier. The exit asks price to fall
+//   3 ATR below the 5-bar HIGH. The entry asked price to rise 3 ATR above the
+//   3-bar LOW — and that low rises as a recovery runs, so the trigger retreats
+//   as price chases it. The result is a script that exits reasonably and then
+//   sits in STAY OUT through the entire turn.
+//   Measured on SOLUSD weekly, 24 Aug 2026: BUY trigger 112.86, price 96.34.
+//   One weekly close had to gain 17.1% — 3.0 ATR — for the panel to say BUY,
+//   while a reference indicator on the same bar had already turned bullish at
+//   95.44. Solving both lines against the same ATR puts that reference's
+//   implied short multiplier at 1.36–1.66; at 1.5 this script's trigger lands
+//   on 96.36, which is the same call.
+//   So atrMultS now defaults to 1.5 while atrMultL stays at 3.0. An exit and an
+//   entry are different objects and do not share a distance. The BUY TRIGGER
+//   row also quotes the gap in ATR units now and flags it beyond 2.5 ATR, so
+//   an unreachable trigger cannot sit there looking like a normal reading.
 // ═══════════════════════════════════════════════════════════════════════════
 indicator("Money Line MASTER v63", overlay = true, max_labels_count = 500, max_lines_count = 500)
 
@@ -60,8 +78,8 @@ indicator("Money Line MASTER v63", overlay = true, max_labels_count = 500, max_l
 longLen   = input.int(5, "Long (Bullish) Lookback", minval = 1, group = "1. Line Settings")
 shortLen  = input.int(3, "Short (Bearish) Lookback", minval = 1, group = "1. Line Settings")
 atrLen    = input.int(21, "ATR Length", minval = 1, group = "1. Line Settings")
-atrMultL  = input.float(3.0, "ATR Multiplier — LONG stop", minval = 0.1, step = 0.05, group = "1. Line Settings")
-atrMultS  = input.float(3.0, "ATR Multiplier — SHORT stop", minval = 0.1, step = 0.05, group = "1. Line Settings")
+atrMultL  = input.float(3.0, "ATR Multiplier — LONG stop (the EXIT)", minval = 0.1, step = 0.05, tooltip = "How far below the recent HIGH the exit sits while you are long. Wide is correct here: an exit's job is to survive noise and stay in the trend, and 3 ATR is the conventional trailing-stop distance.", group = "1. Line Settings")
+atrMultS  = input.float(1.5, "ATR Multiplier — SHORT stop (the ENTRY trigger)", minval = 0.1, step = 0.05, tooltip = "How far above the recent LOW price must close to turn bullish. This is an ENTRY, not a stop, and it must not share the exit's multiplier.\n\nWhy it changed from 3.0 to 1.5 in v63: the two sides measure from opposite ends. The exit asks price to fall 3 ATR below the 5-bar HIGH; the entry asked price to rise 3 ATR above the 3-bar LOW. After a crash those are nowhere near the same distance, and the low itself rises as the recovery runs, so the trigger keeps retreating. On SOLUSD weekly (24 Aug 2026) that put the BUY trigger at 112.86 with price at 96.34 — a single weekly close would have had to gain 17.1%. The panel said STAY OUT through the whole turn.\n\n1.5 was not picked by feel. Solving both lines against the same ATR puts the reference indicator's implied short multiplier between 1.36 and 1.66, and 1.5 reproduces its flip level to within 0.02.\n\nTHE TRADE-OFF, STATED HONESTLY: entering earlier means entering more often and being wrong more often. On randomised price series a 1.5 entry roughly doubles the trade count and cuts the win rate from about 55% to about 35% versus 3.0. That test cannot tell you what happens on a real recovery — a random walk has no trend to catch, which is the entire thing this setting is trying to catch — so treat it as the cost side only. The WHIPSAW and HOLD vs TRADE rows measure the real answer on YOUR symbols. Watch them. If whipsaw climbs past about 25% of exits, try 2.0 as the middle setting before going back to 3.0.", group = "1. Line Settings")
 exitConfirm  = input.int(1, "Bar closes needed to SELL (chart TF)", minval = 1, maxval = 4, tooltip = "1 = sell on the FIRST close below the flip level. 2 = the break must hold for two consecutive closes BELOW THE SAME PRICE — the level that was broken is held still while the count runs, so the second close is measured against the first one's trigger and not against a stop that has since moved. Before v63 this setting was close to inert: the stop collapsed away from price the moment the first close broke it, so the count reset every time and 2 or more meant 'almost never sell'. It works now, which also means 2 will genuinely give back more before you exit. Try it on assets where the HOLD vs TRADE row says HOLD.", group = "1. Line Settings")
 entryConfirm = input.int(1, "Bar closes needed to BUY (chart TF)", minval = 1, maxval = 4, tooltip = "Same idea for entries, and it had the same fault before v63. 1 = buy on the first close above the flip level.", group = "1. Line Settings")
 btUseStart = input.bool(true, "Limit stats to a start year", tooltip = "OFF = measure from the first bar TradingView loads, which is 1891 on GOLD and 1986 on MSFT. That makes Track Record, ASSET FIT and the return figures non-comparable between symbols, and on GOLD it includes the decades when the price was pegged by law. ON = every stat below is measured from your chosen year.", group = "4. Backtest Window")
@@ -349,6 +367,11 @@ ma50  = ta.sma(close, 10)   // 10w ≈ 50d
 ma100 = ta.sma(close, 20)   // 20w ≈ 100d
 ma200 = ta.sma(close, 40)   // 40w ≈ 200d
 rsiV = ta.rsi(close, 14)
+// Display copy of the ATR the flip rule uses. Percentages hide how far a
+// trigger really is: 17% above price sounds survivable on a weekly crypto
+// chart and is in fact 3 ATR, which almost nothing closes through in one bar.
+// Quoting the gap in ATR units is what makes an unreachable trigger obvious.
+atrNow = ta.rma(ta.tr(true), atrLen)
 volAvg = ta.sma(volume, 20)
 volRatio = volAvg > 0 ? volume / volAvg : na
 ext200 = ma200 > 0 ? (close - ma200) / ma200 * 100 : na
@@ -819,8 +842,13 @@ if barstate.islast
         table.cell(t, 1, 26, playTxt, text_color = color.white, bgcolor = playCol, text_halign = text.align_center, text_size = txtSize)
 
         // ── TRIGGER: the price that changes the state, spelled out ──
-        trgTxt = na(moneyLine) ? "—" : trend == 1 ? "SELL / exit on a " + tfWord + " close below " + str.tostring(moneyLine, format.mintick) + "   (turns BEARISH)" : "BUY / enter on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + "   (turns BULLISH)"
-        trgCol = na(moneyLine) ? color.new(color.gray, 60) : trend == 1 ? color.new(#d50000, 35) : color.new(#00c853, 35)
+        // distance to the trigger in ATR units — the honest scale for "can a
+        // single close actually get there?". Beyond ~2.5 ATR, essentially none do.
+        trgATR  = na(atrNow) or atrNow <= 0 or na(moneyLine) ? na : math.abs(moneyLine - close) / atrNow
+        trgFar  = not na(trgATR) and trend == -1 and trgATR > 2.5
+        trgDist = na(trgATR) ? "" : "   [" + str.tostring(trgATR, "#.#") + " ATR away]" + (trgFar ? "  ⚠ OUT OF REACH — no single " + tfBar + " close gets there. Lower the SHORT multiplier." : "")
+        trgTxt = na(moneyLine) ? "—" : (trend == 1 ? "SELL / exit on a " + tfWord + " close below " + str.tostring(moneyLine, format.mintick) + "   (turns BEARISH)" : "BUY / enter on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + "   (turns BULLISH)") + trgDist
+        trgCol = na(moneyLine) ? color.new(color.gray, 60) : trgFar ? color.new(#d50000, 10) : trend == 1 ? color.new(#d50000, 35) : color.new(#00c853, 35)
         table.cell(t, 0, 23, trend == 1 ? "SELL TRIGGER" : "BUY TRIGGER", text_color = color.white, bgcolor = color.new(color.black, 15), text_halign = text.align_left, text_size = txtSize)
         table.cell(t, 1, 23, trgTxt, text_color = color.white, bgcolor = trgCol, text_halign = text.align_center, text_size = txtSize)
 
