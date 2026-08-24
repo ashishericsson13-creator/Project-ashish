@@ -61,6 +61,24 @@
 //   entry are different objects and do not share a distance. The BUY TRIGGER
 //   row also quotes the gap in ATR units now and flags it beyond 2.5 ATR, so
 //   an unreachable trigger cannot sit there looking like a normal reading.
+// CALIBRATION AGAINST THE REFERENCE — READ BEFORE TUNING THE MULTIPLIERS
+//   The current values are fitted to ONE symbol and do NOT generalise. Solved
+//   against the reference indicator on the same weekly bar, 24 Aug 2026:
+//       SOL wants a short multiplier of 1.84
+//       BTC wants 2.9 to 3.9   (reference still bearish, Next Flip 79,463.76,
+//                               ours had already flipped at 71,150.24)
+//   A multiplier scales every symbol by the same factor, so no single value can
+//   satisfy both. On SOL the reference is TIGHTER than a 3.0 band; on BTC it is
+//   WIDER. That is not a mis-set parameter, it is a different quantity being
+//   computed — a different anchor (close vs low), a different ratchet, or a
+//   volatility measure that is not ATR(21).
+//   Tuning the multiplier to match one symbol therefore moves the error onto
+//   the next symbol; the last two rounds of this did exactly that. The
+//   CALIBRATION row exists to end the guessing: it prints ATR, high(n), low(n),
+//   both raw bands AND the level actually in force, so the raw band can be told
+//   apart from the ratchet. Compare those across two symbols before changing a
+//   multiplier again.
+//
 //   Final figures: atrMultS 1.85, atrMultL 2.5, both solved against the flip
 //   this script and the reference took on the 17 Aug 2026 weekly bar. The
 //   first pass assumed the reference used 3.0 on the LONG side and solved the
@@ -661,6 +679,21 @@ if barstate.islast
     trigDist = inPos or na(moneyLine) or close <= 0 ? na : (moneyLine - close) / close * 100
     posSize  = na(stopDist) or stopDist <= 0 ? na : riskPct / stopDist * 100
 
+    // ── CALIBRATION: the raw inputs, not the finished levels ──
+    // Every level in this script is one of two sums:
+    //     exit  = high(n) - atrMultL * ATR      entry = low(n) + atrMultS * ATR
+    // then carried forward by a ratchet, which is why the level in force is
+    // usually NOT the raw band. Both are shown so the two can be told apart:
+    // a mismatch against another indicator is either a different band width
+    // (a multiplier) or a different ratchet (a different rule), and only these
+    // numbers side by side say which.
+    //     needed multiplier = (their level - low(n)) / ATR
+    // This renders in ALL THREE table modes. It first shipped inside the full
+    // mode only, which made it invisible in regime mode — the mode most likely
+    // to be on screen while comparing against another indicator.
+    calRaw = na(atrNow) or na(hi5Now) or na(lo3Now)
+    calTxt = calRaw ? "—" : "ATR(" + str.tostring(atrLen) + ") " + str.tostring(atrNow, format.mintick) + " (" + str.tostring(close > 0 ? atrNow / close * 100 : na, "#.#") + "% of price)  ·  high(" + str.tostring(longLen) + ") " + str.tostring(hi5Now, format.mintick) + "  ·  low(" + str.tostring(shortLen) + ") " + str.tostring(lo3Now, format.mintick) + "  ·  raw exit " + str.tostring(hi5Now - atrMultL * atrNow, format.mintick) + " @" + str.tostring(atrMultL, "#.##") + "  ·  raw entry " + str.tostring(lo3Now + atrMultS * atrNow, format.mintick) + " @" + str.tostring(atrMultS, "#.##") + "  ·  IN FORCE " + str.tostring(moneyLine, format.mintick)
+
     // Row 0 — ACTION
     // quality grade alone is not a size. A grade-A signal whose stop is 20% away
     // still risks 20% of the position, so the stop distance caps the size.
@@ -715,6 +748,8 @@ if barstate.islast
         for i = 0 to 9
             table.cell(t, 0, 3 + i, array.get(rgRows, i), text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
             table.cell(t, 1, 3 + i, array.get(rgVals, i), text_color = color.white, bgcolor = i == 9 ? confluCol : i == 0 ? (thinHist ? color.new(#d50000, 15) : score >= 8 ? color.new(#00c853, 25) : score >= 6 ? color.new(color.orange, 25) : color.new(#d50000, 25)) : i == 5 ? (not inPos or na(stopDist) ? color.new(color.gray, 55) : stopDist <= 8 ? color.new(#00c853, 25) : stopDist <= 15 ? color.new(color.orange, 25) : color.new(#d50000, 20)) : color.new(color.gray, 55), text_halign = text.align_center, text_size = txtSize)
+        table.cell(t, 0, 13, "CALIBRATION", text_color = color.white, bgcolor = color.new(color.gray, 30), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 13, calTxt, text_color = color.white, bgcolor = color.new(color.gray, 65), text_halign = text.align_center, text_size = txtSize)
 
     if not regimeMode and not compactMode
         // Row 3 — quality checks live
@@ -881,15 +916,6 @@ if barstate.islast
         playCol = not enough ? color.new(color.gray, 55) : holdWon and not coreWon ? color.new(#2962ff, 15) : coreWon ? color.new(color.purple, 20) : sysRet > bhRet ? color.new(#00c853, 20) : color.new(color.orange, 25)
         table.cell(t, 0, 26, "HOW TO PLAY", text_color = color.white, bgcolor = color.new(color.black, 5), text_halign = text.align_left, text_size = txtSize)
         table.cell(t, 1, 26, playTxt, text_color = color.white, bgcolor = playCol, text_halign = text.align_center, text_size = txtSize)
-
-        // ── CALIBRATION: the raw inputs, not the finished levels ──
-        // Every level here is one of two sums:
-        //     exit  = high(n) - atrMultL * ATR
-        //     entry = low(n)  + atrMultS * ATR
-        // With these three numbers on screen, matching this script to another
-        // indicator is one division instead of a round of trial and error:
-        //     needed multiplier = (their level - low(n)) / ATR
-        calTxt = na(atrNow) or na(hi5Now) or na(lo3Now) ? "—" : "ATR(" + str.tostring(atrLen) + ") " + str.tostring(atrNow, format.mintick) + "  (" + str.tostring(close > 0 ? atrNow / close * 100 : na, "#.#") + "% of price)   ·   high(" + str.tostring(longLen) + ") " + str.tostring(hi5Now, format.mintick) + "   ·   low(" + str.tostring(shortLen) + ") " + str.tostring(lo3Now, format.mintick) + "   ·   exit " + str.tostring(hi5Now - atrMultL * atrNow, format.mintick) + " @" + str.tostring(atrMultL, "#.##") + "   ·   entry " + str.tostring(lo3Now + atrMultS * atrNow, format.mintick) + " @" + str.tostring(atrMultS, "#.##")
         table.cell(t, 0, 27, "CALIBRATION", text_color = color.white, bgcolor = color.new(color.gray, 30), text_halign = text.align_left, text_size = txtSize)
         table.cell(t, 1, 27, calTxt, text_color = color.white, bgcolor = color.new(color.gray, 65), text_halign = text.align_center, text_size = txtSize)
 
@@ -956,6 +982,8 @@ if barstate.islast
         table.cell(t, 1, 6, cTrgTxt, text_color = color.white, bgcolor = trend == 1 ? color.new(#d50000, 35) : color.new(#00c853, 35), text_halign = text.align_center, text_size = txtSize)
         table.cell(t, 0, 4, "LONG-TERM", text_color = color.white, bgcolor = color.new(color.blue, 20), text_halign = text.align_left, text_size = txtSize)
         table.cell(t, 1, 4, cLtTxt, text_color = color.white, bgcolor = cLtCol, text_halign = text.align_center, text_size = txtSize)
+        table.cell(t, 0, 7, "CALIBRATION", text_color = color.white, bgcolor = color.new(color.gray, 30), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 7, calTxt, text_color = color.white, bgcolor = color.new(color.gray, 65), text_halign = text.align_center, text_size = txtSize)
 
 // ═══════════════════════════════════════════════════════════════
 // SCANNER — same engine per symbol, bottom-right overview
