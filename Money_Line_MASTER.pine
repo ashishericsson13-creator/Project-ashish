@@ -29,8 +29,22 @@
 // HARD LIMIT
 //   40 request.*() calls, and it uses all 40. Any new symbol, timeframe or
 //   fundamental breaks the whole script silently. Reuse existing data instead.
+//
+// WHAT CHANGED IN v63 — signal correctness
+//   The flip rule lived in three near-identical copies and all three judged a
+//   bar's close against a stop that had already been rebuilt using that same
+//   bar's high, low and true range. A bar could therefore move the trigger it
+//   was about to be measured against. Two consequences, both visible in the
+//   stats this script already prints:
+//     • SELLs at the top of an up-spike and BUYs on the low of a capitulation
+//       bar — the whipsaws the WHIPSAW row counts.
+//     • "Bar closes needed to SELL" above 1 could essentially never fire, so
+//       the fix the WHIPSAW row recommends was switched off, not applied.
+//   Both are fixed in f_flip(), which is now the single copy of the rule. Every
+//   number below it — track record, PF, whipsaw cost, HOLD vs TRADE — is
+//   recomputed from the corrected signals, so expect them to move.
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Money Line MASTER v62", overlay = true, max_labels_count = 500, max_lines_count = 500)
+indicator("Money Line MASTER v63", overlay = true, max_labels_count = 500, max_lines_count = 500)
 
 // ═══════════════════════════════════════════════════════════════
 //  THE SYNTHESIS (from everything we tested):
@@ -48,8 +62,8 @@ shortLen  = input.int(3, "Short (Bearish) Lookback", minval = 1, group = "1. Lin
 atrLen    = input.int(21, "ATR Length", minval = 1, group = "1. Line Settings")
 atrMultL  = input.float(3.0, "ATR Multiplier — LONG stop", minval = 0.1, step = 0.05, group = "1. Line Settings")
 atrMultS  = input.float(3.0, "ATR Multiplier — SHORT stop", minval = 0.1, step = 0.05, group = "1. Line Settings")
-exitConfirm  = input.int(1, "Bar closes needed to SELL (chart TF)", minval = 1, maxval = 4, tooltip = "1 = sell on the FIRST weekly close below the line (original behaviour). 2 = the break must hold for two weekly closes before it counts. Higher numbers kill whipsaws but give back more before you exit. Try 2 on assets where the HOLD vs TRADE row says HOLD.", group = "1. Line Settings")
-entryConfirm = input.int(1, "Bar closes needed to BUY (chart TF)", minval = 1, maxval = 4, tooltip = "Same idea for entries. 1 = original.", group = "1. Line Settings")
+exitConfirm  = input.int(1, "Bar closes needed to SELL (chart TF)", minval = 1, maxval = 4, tooltip = "1 = sell on the FIRST close below the flip level. 2 = the break must hold for two consecutive closes BELOW THE SAME PRICE — the level that was broken is held still while the count runs, so the second close is measured against the first one's trigger and not against a stop that has since moved. Before v63 this setting was close to inert: the stop collapsed away from price the moment the first close broke it, so the count reset every time and 2 or more meant 'almost never sell'. It works now, which also means 2 will genuinely give back more before you exit. Try it on assets where the HOLD vs TRADE row says HOLD.", group = "1. Line Settings")
+entryConfirm = input.int(1, "Bar closes needed to BUY (chart TF)", minval = 1, maxval = 4, tooltip = "Same idea for entries, and it had the same fault before v63. 1 = buy on the first close above the flip level.", group = "1. Line Settings")
 btUseStart = input.bool(true, "Limit stats to a start year", tooltip = "OFF = measure from the first bar TradingView loads, which is 1891 on GOLD and 1986 on MSFT. That makes Track Record, ASSET FIT and the return figures non-comparable between symbols, and on GOLD it includes the decades when the price was pegged by law. ON = every stat below is measured from your chosen year.", group = "4. Backtest Window")
 btStartY   = input.int(2010, "Start year for all stats", minval = 1900, maxval = 2100, group = "4. Backtest Window")
 whipWeeks  = input.int(6, "Whipsaw = re-bought within N bars", minval = 1, maxval = 26, tooltip = "An exit that is followed by a BUY within N bars AT A HIGHER PRICE is counted as a whipsaw: you sold and paid up to get back in. The row at the bottom of the table counts them and totals what they cost.", group = "4. Backtest Window")
@@ -159,33 +173,85 @@ s31 = chartMkt == "IN" ? "NSE:GOLDBEES" : chartMkt == "CRYPTO" ? "BINANCE:ALGOUS
 s32 = addChartSym ? syminfo.tickerid : chartMkt == "IN" ? "NSE:CPSEETF" : chartMkt == "CRYPTO" ? "BINANCE:VETUSDT" : "NYSE:IBM"
 
 // ═══════════════════════════════════════════════════════════════
-// CORE ENGINE — baseline money line (1-close flip, no gates)
+// CORE ENGINE — the flip rule, in ONE place
 // ═══════════════════════════════════════════════════════════════
-tr_ = ta.tr(true)
-atrV = ta.rma(tr_, atrLen)
-hh = ta.highest(high, longLen)
-ll = ta.lowest(low, shortLen)
-lsB = hh - atrMultL * atrV
-ssB = ll + atrMultS * atrV
+// This rule used to exist three times: here, in f_tfStats() for the daily and
+// weekly rows, and in f_scanTrend() for the Focus List. Three copies drift, and
+// these had: the panel could read HOLDING while the Focus List read ★ NEW SELL
+// on the same symbol on the same bar. One function called from all three sites
+// is what stops that happening again.
+//
+// TWO RULES THAT WERE WRONG BEFORE v63
+//
+//  1. A bar may not move its own trigger. The stop is rebuilt every bar from
+//     highest(high, longLen) and the ATR, and both of those include the bar
+//     being judged. So a bar that printed a new high ratcheted the stop up, and
+//     then that same bar's close — still well above the level that existed when
+//     the bar opened — counted as "below the line". That is where the exits at
+//     the top of a spike came from, and the WHIPSAW row was measuring the
+//     result. A close is now tested against the level carried in from the last
+//     CLOSED bar, which is what Chandelier's original does. The same fault ran
+//     in reverse on the short side: a capitulation bar dragged the buy trigger
+//     down to meet its own close and printed a BUY on the low.
+//
+//  2. Confirmation has to hold the broken level still. With "closes needed to
+//     SELL" at 2, the first close below flipped the ratchet off (close[1] was
+//     now under the stop), so the next bar rebuilt the stop far lower on the
+//     freshly expanded ATR, the second close landed ABOVE that lower level, and
+//     the counter reset to zero. The setting could therefore almost never fire:
+//     raising it did not reduce whipsaw, it quietly switched selling off — while
+//     the WHIPSAW row went on recommending exactly that. The broken level is now
+//     frozen for the duration of the count, so "2 closes" means two closes
+//     beyond one fixed price, which is what the tooltip always claimed.
+f_flip() =>
+    _atr = ta.rma(ta.tr(true), atrLen)
+    _lsB = ta.highest(high, longLen) - atrMultL * _atr
+    _ssB = ta.lowest(low, shortLen)  + atrMultS * _atr
+    var float _ls = na
+    var float _ss = na
+    // captured BEFORE the ratchet runs: the levels that were in force for this
+    // bar's close, and the only ones it may legitimately be judged against
+    _lsPrev = nz(_ls[1], _lsB)
+    _ssPrev = nz(_ss[1], _ssB)
+    _ls := close[1] > _lsPrev ? math.max(_lsB, _lsPrev) : _lsB
+    _ss := close[1] < _ssPrev ? math.min(_ssB, _ssPrev) : _ssB
+    var int   _t   = 1
+    var int   _bn  = 0
+    var int   _an  = 0
+    var float _brk = na
+    // while a confirmation count is running, the frozen broken level is the
+    // reference; otherwise it is last bar's stop
+    _refL = _bn > 0 and not na(_brk) ? _brk : _lsPrev
+    _refS = _an > 0 and not na(_brk) ? _brk : _ssPrev
+    _bn := _t == 1  and close < _refL ? _bn + 1 : 0
+    _an := _t == -1 and close > _refS ? _an + 1 : 0
+    _brk := _bn == 1 ? _refL : _an == 1 ? _refS : _bn > 0 or _an > 0 ? _brk : na
+    // the level this bar's close was actually judged against. Read here because
+    // _t still holds the incoming trend; the next line may reassign it.
+    _tested = _t == 1 ? _refL : _refS
+    _t := _t == -1 and _an >= entryConfirm ? 1 : _t == 1 and _bn >= exitConfirm ? -1 : _t
+    // a flip consumes the count — the new side starts from a clean slate
+    if _t != _t[1]
+        _bn  := 0
+        _an  := 0
+        _brk := na
+    [_t, _t == 1 ? _refL : _refS, _tested]
 
-var float longStop = na
-var float shortStop = na
-longStop  := close[1] > nz(longStop[1], lsB) ? math.max(lsB, nz(longStop[1], lsB)) : lsB
-shortStop := close[1] < nz(shortStop[1], ssB) ? math.min(ssB, nz(shortStop[1], ssB)) : ssB
-
-var int trend = 1
-// consecutive weekly closes on the wrong side of the line. With both confirms
-// set to 1 this is mathematically identical to the original one-close rule.
-var int belowN = 0
-var int aboveN = 0
-belowN := trend == 1 and close < longStop ? belowN + 1 : 0
-aboveN := trend == -1 and close > shortStop ? aboveN + 1 : 0
-trend := trend == -1 and aboveN >= entryConfirm ? 1 : trend == 1 and belowN >= exitConfirm ? -1 : trend
-isFlip = trend != trend[1]
-moneyLine = trend == 1 ? longStop : shortStop
+// moneyLine is the level the CURRENT bar's close is measured against, so it is
+// fixed for the whole bar. The old line was the stop recomputed from the forming
+// bar, which meant "Flip Level: 1234.5" moved while you were reading it and
+// could not be left as a resting order.
+[trend, moneyLine, testedLevel] = f_flip()
+isFlip = not na(trend[1]) and trend != trend[1]
 
 buySignal  = isFlip and trend == 1
 sellSignal = isFlip and trend == -1
+
+// Has this bar actually finished? `not barstate.isconfirmed` stays true all
+// weekend once the session has ended, so the honest test is whether the bar's
+// close time has passed. Hoisted to here because the table and the tripwire
+// alert both need it and had drifted into asking the question separately.
+barUnconfirmed = time_close > timenow
 
 var float entryPrice = na
 var float exitPrice = na
@@ -195,7 +261,9 @@ var float lastFlipPx = na
 var float flipClose = na
 if isFlip
     flipBarIdx := bar_index
-    lastFlipPx := moneyLine[1]   // the LEVEL that was crossed (the old tripwire), not the close
+    lastFlipPx := testedLevel    // the LEVEL this bar's close actually broke, not the close
+                                 // (moneyLine[1] was a bar early and, after a flip,
+                                 //  reported the level for the side just left)
     flipClose  := close          // the PRICE when the regime turned, for the since-flip stat
 var int tradeCount = 0
 var int winCount = 0
@@ -237,48 +305,18 @@ if sellSignal
 // ═══════════════════════════════════════════════════════════════
 // QUALITY CHECKS (grade, never gate)
 // ═══════════════════════════════════════════════════════════════
-// Self-contained so the daily context recomputes the whole chain on DAILY bars
-// rather than inheriting anything from the chart-timeframe `trend` variable.
-f_trendOnly() =>
-    _tr = ta.tr(true)
-    _atr = ta.rma(_tr, atrLen)
-    _hh = ta.highest(high, longLen)
-    _ll = ta.lowest(low, shortLen)
-    _lsB = _hh - atrMultL * _atr
-    _ssB = _ll + atrMultS * _atr
-    var float _ls = na
-    var float _ss = na
-    _ls := close[1] > nz(_ls[1], _lsB) ? math.max(_lsB, nz(_ls[1], _lsB)) : _lsB
-    _ss := close[1] < nz(_ss[1], _ssB) ? math.min(_ssB, nz(_ss[1], _ssB)) : _ssB
-    var int _t = 1
-    var int _bn = 0
-    var int _an = 0
-    _bn := _t == 1 and close < _ls ? _bn + 1 : 0
-    _an := _t == -1 and close > _ss ? _an + 1 : 0
-    _t := _t == -1 and _an >= entryConfirm ? 1 : _t == 1 and _bn >= exitConfirm ? -1 : _t
-    _t
-
 // ── TIMEFRAME FIT ────────────────────────────────────────────────────
 // Runs the SAME flip rule and the SAME mini-backtest on daily and weekly, so
 // the two can be compared on one screen instead of by loading two charts.
 // Trade count and profit factor are packed into one number (n*1000 + PF*10)
 // because each element of a request.security tuple counts against a series
 // budget this script has already overrun once.
+//
+// f_trendOnly() used to sit here: a fourth copy of the flip rule that nothing
+// ever called. It is gone — f_flip() is the rule now, and a copy that compiles
+// but is never evaluated is the easiest place for a fix to go missing.
 f_tfStats() =>
-    _tr = ta.tr(true)
-    _atr = ta.rma(_tr, atrLen)
-    _lsB = ta.highest(high, longLen) - atrMultL * _atr
-    _ssB = ta.lowest(low, shortLen)  + atrMultS * _atr
-    var float _ls = na
-    var float _ss = na
-    _ls := close[1] > nz(_ls[1], _lsB) ? math.max(_lsB, nz(_ls[1], _lsB)) : _lsB
-    _ss := close[1] < nz(_ss[1], _ssB) ? math.min(_ssB, nz(_ss[1], _ssB)) : _ssB
-    var int _t = 1
-    var int _bn = 0
-    var int _an = 0
-    _bn := _t == 1  and close < _ls ? _bn + 1 : 0
-    _an := _t == -1 and close > _ss ? _an + 1 : 0
-    _t := _t == -1 and _an >= entryConfirm ? 1 : _t == 1 and _bn >= exitConfirm ? -1 : _t
+    [_t, _lvl, _tested] = f_flip()
     // mini-backtest, windowed to the same start year as the main table
     _in = not btUseStart or year >= btStartY
     var float _entry = na
@@ -546,9 +584,7 @@ if barstate.islast
     table.clear(t, 0, 0, 1, 27)   // wipe stale cells so mode switches render cleanly
 
     // ── is this bar actually finished? a flip on a forming bar can un-happen ──
-    // not barstate.isconfirmed stays true all weekend once the session has ended.
-    // The honest test is whether the bar's close time has actually passed.
-    unconf  = time_close > timenow
+    unconf  = barUnconfirmed
     hrsLeft = (time_close - timenow) / 3600000
     leftTxt = na(hrsLeft) or hrsLeft <= 0 ? "" : hrsLeft >= 24 ? str.tostring(math.floor(hrsLeft / 24), "#") + "d " + str.tostring(math.floor(hrsLeft % 24), "#") + "h left" : str.tostring(math.floor(hrsLeft), "#") + "h left"
     // ── how far is the exit, and what size does that allow? ──
@@ -676,8 +712,11 @@ if barstate.islast
         table.cell(t, 1, 10, lfTxt, text_color = color.white, bgcolor = color.new(color.gray, 60), text_halign = text.align_center, text_size = txtSize)
 
         // ── Tripwire: intraweek price vs the buy level (only meaningful while flat) ──
-        twTxt = trend == 1 ? "—  (in position; watching exit level instead)" : close > moneyLine ? "⚡ PRICE ABOVE BUY LEVEL — unconfirmed until wk close (early-entry zone)" : "below buy level — waiting  (" + str.tostring((close - moneyLine) / moneyLine * 100, "#.#") + "% away)"
-        twCol = trend == 1 ? color.new(color.gray, 60) : close > moneyLine ? color.new(#00c853, 15) : color.new(color.gray, 50)
+        // A live bar that has crossed the trigger has ALREADY flipped trend to 1,
+        // so "trend == 1" alone cannot mean "in position" here — on an unfinished
+        // bar it may mean the entry is still provisional. Say which.
+        twTxt = trend == 1 and buySignal and unconf ? "⚡ PRICE ABOVE BUY LEVEL — flip is on an unfinished bar, can still un-happen (" + leftTxt + ")" : trend == 1 ? "—  (in position; watching exit level instead)" : close > moneyLine ? "⚡ PRICE ABOVE BUY LEVEL — unconfirmed until " + tfBar + " close (early-entry zone)" : "below buy level — waiting  (" + str.tostring((close - moneyLine) / moneyLine * 100, "#.#") + "% away)"
+        twCol = trend == 1 and buySignal and unconf ? color.new(#7c4dff, 15) : trend == 1 ? color.new(color.gray, 60) : close > moneyLine ? color.new(#00c853, 15) : color.new(color.gray, 50)
         table.cell(t, 0, 11, "TRIPWIRE", text_color = color.white, bgcolor = color.new(color.teal, 10), text_halign = text.align_left, text_size = txtSize)
         table.cell(t, 1, 11, twTxt, text_color = color.white, bgcolor = twCol, text_halign = text.align_center, text_size = txtSize)
 
@@ -685,7 +724,10 @@ if barstate.islast
         offHi = hi52 > 0 ? (close - hi52) / hi52 * 100 : na
         weeksIn = na(flipBarIdx) ? na : bar_index - flipBarIdx
         atNewHigh = close >= hiAll * 0.995
-        stageTxt = trend != 1 ? "—  (no active uptrend)" : atNewHigh ? "BREAKOUT — at/near all-time highs, " + str.tostring(weeksIn) + tfBar + " into trend" : offHi > -3 ? "TESTING HIGHS — within 3% of 52-bar high, " + str.tostring(weeksIn) + tfBar + " in" : offHi > -15 ? "RECOVERING — " + str.tostring(-offHi, "#.#") + "% below 52-bar high, " + str.tostring(weeksIn) + tfBar + " in" : "EARLY — still " + str.tostring(-offHi, "#.#") + "% below 52-bar high, " + str.tostring(weeksIn) + tfBar + " in"
+        // hiAll is highest(high, 500) — the highest of the last 500 BARS, which is
+        // as far back as the buffer goes. It is not the all-time high, and saying
+        // so on a symbol with longer history was simply wrong.
+        stageTxt = trend != 1 ? "—  (no active uptrend)" : atNewHigh ? "BREAKOUT — at/near the 500-bar high, " + str.tostring(weeksIn) + tfBar + " into trend" : offHi > -3 ? "TESTING HIGHS — within 3% of 52-bar high, " + str.tostring(weeksIn) + tfBar + " in" : offHi > -15 ? "RECOVERING — " + str.tostring(-offHi, "#.#") + "% below 52-bar high, " + str.tostring(weeksIn) + tfBar + " in" : "EARLY — still " + str.tostring(-offHi, "#.#") + "% below 52-bar high, " + str.tostring(weeksIn) + tfBar + " in"
         stageCol = trend != 1 ? color.new(color.gray, 60) : atNewHigh ? color.new(#00c853, 15) : offHi > -3 ? color.new(color.orange, 25) : color.new(color.blue, 30)
         table.cell(t, 0, 12, "TREND STAGE", text_color = color.white, bgcolor = color.new(color.maroon, 15), text_halign = text.align_left, text_size = txtSize)
         table.cell(t, 1, 12, stageTxt, text_color = color.white, bgcolor = stageCol, text_halign = text.align_center, text_size = txtSize)
@@ -842,25 +884,9 @@ if barstate.islast
 // bars. `_n` gives a deterministic warm-up guard, and returning the [1] values makes
 // the reading independent of where each chart happens to sit inside its live bar.
 f_scanTrend() =>
-    _tr = ta.tr(true)
-    _atr = ta.rma(_tr, atrLen)
-    _hh = ta.highest(high, longLen)
-    _ll = ta.lowest(low, shortLen)
-    _lsB = _hh - atrMultL * _atr
-    _ssB = _ll + atrMultS * _atr
-    var float _ls = na
-    var float _ss = na
-    _ls := close[1] > nz(_ls[1], _lsB) ? math.max(_lsB, nz(_ls[1], _lsB)) : _lsB
-    _ss := close[1] < nz(_ss[1], _ssB) ? math.min(_ssB, nz(_ss[1], _ssB)) : _ssB
-    var int _t = 1
-    var int _bn = 0
-    var int _an = 0
-    _bn := _t == 1 and close < _ls ? _bn + 1 : 0
-    _an := _t == -1 and close > _ss ? _an + 1 : 0
-    _t := _t == -1 and _an >= entryConfirm ? 1 : _t == 1 and _bn >= exitConfirm ? -1 : _t
-    _lvl = _t == 1 ? _ls : _ss
+    [_t, _lvl, _tested] = f_flip()
     _dist = _lvl > 0 ? (close - _lvl) / _lvl * 100 : na
-    _fresh = _t != _t[1]
+    _fresh = not na(_t[1]) and _t != _t[1]
     // warm-up guard: the trailing stop is path-dependent, so suppress output until
     // it has had enough bars to converge. Without this, a short-history symbol shows
     // a state that is really just an artefact of its seed value.
@@ -885,10 +911,10 @@ f_scanTrend() =>
     // element: each element of a request.security tuple counts against
     // TradingView's series budget, and 32 x 5 exceeds it. Bit 1 = confirmed
     // flip, bit 2 = live crossing.
-    _P = _off == 1 and _W and _t != _t[1]
+    _P = _off == 1 and _W and _fresh
     // how long has this symbol been in its current regime?
     var int _fb = na
-    if _t != _t[1]
+    if _fresh
         _fb := bar_index
     _bars0 = na(_fb) ? 0 : bar_index - _fb
     _BARS  = _off == 0 ? _bars0 : nz(_bars0[1], 0)
@@ -1036,7 +1062,7 @@ if showScanner and barstate.islast
     // always present — the urgency sort would otherwise drop a settled trend
     // (e.g. TCS at +12% above its line) below the display cut.
     array.push(scores, addChartSym ? -1.0 : f_score(st32, sd32, sf32)), array.push(idxs, 32)
-    table.cell(sc, 0, 0, "FOCUS LIST v62", text_color = color.white, bgcolor = color.new(color.blue, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(sc, 0, 0, "FOCUS LIST v63", text_color = color.white, bgcolor = color.new(color.blue, 20), text_halign = text.align_left, text_size = txtSize)
     // diagnostic: the bar each symbol was read at. Same date on two different
     // charts = the Focus List is genuinely aligned.
     // Every symbol should be read at the SAME bar. If they are not, the scan is
@@ -1270,9 +1296,14 @@ if showScanner and barstate.islast
 // ═══════════════════════════════════════════════════════════════
 // ALERTS
 // ═══════════════════════════════════════════════════════════════
-// score is out of 9 now, not 5 — the old ">= 4" fired on almost everything
-alertcondition(buySignal and score >= 7, title = "BUY — Grade A (7+/9 checks)", message = "{{ticker}} {{interval}}: BUY signal, GRADE A at {{close}} — 7+ of 9 checks agree")
-alertcondition(sellSignal and score >= 7, title = "SELL — well confirmed (7+/9)", message = "{{ticker}} {{interval}}: SELL signal at {{close}} — downtrend well confirmed")
+// score is out of 9 now, not 5 — the old ">= 4" fired on almost everything.
+// The A threshold is 8, not 7: `grade` is assigned A at score >= 8, so an alert
+// titled "Grade A" that fired at 7 was labelling B setups as A.
+// Set these alerts to "Once Per Bar Close" in TradingView. On any other setting
+// they fire intrabar, and an intrabar flip is exactly the thing this script
+// marks ⚠ UNCONFIRMED because it can still un-happen before the bar closes.
+alertcondition(buySignal and score >= 8, title = "BUY — Grade A (8+/9 checks)", message = "{{ticker}} {{interval}}: BUY signal, GRADE A at {{close}} — 8+ of 9 checks agree")
+alertcondition(sellSignal and score >= 8, title = "SELL — well confirmed (8+/9)", message = "{{ticker}} {{interval}}: SELL signal at {{close}} — downtrend well confirmed")
 alertcondition(buySignal, title = "BUY — any grade", message = "{{ticker}} {{interval}}: BUY signal at {{close}} — check grade on chart")
 
 // breadth on the last bar, for the alert below
@@ -1322,7 +1353,16 @@ alertcondition(not na(gPct) and gPct >= 80 and nz(gPct[1], 0) < 80, title = "Bre
 alertcondition(not na(gPct) and gPct <= 20 and nz(gPct[1], 100) > 20, title = "Breadth crossed into CROWDED SHORT", message = "Scanned list breadth just fell below 20% bullish — broad risk-off.")
 alertcondition(sellSignal, title = "SELL", message = "{{ticker}} {{interval}}: SELL signal at {{close}}")
 
-// intraweek tripwire: fires the moment price trades ABOVE the buy flip level while still bearish
-// (unconfirmed — the weekly close can still fall back below; this is the EARLY-PRICE heads-up)
-tripwireUp = trend == -1 and close > moneyLine
+// Intrabar tripwire: price is through the BUY trigger but the close is not in yet.
+//
+// The old condition was `trend == -1 and close > moneyLine`, which could almost
+// never be true. On a live bar Pine evaluates with the running close, so the
+// instant close rises above the buy level the flip rule above has ALREADY set
+// trend to 1 — and the test then asks for a bearish trend that no longer exists.
+// The alert was therefore silent in exactly the situation it was written for,
+// and only fired at all when "closes needed to BUY" was 2 or more.
+//
+// Two ways price can be through the trigger on an unfinished bar: the flip is
+// printing on the live bar, or a multi-close confirmation count is still running.
+tripwireUp = barUnconfirmed and (buySignal or (trend == -1 and close > moneyLine))
 alertcondition(tripwireUp, title = "⚡ PRICE ABOVE BUY LEVEL (unconfirmed)", message = "{{ticker}}: price {{close}} is ABOVE the buy flip level intrabar — unconfirmed until the bar closes. Early-entry zone.")
