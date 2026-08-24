@@ -1,0 +1,1328 @@
+//@version=6
+// ═══════════════════════════════════════════════════════════════════════════
+// MONEY LINE MASTER v45
+//
+// WHAT IT IS
+//   An ATR trailing-stop regime line. Above it = bullish, below = bearish.
+//   The line follows whatever timeframe the chart is on. Everything else in
+//   this script qualifies that one fact — none of it changes the signal.
+//
+// WHAT IT WILL NOT DO
+//   It does not predict. It reports which side of a line price closed on,
+//   after the close. On large-cap compounders it has historically given back
+//   most of the upside versus simply holding (see the HOLD vs TRADE row and
+//   the three return figures). Its value there is the exit, not the entry.
+//
+// THE ROWS THAT MATTER MOST
+//   RISK & SIZE     how far the exit sits and what position that allows
+//   HOLD vs TRADE   signals vs core-200w vs buy&hold, from your start year
+//   WHIPSAW         exits that bought back higher, and what they cost
+//   CORE EXIT       the slow 200-bar line for a held position
+//   CONFIRM         n/9 checks, direction-aware
+//
+// WARNINGS BUILT IN
+//   ⚠ UNCONFIRMED    the bar has not closed; this can still un-happen
+//   ⚠ ONLY nnd       the symbol is too young for the line to mean anything
+//   ⚠ MIXED DATES    focus list symbols are reading different bars — do not act
+//   ⧗ / ⚡           row is stale / crossing live but unconfirmed
+//
+// HARD LIMIT
+//   40 request.*() calls, and it uses all 40. Any new symbol, timeframe or
+//   fundamental breaks the whole script silently. Reuse existing data instead.
+// ═══════════════════════════════════════════════════════════════════════════
+indicator("Money Line MASTER v62", overlay = true, max_labels_count = 500, max_lines_count = 500)
+
+// ═══════════════════════════════════════════════════════════════
+//  THE SYNTHESIS (from everything we tested):
+//  • Engine = CLEAN baseline (1-close flip) → trades EVERY asset,
+//    no lockouts (the ULTIMATE gates locked out TSLA & TCS)
+//  • The gates (daily confluence, 200d MA, MA stack, volume, RSI)
+//    now GRADE each BUY (A/B/C) instead of blocking it
+//    → you never miss a trend, but you know its quality → size accordingly
+//  • Long-Term row = plain-language market health for hold decisions
+// ═══════════════════════════════════════════════════════════════
+
+// ── 1. Line Settings (the validated baseline) ──
+longLen   = input.int(5, "Long (Bullish) Lookback", minval = 1, group = "1. Line Settings")
+shortLen  = input.int(3, "Short (Bearish) Lookback", minval = 1, group = "1. Line Settings")
+atrLen    = input.int(21, "ATR Length", minval = 1, group = "1. Line Settings")
+atrMultL  = input.float(3.0, "ATR Multiplier — LONG stop", minval = 0.1, step = 0.05, group = "1. Line Settings")
+atrMultS  = input.float(3.0, "ATR Multiplier — SHORT stop", minval = 0.1, step = 0.05, group = "1. Line Settings")
+exitConfirm  = input.int(1, "Bar closes needed to SELL (chart TF)", minval = 1, maxval = 4, tooltip = "1 = sell on the FIRST weekly close below the line (original behaviour). 2 = the break must hold for two weekly closes before it counts. Higher numbers kill whipsaws but give back more before you exit. Try 2 on assets where the HOLD vs TRADE row says HOLD.", group = "1. Line Settings")
+entryConfirm = input.int(1, "Bar closes needed to BUY (chart TF)", minval = 1, maxval = 4, tooltip = "Same idea for entries. 1 = original.", group = "1. Line Settings")
+btUseStart = input.bool(true, "Limit stats to a start year", tooltip = "OFF = measure from the first bar TradingView loads, which is 1891 on GOLD and 1986 on MSFT. That makes Track Record, ASSET FIT and the return figures non-comparable between symbols, and on GOLD it includes the decades when the price was pegged by law. ON = every stat below is measured from your chosen year.", group = "4. Backtest Window")
+btStartY   = input.int(2010, "Start year for all stats", minval = 1900, maxval = 2100, group = "4. Backtest Window")
+whipWeeks  = input.int(6, "Whipsaw = re-bought within N bars", minval = 1, maxval = 26, tooltip = "An exit that is followed by a BUY within N bars AT A HIGHER PRICE is counted as a whipsaw: you sold and paid up to get back in. The row at the bottom of the table counts them and totals what they cost.", group = "4. Backtest Window")
+adxMin = input.int(20, "Min ADX for a 'trending' check", minval = 10, maxval = 40, tooltip = "ADX measures how strongly price is trending, in either direction. Below this the market is ranging — the condition that produces whipsaw. 20 is the conventional threshold.", group = "4. Backtest Window")
+extMax = input.float(25.0, "Max % from the 200-bar mean", minval = 5, maxval = 100, step = 1, tooltip = "Beyond this distance from the long mean, a trend is stretched and mean-reversion risk rises. The check fails above it.", group = "4. Backtest Window")
+minHistDays = input.int(365, "Minimum symbol history (days) before trusting signals", minval = 30, maxval = 2000, tooltip = "Below this, the panel warns that the symbol has not existed long enough for a trailing stop to mean anything. Measured in calendar days, not bars — a newly listed stock produces plenty of 4H bars while still being only weeks old.", group = "4. Backtest Window")
+riskPct = input.float(1.0, "Account risk per trade %", minval = 0.1, maxval = 10, step = 0.1, tooltip = "How much of the account you are willing to lose if the trade goes straight from here to the flip line. The RISK & SIZE row turns this into a position size. A fresh signal with a tight stop allows a big position; the same signal after price has run far from the line allows a small one.", group = "4. Backtest Window")
+regimeMode = input.bool(false, "Regime mode — state, not orders", tooltip = "OFF = BUY/SELL labels and instructions, as now. ON = the chart just says what the state IS: green above the flip line, red below, with small bullish/bearish tags at the turns and no order language anywhere. IMPORTANT: this changes nothing in the maths. Trend, focus list, stats and returns are byte-identical either way. It changes what you are shown, not what the system does.", group = "5. Display Mode")
+
+// ── 2. Display ──
+bullColor = input.color(color.new(#00e676, 0), "Bullish Color", group = "2. Display")
+bearColor = input.color(color.new(#ff1744, 0), "Bearish Color", group = "2. Display")
+lineWidth = input.int(3, "Line Width", minval = 1, maxval = 6, group = "2. Display")
+showFill  = input.bool(true, "Fill Between Price and Line", group = "2. Display")
+show200   = input.bool(true, "Show 200-day MA (red)", group = "2. Display")
+show200bar = input.bool(true, "Show 200-bar MA (thick black — the slow CORE line)", group = "2. Display")
+ma200barLen = input.int(200, "200-bar MA Length", minval = 10, group = "2. Display")
+show50bar  = input.bool(true, "Show 50-bar MA (orange)", group = "2. Display")
+ma50barLen = input.int(50, "50-bar MA Length", minval = 5, group = "2. Display")
+show100bar = input.bool(true, "Show 100-bar MA (blue)", group = "2. Display")
+ma100barLen = input.int(100, "100-bar MA Length", minval = 5, group = "2. Display")
+tablePos  = input.string("Middle Left", "Table Position", options = ["Middle Left", "Top Left", "Top Right", "Bottom Left", "Bottom Right"], group = "2. Display")
+tableSize = input.string("Tiny", "Table Text Size", options = ["Tiny", "Small", "Normal", "Large"], group = "2. Display")
+compactMode = input.bool(false, "Compact Mode (short table + smart note; untick for the full 27-row detail)", group = "2. Display")
+
+// ── 3. Scanner (bottom-right trend overview) ──
+showScanner = input.bool(true, "Show Focus List (bottom right)", group = "3. Focus List")
+scanUseChart = input.bool(false, "Focus List follows the chart timeframe", tooltip = "ON = the scan runs on whatever timeframe you are viewing, so switching chart TF switches the whole list with it. OFF = the list stays pinned to the timeframe below no matter what the chart shows.", group = "3. Focus List")
+scanTFin     = input.timeframe("W", "Focus List Timeframe (when not following)", group = "3. Focus List")
+scanTF       = scanUseChart ? timeframe.period : scanTFin
+scanPos     = input.string("Bottom Right", "Focus List Position", options = ["Bottom Right", "Top Right", "Middle Right", "Bottom Left"], group = "3. Focus List")
+maxShow     = input.int(20, "Max rows to display (most urgent first)", minval = 3, maxval = 32, group = "3. Focus List")
+scanConfirmed = input.bool(true, "Confirmed bars only (identical on every chart)", tooltip = "ON = each symbol is read at its own last CLOSED weekly bar. This is what makes the Focus List give the same answer whether you are on an NSE chart or a NASDAQ chart. OFF = live/forming bar, which drifts between charts because sessions and holidays differ.", group = "3. Focus List")
+scanBars      = input.int(750, "History window per symbol (bars)", minval = 100, maxval = 2000, tooltip = "Fixes how many bars each symbol is calculated over so the trailing-stop state cannot depend on how much history your current chart happens to have loaded. Keep this the same on every chart.", group = "3. Focus List")
+scanNoFx      = input.bool(true, "Ignore chart currency conversion", tooltip = "Stops an INR chart from converting USD symbols (and vice versa).", group = "3. Focus List")
+addChartSym   = input.bool(true, "Always scan the chart's own symbol", tooltip = "Puts whatever symbol you have open into slot 32, so a chart that is not in the market set still gets a scanner row. Turn off to keep the fixed 32nd symbol instead.", group = "3. Focus List")
+mktFilter     = input.bool(false, "Show only symbols from the chart's market", tooltip = "ON = an NSE chart lists only NSE/BSE symbols, a US chart only US symbols, and so on. This removes the one-bar offset that appears when a symbol's exchange closes later than the chart's, which is the honest fix for it. Symbols entered without an exchange prefix always show. OFF = all 32 symbols, with the offset present on cross-market rows.", group = "3. Focus List")
+tolBars       = input.float(1.5, "Stale threshold (bars)", minval = 1.0, maxval = 5.0, step = 0.5, tooltip = "How far behind the newest symbol a row may read before it is flagged ⧗. Measured in scan bars, not days. 1.5 is the sensible floor for a mixed-exchange list: symbols on a later-closing exchange always report one bar behind on a chart whose session ended earlier, which is correct behaviour. Raise it if the warning fires constantly; lower it toward 1.0 only on a single-exchange list.", group = "3. Focus List")
+scanWarm      = input.int(120, "Warm-up bars before a symbol is trusted", minval = 40, maxval = 400, tooltip = "The trailing stop is path-dependent: it starts from an arbitrary seed and needs bars to forget it. Below this many bars a symbol's state is still partly an artefact of where its data began, so it is shown as 'warming up' rather than given a signal. Raise it if levels shift when you zoom; lower it if too many symbols are suppressed.", group = "3. Focus List")
+showAsOf      = input.bool(true, "Show 'as of' date in Focus List header", tooltip = "Diagnostic: if two charts show the same as-of date, they are reading the same week.", group = "3. Focus List")
+// ── MARKET BUCKETS ───────────────────────────────────────────────────
+// Symbols only share a bar boundary if their sessions END together. NSE closes
+// 10:00 UTC Friday, NASDAQ 20:00 UTC — so on an NSE chart every US symbol
+// legitimately reports one bar behind. Filtering to the chart's own market
+// removes that offset instead of tolerating it.
+f_exch(_s) =>
+    _i = str.pos(_s, ":")
+    na(_i) ? "" : str.upper(str.substring(_s, 0, _i))
+
+f_mkt(_p) =>
+    _u = str.upper(_p)
+    _u == "" ? "ANY" : _u == "NSE" or _u == "BSE" ? "IN" : _u == "NASDAQ" or _u == "NYSE" or _u == "AMEX" or _u == "ARCA" or _u == "NYSEARCA" or _u == "BATS" or _u == "CBOE" ? "US" : _u == "BINANCE" or _u == "COINBASE" or _u == "BITSTAMP" or _u == "KRAKEN" or _u == "BYBIT" ? "CRYPTO" : "OTHER"
+
+// Exchange-string matching turned out to be unreliable — an NSE:TCS chart
+// resolved to "OTHER", so the scanner fell back to the US set. Currency and
+// instrument type are unambiguous and need no lookup table:
+//   crypto  -> syminfo.type is "crypto" regardless of venue
+//   India   -> quoted in INR
+//   else    -> treated as US / global
+chartMkt = syminfo.type == "crypto" ? "CRYPTO" : str.upper(syminfo.currency) == "INR" ? "IN" : "US"
+
+// ── PER-MARKET SYMBOL SETS ───────────────────────────────────────────
+// These are CONSTANTS, not inputs. 96 input.symbol() pickers pushed the script
+// to 143 inputs, which appears to exceed what TradingView allows — the script
+// compiled but drew nothing. Constants cost nothing against that budget.
+// To change a set, edit the lines below and re-save.
+//
+// The active set is chosen from the CHART's market, which is legal because
+// request.security only needs a `simple string` and syminfo.prefix is simple.
+// Result: 32 symbols PER MARKET on the same 40-request budget, and every row
+// shares the chart's own bar boundary — which removes the one-bar cross-exchange
+// offset at source instead of tolerating it.
+
+s1 = chartMkt == "IN" ? "NSE:TCS" : chartMkt == "CRYPTO" ? "BINANCE:BTCUSDT" : "NASDAQ:AAPL"
+s2 = chartMkt == "IN" ? "NSE:INFY" : chartMkt == "CRYPTO" ? "BINANCE:ETHUSDT" : "NASDAQ:MSFT"
+s3 = chartMkt == "IN" ? "NSE:RELIANCE" : chartMkt == "CRYPTO" ? "BINANCE:SOLUSDT" : "NASDAQ:NVDA"
+s4 = chartMkt == "IN" ? "NSE:HDFCBANK" : chartMkt == "CRYPTO" ? "BINANCE:BNBUSDT" : "NASDAQ:GOOGL"
+s5 = chartMkt == "IN" ? "NSE:ICICIBANK" : chartMkt == "CRYPTO" ? "BINANCE:XRPUSDT" : "NASDAQ:AMZN"
+s6 = chartMkt == "IN" ? "NSE:ITC" : chartMkt == "CRYPTO" ? "BINANCE:ADAUSDT" : "NASDAQ:META"
+s7 = chartMkt == "IN" ? "NSE:LT" : chartMkt == "CRYPTO" ? "BINANCE:DOGEUSDT" : "NASDAQ:TSLA"
+s8 = chartMkt == "IN" ? "NSE:SBIN" : chartMkt == "CRYPTO" ? "BINANCE:AVAXUSDT" : "NASDAQ:AVGO"
+s9 = chartMkt == "IN" ? "NSE:BHARTIARTL" : chartMkt == "CRYPTO" ? "BINANCE:LINKUSDT" : "NASDAQ:NFLX"
+s10 = chartMkt == "IN" ? "NSE:ASIANPAINT" : chartMkt == "CRYPTO" ? "BINANCE:DOTUSDT" : "NASDAQ:AMD"
+s11 = chartMkt == "IN" ? "NSE:MARUTI" : chartMkt == "CRYPTO" ? "BINANCE:LTCUSDT" : "NASDAQ:COST"
+s12 = chartMkt == "IN" ? "NSE:AXISBANK" : chartMkt == "CRYPTO" ? "BINANCE:TRXUSDT" : "NASDAQ:ORCL"
+s13 = chartMkt == "IN" ? "NSE:KOTAKBANK" : chartMkt == "CRYPTO" ? "BINANCE:ATOMUSDT" : "NASDAQ:PLTR"
+s14 = chartMkt == "IN" ? "NSE:BAJFINANCE" : chartMkt == "CRYPTO" ? "BINANCE:UNIUSDT" : "NASDAQ:CRWD"
+s15 = chartMkt == "IN" ? "NSE:HINDUNILVR" : chartMkt == "CRYPTO" ? "BINANCE:NEARUSDT" : "NASDAQ:COIN"
+s16 = chartMkt == "IN" ? "NSE:TITAN" : chartMkt == "CRYPTO" ? "BINANCE:APTUSDT" : "NASDAQ:MU"
+s17 = chartMkt == "IN" ? "NSE:SUNPHARMA" : chartMkt == "CRYPTO" ? "BINANCE:ARBUSDT" : "NYSE:BRK.B"
+s18 = chartMkt == "IN" ? "NSE:WIPRO" : chartMkt == "CRYPTO" ? "BINANCE:OPUSDT" : "NYSE:JPM"
+s19 = chartMkt == "IN" ? "NSE:HCLTECH" : chartMkt == "CRYPTO" ? "BINANCE:INJUSDT" : "NYSE:V"
+s20 = chartMkt == "IN" ? "NSE:TECHM" : chartMkt == "CRYPTO" ? "BINANCE:SUIUSDT" : "NYSE:UNH"
+s21 = chartMkt == "IN" ? "NSE:ADANIPORTS" : chartMkt == "CRYPTO" ? "BINANCE:TIAUSDT" : "NYSE:XOM"
+s22 = chartMkt == "IN" ? "NSE:ONGC" : chartMkt == "CRYPTO" ? "BINANCE:SEIUSDT" : "NYSE:LLY"
+s23 = chartMkt == "IN" ? "NSE:NTPC" : chartMkt == "CRYPTO" ? "BINANCE:FILUSDT" : "NYSE:CRM"
+s24 = chartMkt == "IN" ? "NSE:POWERGRID" : chartMkt == "CRYPTO" ? "BINANCE:AAVEUSDT" : "NYSE:SAP"
+s25 = chartMkt == "IN" ? "NSE:COALINDIA" : chartMkt == "CRYPTO" ? "BINANCE:MKRUSDT" : "NASDAQ:QQQ"
+s26 = chartMkt == "IN" ? "NSE:TATAMOTORS" : chartMkt == "CRYPTO" ? "BINANCE:ETCUSDT" : "AMEX:SPY"
+s27 = chartMkt == "IN" ? "NSE:TATASTEEL" : chartMkt == "CRYPTO" ? "BINANCE:BCHUSDT" : "AMEX:VOO"
+s28 = chartMkt == "IN" ? "NSE:NIFTYBEES" : chartMkt == "CRYPTO" ? "BINANCE:XLMUSDT" : "AMEX:IWM"
+s29 = chartMkt == "IN" ? "NSE:JUNIORBEES" : chartMkt == "CRYPTO" ? "BINANCE:HBARUSDT" : "AMEX:XLK"
+s30 = chartMkt == "IN" ? "NSE:MID150BEES" : chartMkt == "CRYPTO" ? "BINANCE:ICPUSDT" : "AMEX:GLD"
+s31 = chartMkt == "IN" ? "NSE:GOLDBEES" : chartMkt == "CRYPTO" ? "BINANCE:ALGOUSDT" : "NASDAQ:INTC"
+// Slot 32 carries the CHART's own symbol so anything you open is scanned, even
+// if it is not in the market set. Duplicates are removed in the display loop.
+s32 = addChartSym ? syminfo.tickerid : chartMkt == "IN" ? "NSE:CPSEETF" : chartMkt == "CRYPTO" ? "BINANCE:VETUSDT" : "NYSE:IBM"
+
+// ═══════════════════════════════════════════════════════════════
+// CORE ENGINE — baseline money line (1-close flip, no gates)
+// ═══════════════════════════════════════════════════════════════
+tr_ = ta.tr(true)
+atrV = ta.rma(tr_, atrLen)
+hh = ta.highest(high, longLen)
+ll = ta.lowest(low, shortLen)
+lsB = hh - atrMultL * atrV
+ssB = ll + atrMultS * atrV
+
+var float longStop = na
+var float shortStop = na
+longStop  := close[1] > nz(longStop[1], lsB) ? math.max(lsB, nz(longStop[1], lsB)) : lsB
+shortStop := close[1] < nz(shortStop[1], ssB) ? math.min(ssB, nz(shortStop[1], ssB)) : ssB
+
+var int trend = 1
+// consecutive weekly closes on the wrong side of the line. With both confirms
+// set to 1 this is mathematically identical to the original one-close rule.
+var int belowN = 0
+var int aboveN = 0
+belowN := trend == 1 and close < longStop ? belowN + 1 : 0
+aboveN := trend == -1 and close > shortStop ? aboveN + 1 : 0
+trend := trend == -1 and aboveN >= entryConfirm ? 1 : trend == 1 and belowN >= exitConfirm ? -1 : trend
+isFlip = trend != trend[1]
+moneyLine = trend == 1 ? longStop : shortStop
+
+buySignal  = isFlip and trend == 1
+sellSignal = isFlip and trend == -1
+
+var float entryPrice = na
+var float exitPrice = na
+// ── embedded track record (mini-backtest of this system on THIS symbol) ──
+var int flipBarIdx = na
+var float lastFlipPx = na
+var float flipClose = na
+if isFlip
+    flipBarIdx := bar_index
+    lastFlipPx := moneyLine[1]   // the LEVEL that was crossed (the old tripwire), not the close
+    flipClose  := close          // the PRICE when the regime turned, for the since-flip stat
+var int tradeCount = 0
+var int winCount = 0
+var float grossWin = 0.0
+var float grossLoss = 0.0
+var float sysEquity = 1.0
+var float firstEntry = na
+var int firstEntryTime = na
+var bool entryInBT = false
+// whipsaw = sold, then bought back within `whipWeeks` bars at a HIGHER price
+var int whipCount = 0
+var float whipCost = 0.0
+var float lastExitPx = na
+var int lastExitBar = na
+inBT = not btUseStart or year >= btStartY
+if buySignal
+    entryPrice := close
+    entryInBT := inBT
+    if inBT and na(firstEntry)
+        firstEntry := close
+        firstEntryTime := time
+    if inBT and not na(lastExitPx) and not na(lastExitBar) and bar_index - lastExitBar <= whipWeeks and close > lastExitPx
+        whipCount += 1
+        whipCost += (close - lastExitPx) / lastExitPx * 100
+if sellSignal
+    exitPrice := close
+    lastExitPx := close
+    lastExitBar := bar_index
+    if inBT and entryInBT and not na(entryPrice) and entryPrice > 0
+        tradePnl = (close - entryPrice) / entryPrice * 100
+        sysEquity := sysEquity * (1 + tradePnl / 100)
+        tradeCount += 1
+        if tradePnl > 0
+            winCount += 1
+            grossWin += tradePnl
+        else
+            grossLoss += -tradePnl
+
+// ═══════════════════════════════════════════════════════════════
+// QUALITY CHECKS (grade, never gate)
+// ═══════════════════════════════════════════════════════════════
+// Self-contained so the daily context recomputes the whole chain on DAILY bars
+// rather than inheriting anything from the chart-timeframe `trend` variable.
+f_trendOnly() =>
+    _tr = ta.tr(true)
+    _atr = ta.rma(_tr, atrLen)
+    _hh = ta.highest(high, longLen)
+    _ll = ta.lowest(low, shortLen)
+    _lsB = _hh - atrMultL * _atr
+    _ssB = _ll + atrMultS * _atr
+    var float _ls = na
+    var float _ss = na
+    _ls := close[1] > nz(_ls[1], _lsB) ? math.max(_lsB, nz(_ls[1], _lsB)) : _lsB
+    _ss := close[1] < nz(_ss[1], _ssB) ? math.min(_ssB, nz(_ss[1], _ssB)) : _ssB
+    var int _t = 1
+    var int _bn = 0
+    var int _an = 0
+    _bn := _t == 1 and close < _ls ? _bn + 1 : 0
+    _an := _t == -1 and close > _ss ? _an + 1 : 0
+    _t := _t == -1 and _an >= entryConfirm ? 1 : _t == 1 and _bn >= exitConfirm ? -1 : _t
+    _t
+
+// ── TIMEFRAME FIT ────────────────────────────────────────────────────
+// Runs the SAME flip rule and the SAME mini-backtest on daily and weekly, so
+// the two can be compared on one screen instead of by loading two charts.
+// Trade count and profit factor are packed into one number (n*1000 + PF*10)
+// because each element of a request.security tuple counts against a series
+// budget this script has already overrun once.
+f_tfStats() =>
+    _tr = ta.tr(true)
+    _atr = ta.rma(_tr, atrLen)
+    _lsB = ta.highest(high, longLen) - atrMultL * _atr
+    _ssB = ta.lowest(low, shortLen)  + atrMultS * _atr
+    var float _ls = na
+    var float _ss = na
+    _ls := close[1] > nz(_ls[1], _lsB) ? math.max(_lsB, nz(_ls[1], _lsB)) : _lsB
+    _ss := close[1] < nz(_ss[1], _ssB) ? math.min(_ssB, nz(_ss[1], _ssB)) : _ssB
+    var int _t = 1
+    var int _bn = 0
+    var int _an = 0
+    _bn := _t == 1  and close < _ls ? _bn + 1 : 0
+    _an := _t == -1 and close > _ss ? _an + 1 : 0
+    _t := _t == -1 and _an >= entryConfirm ? 1 : _t == 1 and _bn >= exitConfirm ? -1 : _t
+    // mini-backtest, windowed to the same start year as the main table
+    _in = not btUseStart or year >= btStartY
+    var float _entry = na
+    var int   _n  = 0
+    var float _gw = 0.0
+    var float _gl = 0.0
+    if _t == 1 and _t[1] == -1 and _in
+        _entry := close
+    if _t == -1 and _t[1] == 1 and _in and not na(_entry) and _entry > 0
+        _p = (close - _entry) / _entry * 100
+        _n += 1
+        _gw += _p > 0 ?  _p : 0
+        _gl += _p < 0 ? -_p : 0
+        _entry := na
+    _pf = _gl > 0 ? _gw / _gl : _gw > 0 ? 99.9 : 0.0
+    [_t, _n * 1000 + math.round(math.min(_pf, 99.9) * 10)]
+
+[dailyTrend, statD] = request.security(syminfo.tickerid, "D", f_tfStats(), lookahead = barmerge.lookahead_off, ignore_invalid_symbol = true)
+// The flip rule is timeframe-agnostic, so read it on all three at once.
+// Chart TF then becomes a viewing choice, not a different system.
+// NOTE ON REQUEST BUDGET: TradingView allows a maximum of 40 request.*() calls
+// per script. This script uses 32 (focus list) + 1 (daily) + 1 (weekly) + 6
+// (financials) = 40. It is FULL. Adding even one more request.security or
+// request.financial call will break the entire indicator — it will compile-fail
+// and draw nothing at all, not just lose the new feature. If you want another
+// timeframe or symbol, you must remove an existing call first.
+regD = dailyTrend
+[regW, statW] = request.security(syminfo.tickerid, "W", f_tfStats(), lookahead = barmerge.lookahead_off, ignore_invalid_symbol = true)
+ma50  = ta.sma(close, 10)   // 10w ≈ 50d
+ma100 = ta.sma(close, 20)   // 20w ≈ 100d
+ma200 = ta.sma(close, 40)   // 40w ≈ 200d
+rsiV = ta.rsi(close, 14)
+volAvg = ta.sma(volume, 20)
+volRatio = volAvg > 0 ? volume / volAvg : na
+ext200 = ma200 > 0 ? (close - ma200) / ma200 * 100 : na
+
+// first loaded bar's timestamp. `time[bar_index]` looks equivalent but Pine
+// sizes its history buffer from CONSTANT offsets at compile time, so a dynamic
+// offset silently returns na — which disables any check built on it.
+var int firstBarTime = na
+if na(firstBarTime)
+    firstBarTime := time
+
+// ── the script now describes whatever timeframe the chart is on ──
+tfIntra = timeframe.isintraday ? (timeframe.multiplier >= 60 ? str.tostring(timeframe.multiplier / 60) + "h" : str.tostring(timeframe.multiplier) + "m") : ""
+tfWord = timeframe.ismonthly ? (timeframe.multiplier > 1 ? str.tostring(timeframe.multiplier) + "-month" : "monthly") : timeframe.isweekly ? (timeframe.multiplier > 1 ? str.tostring(timeframe.multiplier) + "-week" : "weekly") : timeframe.isdaily ? (timeframe.multiplier > 1 ? str.tostring(timeframe.multiplier) + "-day" : "daily") : tfIntra
+tfBar  = timeframe.ismonthly ? "mo" : timeframe.isweekly ? "w" : timeframe.isdaily ? "d" : tfIntra
+
+// ── How old is this SYMBOL, in calendar terms? Bar count lies: a 7-week-old
+// stock has ~200 bars on 4H and ~8 on weekly, but it is seven weeks old
+// either way. A trailing stop needs the stock to have LIVED through
+// something, not merely to have produced rows of data.
+histDays = na(firstBarTime) ? na : (time - firstBarTime) / 86400000
+thinHist = not na(histDays) and histDays < minHistDays
+histTag  = thinHist ? "   ⚠ ONLY " + str.tostring(histDays, "#") + "d OF HISTORY — signals unreliable" : ""
+
+// RAW structural facts (direction-neutral) — used by the LONG-TERM rows
+above200 = na(ma200) ? false : close > ma200
+bullStack = na(ma50) or na(ma100) or na(ma200) ? false : ma50 > ma100 and ma100 > ma200
+bearStack = na(ma50) or na(ma100) or na(ma200) ? false : ma50 < ma100 and ma100 < ma200
+
+// ── CONFIRMATION CHECKS — every one reads WITH the current trend ──────
+// A score is "how well confirmed is the state we are in", not "how bullish
+// is everything". So in a downtrend, below-the-200 and a bearish stack COUNT.
+// Without this, "Bearish 8/9" would have meant a downtrend under attack,
+// which is the opposite of what the words suggest.
+c1 = dailyTrend == trend                                    // lower TF agrees
+c2 = trend == 1 ? above200 : not above200                   // right side of the 200
+c3 = trend == 1 ? bullStack : bearStack                     // MA stack aligned
+c4 = na(volRatio) ? true : volRatio >= 1.0                  // participation
+c5 = na(rsiV) ? true : (trend == 1 ? rsiV < 70 : rsiV > 30) // not exhausted either way
+
+// ── c6 TREND STRENGTH (ADX) ──────────────────────────────────────────
+// The check that speaks to whipsaw. ADX does not say which way price is
+// going, only whether it is going anywhere. Below ~20 the market is ranging,
+// which is exactly where a trailing stop gets chopped up.
+[diPlus, diMinus, adxV] = ta.dmi(14, 14)
+c6 = na(adxV) ? true : adxV >= adxMin
+
+// ── c7 MOMENTUM THRUST (MACD histogram) ──────────────────────────────
+// RSI < 70 says the move is not stretched. It never says the move has force.
+[macdL, macdS, macdH] = ta.macd(close, 12, 26, 9)
+c7 = na(macdH) ? true : (trend == 1 ? macdH > 0 : macdH < 0)
+
+// ── c8 NOT OVER-EXTENDED ─────────────────────────────────────────────
+// ext200 was already computed and never used. Entering 40% above the mean
+// is a different trade from entering 5% above it.
+c8 = na(ext200) ? true : math.abs(ext200) <= extMax
+
+// ── c9 WEEKLY AGREES ─────────────────────────────────────────────────
+// regW is already fetched for the REGIME row, so this costs nothing. It is
+// auto-passed when the chart is weekly or higher: there `trend` IS the weekly
+// read, and scoring it against itself would be circular, not confirming.
+wRedundant = timeframe.isweekly or timeframe.ismonthly
+c9 = wRedundant or na(regW) ? true : regW == trend
+
+score = (c1 ? 1 : 0) + (c2 ? 1 : 0) + (c3 ? 1 : 0) + (c4 ? 1 : 0) + (c5 ? 1 : 0) + (c6 ? 1 : 0) + (c7 ? 1 : 0) + (c8 ? 1 : 0) + (c9 ? 1 : 0)
+// A grade is a claim about evidence. On a symbol with too little history the
+// score is arithmetic, not evidence, so it gets no letter.
+grade = thinHist ? "?" : score >= 8 ? "A" : score >= 6 ? "B" : "C"
+
+var string lastBuyGrade = na
+if buySignal
+    lastBuyGrade := grade
+
+// ═══════════════════════════════════════════════════════════════
+// PLOT — line, fill, 200d, clean graded signals
+// ═══════════════════════════════════════════════════════════════
+lineColor = trend == 1 ? bullColor : bearColor
+mlPlot = plot(moneyLine, "Money Line", color = lineColor, linewidth = lineWidth, style = plot.style_stepline)
+srcPlot = plot(close, "Price (invisible)", display = display.none)
+fill(srcPlot, mlPlot, color = showFill ? (trend == 1 ? color.new(bullColor, 90) : color.new(bearColor, 90)) : na)
+plot(show200 ? ma200 : na, "200-day MA", color = color.new(color.red, 35), linewidth = 2)
+ma200bar = ta.sma(close, ma200barLen)
+plot(show200bar ? ma200bar : na, "200-bar MA", color = color.new(color.black, 0), linewidth = 3)
+ma50bar = ta.sma(close, ma50barLen)
+plot(show50bar ? ma50bar : na, "50-bar MA", color = color.new(color.orange, 20), linewidth = 2)
+ma100bar = ta.sma(close, ma100barLen)
+plot(show100bar ? ma100bar : na, "100-bar MA", color = color.new(#2962ff, 20), linewidth = 2)
+
+// ── CORE variant: buy the same first signal, then hold until a weekly close
+// breaks the 200-week line. Runs from the SAME start date as the system and the
+// buy&hold figures so the three numbers are directly comparable.
+var float coreEq    = 1.0
+var float coreEntry = na
+var bool  coreOn    = false
+if not coreOn and buySignal and inBT
+    coreOn    := true
+    coreEntry := close
+if coreOn
+    if not na(coreEntry) and not na(ma200bar) and close < ma200bar
+        coreEq    := coreEq * (close / coreEntry)
+        coreEntry := na
+    else if na(coreEntry) and not na(ma200bar) and close > ma200bar
+        coreEntry := close
+
+plotshape(buySignal and not regimeMode, "BUY", style = shape.labelup, location = location.belowbar, color = color.new(#00c853, 0), textcolor = color.white, text = "▲ BUY", size = size.normal)
+plotshape(sellSignal and not regimeMode, "SELL", style = shape.labeldown, location = location.abovebar, color = color.new(#d50000, 0), textcolor = color.white, text = "▼ SELL", size = size.normal)
+// regime mode: mark the turn, do not issue an order
+plotshape(buySignal and regimeMode, "Turned bullish", style = shape.labelup, location = location.belowbar, color = color.new(bullColor, 15), textcolor = color.white, text = "bullish", size = size.tiny)
+plotshape(sellSignal and regimeMode, "Turned bearish", style = shape.labeldown, location = location.abovebar, color = color.new(bearColor, 15), textcolor = color.white, text = "bearish", size = size.tiny)
+
+// ── Flip Level line + label on chart (Bullmania-style) ──
+
+
+
+showFlipLine = input.bool(true, "Show Flip Level Line + Label on Chart", group = "2. Display")
+showScoreTag = input.bool(true, "Show CONFIRM score tag on chart", tooltip = "Small on-chart tag showing the n/5 confirmation score for the CURRENT chart timeframe, next to the last bar.", group = "2. Display")
+var line flipLn = na
+var label flipLb = na
+if barstate.islast and showFlipLine and not na(moneyLine)
+    line.delete(flipLn)
+    label.delete(flipLb)
+    flipLn := line.new(bar_index - 10, moneyLine, bar_index + 8, moneyLine, extend = extend.right, color = color.new(color.yellow, 30), style = line.style_dotted, width = 1)
+    flipLb := label.new(bar_index + 8, moneyLine, "Flip Level: " + str.tostring(moneyLine, format.mintick), style = label.style_label_left, color = color.new(color.black, 30), textcolor = color.yellow, size = size.small)
+
+// on-chart confirm tag. Reads the CHART timeframe, same as the line it sits on.
+var label scoreLb = na
+if barstate.islast and showScoreTag
+    label.delete(scoreLb)
+    sTxt = thinHist ? "⚠ " + str.tostring(histDays, "#") + "d only" : (trend == 1 ? "Bullish " : "Bearish ") + str.tostring(score) + "/9"
+    sCol = thinHist ? color.new(#d50000, 15) : score >= 8 ? color.new(#00c853, 15) : score >= 6 ? color.new(color.orange, 20) : color.new(#d50000, 20)
+    scoreLb := label.new(bar_index + 2, close, sTxt + "  ·  " + tfWord, style = label.style_label_left, color = sCol, textcolor = color.white, size = size.small)
+
+// ═══════════════════════════════════════════════════════════════
+// FUNDAMENTALS (real reported financials via request.financial)
+// Stocks only — indices/crypto return na and the rows say "n/a"
+// ═══════════════════════════════════════════════════════════════
+showFund = input.bool(true, "Show Fundamentals Rows (stocks only)", group = "2. Display")
+revTTM  = request.financial(syminfo.tickerid, "TOTAL_REVENUE", "TTM", ignore_invalid_symbol = true)
+revPrev = request.financial(syminfo.tickerid, "TOTAL_REVENUE", "FY", ignore_invalid_symbol = true)
+niTTM   = request.financial(syminfo.tickerid, "NET_INCOME", "TTM", ignore_invalid_symbol = true)
+roeFY   = request.financial(syminfo.tickerid, "RETURN_ON_EQUITY", "FY", ignore_invalid_symbol = true)
+deFY    = request.financial(syminfo.tickerid, "DEBT_TO_EQUITY", "FY", ignore_invalid_symbol = true)
+epsTTM  = request.financial(syminfo.tickerid, "EARNINGS_PER_SHARE_BASIC", "TTM", ignore_invalid_symbol = true)
+
+netMargin = not na(revTTM) and revTTM > 0 and not na(niTTM) ? niTTM / revTTM * 100 : na
+revGrowth = not na(revTTM) and not na(revPrev) and revPrev > 0 ? (revTTM - revPrev) / revPrev * 100 : na
+peRatio   = not na(epsTTM) and epsTTM > 0 ? close / epsTTM : na
+
+// hoisted: ta.* must run every bar (calling inside `if` blocks corrupts history)
+hi52  = ta.highest(high, 52)
+hiAll = ta.highest(high, 500)
+
+// ═══════════════════════════════════════════════════════════════
+// AUTO SUPPORT / RESISTANCE (swing pivots — where price reacted before)
+// ═══════════════════════════════════════════════════════════════
+showSR   = input.bool(true, "Show Auto Support/Resistance Zones", group = "2. Display")
+pivLen   = input.int(8, "S/R Pivot Strength (bars each side)", minval = 2, group = "2. Display")
+srCount  = input.int(3, "How many levels each side", minval = 1, maxval = 6, group = "2. Display")
+
+
+ph = ta.pivothigh(high, pivLen, pivLen)
+pl = ta.pivotlow(low, pivLen, pivLen)
+
+var array<float> resArr = array.new_float()
+var array<float> supArr = array.new_float()
+if not na(ph)
+    array.unshift(resArr, ph)
+    if array.size(resArr) > 40
+        array.pop(resArr)
+if not na(pl)
+    array.unshift(supArr, pl)
+    if array.size(supArr) > 40
+        array.pop(supArr)
+
+// nearest levels above / below current price
+f_nearest(_arr, _above) =>
+    float best1 = na, float best2 = na, float best3 = na
+    if array.size(_arr) > 0
+        for i = 0 to array.size(_arr) - 1
+            v = array.get(_arr, i)
+            ok = _above ? v > close : v < close
+            if ok
+                if na(best1) or (_above ? v < best1 : v > best1)
+                    best3 := best2, best2 := best1, best1 := v
+                else if na(best2) or (_above ? v < best2 : v > best2)
+                    best3 := best2, best2 := v
+                else if na(best3) or (_above ? v < best3 : v > best3)
+                    best3 := v
+    [best1, best2, best3]
+
+[r1, r2, r3] = f_nearest(resArr, true)
+[sup1, sup2, sup3] = f_nearest(supArr, false)
+
+var line lnR1 = na, var line lnR2 = na, var line lnR3 = na
+var line lnS1 = na, var line lnS2 = na, var line lnS3 = na
+var label lbR1 = na, var label lbS1 = na
+
+f_srLine(line _ln, float _price, color _col) =>
+    line.delete(_ln)
+    line _out = na
+    if not na(_price)
+        _out := line.new(bar_index - 60, _price, bar_index + 10, _price, extend = extend.right, color = _col, style = line.style_dashed, width = 1)
+    _out
+
+if barstate.islast and showSR
+    lnR1 := f_srLine(lnR1, r1, color.new(#ff5252, 30))
+    lnR2 := f_srLine(lnR2, srCount >= 2 ? r2 : na, color.new(#ff5252, 55))
+    lnR3 := f_srLine(lnR3, srCount >= 3 ? r3 : na, color.new(#ff5252, 70))
+    lnS1 := f_srLine(lnS1, sup1, color.new(#00e676, 30))
+    lnS2 := f_srLine(lnS2, srCount >= 2 ? sup2 : na, color.new(#00e676, 55))
+    lnS3 := f_srLine(lnS3, srCount >= 3 ? sup3 : na, color.new(#00e676, 70))
+    label.delete(lbR1)
+    label.delete(lbS1)
+    if not na(r1)
+        lbR1 := label.new(bar_index + 10, r1, "R " + str.tostring(r1, format.mintick), style = label.style_label_left, color = color.new(#ff5252, 40), textcolor = color.white, size = size.tiny)
+    if not na(sup1)
+        lbS1 := label.new(bar_index + 10, sup1, "S " + str.tostring(sup1, format.mintick), style = label.style_label_left, color = color.new(#00e676, 40), textcolor = color.white, size = size.tiny)
+
+// ═══════════════════════════════════════════════════════════════
+// TABLE — five plain-language rows
+// ═══════════════════════════════════════════════════════════════
+
+
+
+f_arw(_v) => na(_v) ? "—" : _v == 1 ? "▲ bull" : "▼ bear"
+f_pc(_v) => na(_v) ? "—" : (_v >= 0 ? "+" : "") + str.tostring(_v, "#") + "%"
+
+posMap = tablePos == "Middle Left" ? position.middle_left : tablePos == "Top Left" ? position.top_left : tablePos == "Top Right" ? position.top_right : tablePos == "Bottom Left" ? position.bottom_left : position.bottom_right
+txtSize = tableSize == "Tiny" ? size.tiny : tableSize == "Small" ? size.small : tableSize == "Large" ? size.large : size.normal
+var table t = table.new(posMap, 2, 28, border_width = 2)
+
+if barstate.islast
+    table.clear(t, 0, 0, 1, 27)   // wipe stale cells so mode switches render cleanly
+
+    // ── is this bar actually finished? a flip on a forming bar can un-happen ──
+    // not barstate.isconfirmed stays true all weekend once the session has ended.
+    // The honest test is whether the bar's close time has actually passed.
+    unconf  = time_close > timenow
+    hrsLeft = (time_close - timenow) / 3600000
+    leftTxt = na(hrsLeft) or hrsLeft <= 0 ? "" : hrsLeft >= 24 ? str.tostring(math.floor(hrsLeft / 24), "#") + "d " + str.tostring(math.floor(hrsLeft % 24), "#") + "h left" : str.tostring(math.floor(hrsLeft), "#") + "h left"
+    // ── how far is the exit, and what size does that allow? ──
+    // math.abs() hid the direction. In a downtrend the line sits ABOVE price and
+    // is a BUY TRIGGER, not a stop — there is no position, so there is nothing to
+    // size. Reporting "5.1% to exit, 19.7% position" in green on a symbol the
+    // script says to stay out of is an invitation in the wrong direction.
+    inPos    = trend == 1
+    stopDist = not inPos or na(moneyLine) or close <= 0 ? na : (close - moneyLine) / close * 100
+    trigDist = inPos or na(moneyLine) or close <= 0 ? na : (moneyLine - close) / close * 100
+    posSize  = na(stopDist) or stopDist <= 0 ? na : riskPct / stopDist * 100
+
+    // Row 0 — ACTION
+    // quality grade alone is not a size. A grade-A signal whose stop is 20% away
+    // still risks 20% of the position, so the stop distance caps the size.
+    sizeHint = thinHist ? "unrated — " + str.tostring(histDays, "#") + "d history" : na(posSize) ? (grade == "A" ? "full size" : grade == "B" ? "half size" : "small/skip") : str.tostring(math.min(posSize, 100), "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk"
+    // two independent warnings — neither may hide the other
+    unconfTag = (unconf ? "   ⚠ UNCONFIRMED — " + leftTxt : "") + histTag
+    actionTxt = regimeMode ? ((trend == 1 ? "BULLISH — above the flip line" : "BEARISH — below the flip line") + unconfTag) : sellSignal ? "SELL NOW" + unconfTag : buySignal ? "BUY NOW (" + grade + " — " + sizeHint + ")" + unconfTag : trend == 1 ? "HOLDING" + unconfTag : "STAY OUT" + unconfTag
+    actionCol = sellSignal ? color.new(#d50000, 0) : buySignal ? color.new(#00c853, 0) : trend == 1 ? color.new(#00e676, 20) : color.new(#ff1744, 20)
+
+    // Row 1 — the one price that matters (the flip level)
+    lvlName = regimeMode ? "Flip Level" : trend == 1 ? "Flip Level (SELL if " + tfBar + " close under)" : "Flip Level (BUY if " + tfBar + " close over)"
+
+    // Row 2 — position
+    pnlPct = na(entryPrice) or entryPrice == 0 ? na : (close - entryPrice) / entryPrice * 100
+    posTxt = trend == 1 and not na(entryPrice) ? "Bought " + str.tostring(entryPrice, format.mintick) + " (" + (pnlPct >= 0 ? "+" : "") + str.tostring(pnlPct, "#.#") + "%)" + (na(lastBuyGrade) ? "" : "  grade " + lastBuyGrade) : trend == 1 ? "In uptrend (pre-history)" : na(exitPrice) ? "No position" : "Sold " + str.tostring(exitPrice, format.mintick)
+
+    // hoisted so compact mode can use them too
+    openPnlMultC = trend == 1 and not na(entryPrice) and entryPrice > 0 ? close / entryPrice : 1.0
+    sysRet = (sysEquity * openPnlMultC - 1) * 100
+    bhRet = na(firstEntry) or firstEntry == 0 ? na : (close - firstEntry) / firstEntry * 100
+
+    // core rows — always shown (compact and full)
+    distPct = moneyLine > 0 ? (close - moneyLine) / moneyLine * 100 : na
+    lvlVal2 = str.tostring(moneyLine, format.mintick) + "  (price " + (distPct >= 0 ? "+" : "") + str.tostring(distPct, "#.#") + "% vs level)"
+    table.cell(t, 0, 0, regimeMode ? "TREND" : "ACTION", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+    table.cell(t, 1, 0, actionTxt, text_color = color.white, bgcolor = actionCol, text_halign = text.align_center, text_size = txtSize)
+    table.cell(t, 0, 1, lvlName, text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(t, 1, 1, lvlVal2, text_color = color.yellow, bgcolor = color.new(color.black, 20), text_halign = text.align_center, text_size = txtSize)
+    distTxt = "price " + (close >= moneyLine ? "+" : "") + str.tostring((close - moneyLine) / moneyLine * 100, "#.#") + "% vs the line"
+    table.cell(t, 0, 2, regimeMode ? "Distance" : "Position", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(t, 1, 2, regimeMode ? distTxt : posTxt, text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_center, text_size = txtSize)
+
+    // ═══ REGIME PANEL — the whole table collapses to state, nothing else ═══
+    if regimeMode
+        rgD = f_arw(regD)
+        rgW = f_arw(regW)
+        rgC = f_arw(trend)
+        nBull = (regD == 1 ? 1 : 0) + (regW == 1 ? 1 : 0) + (trend == 1 ? 1 : 0)
+        conflu = na(regD) or na(regW) ? "partial data" : nBull == 3 ? "ALIGNED BULL" : nBull == 0 ? "ALIGNED BEAR" : "CONFLICT (" + str.tostring(nBull) + "/3 bull)"
+        confluCol = na(regD) or na(regW) ? color.new(color.gray, 55) : nBull == 3 ? color.new(#00c853, 20) : nBull == 0 ? color.new(#d50000, 20) : color.new(color.orange, 25)
+        sfP = na(flipClose) or flipClose <= 0 ? na : (close - flipClose) / flipClose * 100
+        sfB = na(flipBarIdx) ? na : bar_index - flipBarIdx
+        rgRows = array.from("Confirm", trend == 1 ? "SELL trigger" : "BUY trigger", "Last Flip", "Flip Date", "Since Flip", "Risk to line", "Daily", "Weekly", "Chart (" + tfWord + ")", "Confluence")
+        rgVals = array.from(
+             thinHist ? "⚠ only " + str.tostring(histDays, "#") + "d of history" : (trend == 1 ? "Bullish " : "Bearish ") + str.tostring(score) + "/9 (" + (c1 ? "D" : "·") + (c2 ? "M" : "·") + (c3 ? "S" : "·") + (c4 ? "V" : "·") + (c5 ? "R" : "·") + (c6 ? "A" : "·") + (c7 ? "T" : "·") + (c8 ? "X" : "·") + (c9 ? "W" : "·") + ")",
+             na(moneyLine) ? "—" : (trend == 1 ? "close below " : "close above ") + str.tostring(moneyLine, format.mintick),
+             na(lastFlipPx) ? "—" : str.tostring(lastFlipPx, format.mintick),
+             na(flipBarIdx) ? "—" : str.format_time(time[bar_index - flipBarIdx], "yyyy-MM-dd"),
+             na(sfP) ? "—" : (sfP >= 0 ? "+" : "") + str.tostring(sfP, "#.#") + "%  over " + str.tostring(sfB) + tfBar,
+             not inPos ? (na(trigDist) ? "—" : "no position  |  buy trigger " + str.tostring(trigDist, "#.#") + "% above") : na(stopDist) ? "—" : str.tostring(stopDist, "#.#") + "% to exit  |  " + str.tostring(math.min(posSize, 100), "#.#") + "% position at " + str.tostring(riskPct, "#.#") + "% risk",
+             rgD, rgW, rgC, conflu)
+        for i = 0 to 9
+            table.cell(t, 0, 3 + i, array.get(rgRows, i), text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+            table.cell(t, 1, 3 + i, array.get(rgVals, i), text_color = color.white, bgcolor = i == 9 ? confluCol : i == 0 ? (thinHist ? color.new(#d50000, 15) : score >= 8 ? color.new(#00c853, 25) : score >= 6 ? color.new(color.orange, 25) : color.new(#d50000, 25)) : i == 5 ? (not inPos or na(stopDist) ? color.new(color.gray, 55) : stopDist <= 8 ? color.new(#00c853, 25) : stopDist <= 15 ? color.new(color.orange, 25) : color.new(#d50000, 20)) : color.new(color.gray, 55), text_halign = text.align_center, text_size = txtSize)
+
+    if not regimeMode and not compactMode
+        // Row 3 — quality checks live
+        qTxt = (trend == 1 ? "Bullish " : "Bearish ") + str.tostring(score) + "/9   Daily " + (c1 ? "✓" : "✗") + "  200d " + (c2 ? "✓" : "✗") + "  Stack " + (c3 ? "✓" : "✗") + "  Vol " + (c4 ? "✓" : "✗") + "  RSI " + (c5 ? "✓" : "✗") + "  ADX " + (c6 ? "✓" : "✗") + "  Mom " + (c7 ? "✓" : "✗") + "  Ext " + (c8 ? "✓" : "✗") + (wRedundant ? "" : "  Wkly " + (c9 ? "✓" : "✗"))
+        qCol = score >= 4 ? color.new(#00c853, 40) : score == 3 ? color.new(color.orange, 30) : color.new(#ff1744, 40)
+
+        // Row 4 — LONG-TERM view in plain words
+        ltTxt = above200 and bullStack and trend == 1 ? "HEALTHY UPTREND — ok to hold" :
+             c2 and trend == 1 ? "UPTREND, early/rebuilding — hold with care" :
+             not c2 and trend == 1 ? "RECOVERY ATTEMPT — not proven yet" :
+             c2 ? "PULLBACK in uptrend — watch the line" :
+             "DOWNTREND — do not hold long-term"
+        ltCol = above200 and bullStack and trend == 1 ? color.new(#00c853, 20) : trend == 1 or above200 ? color.new(color.orange, 20) : color.new(#d50000, 20)
+
+        table.cell(t, 0, 3, "Quality", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 3, qTxt, text_color = color.white, bgcolor = qCol, text_halign = text.align_center, text_size = txtSize)
+        table.cell(t, 0, 4, "MEDIUM-TERM (200d)", text_color = color.white, bgcolor = color.new(color.blue, 20), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 4, ltTxt, text_color = color.white, bgcolor = ltCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── Track Record + Asset Fit (the asset-map lesson, automated) ──
+        pfVal = grossLoss > 0 ? grossWin / grossLoss : na
+        winRate = tradeCount > 0 ? winCount / tradeCount * 100 : na
+        // the record covers ALL loaded history, not just what is on screen —
+        // show the start date so a 43/82 record is not mistaken for recent trades
+        recStart = btUseStart ? "  |  from " + str.tostring(btStartY, "#") : na(firstEntry) ? "" : "  |  since " + str.format_time(firstEntryTime, "MMM yyyy")
+        trTxt = tradeCount == 0 ? "no completed trades yet" : str.tostring(winCount) + "/" + str.tostring(tradeCount) + " wins  |  PF " + (na(pfVal) ? "∞" : str.tostring(pfVal, "#.##")) + recStart
+        fitTxt = tradeCount < 5 ? "COLLECTING DATA (need 5+ trades)" : (not na(pfVal) and pfVal >= 1.5 and winRate >= 45) or na(pfVal) ? "GOOD — system suits this asset" : pfVal >= 1.0 ? "MIXED — trade small here" : "POOR — hold or skip this asset"
+        fitCol = tradeCount < 5 ? color.new(color.gray, 40) : (not na(pfVal) and pfVal >= 1.5 and winRate >= 45) or na(pfVal) ? color.new(#00c853, 20) : pfVal >= 1.0 ? color.new(color.orange, 20) : color.new(#d50000, 20)
+        table.cell(t, 0, 5, "Track Record", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 5, trTxt, text_color = color.white, bgcolor = color.new(color.gray, 60), text_halign = text.align_center, text_size = txtSize)
+        table.cell(t, 0, 6, "ASSET FIT", text_color = color.white, bgcolor = color.new(color.purple, 20), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 6, fitTxt, text_color = color.white, bgcolor = fitCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── Early Entry scout: daily flipped up while weekly still bearish ──
+        earlyTxt = trend == 1 ? "—  (already in: " + tfWord + " confirmed)" : dailyTrend == 1 and score <= 4 ? "DAILY TURNED UP — scout entry possible (half size), full size on " + tfWord + " BUY" : dailyTrend == 1 ? "daily up, but the downtrend is still well confirmed — wait" : "no — daily still down, nothing to do"
+        earlyCol = trend == 1 ? color.new(color.gray, 60) : dailyTrend == 1 and score <= 4 ? color.new(#00c853, 30) : dailyTrend == 1 ? color.new(color.orange, 30) : color.new(color.gray, 60)
+        table.cell(t, 0, 7, "EARLY ENTRY", text_color = color.white, bgcolor = color.new(color.teal, 20), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 7, earlyTxt, text_color = color.white, bgcolor = earlyCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── Confirmation depth: consecutive weekly closes since the flip ──
+        confN = na(flipBarIdx) ? 0 : math.min(bar_index - flipBarIdx + 1, 2)
+        confTxt2 = trend == 1 ? (confN >= 2 ? "Bullish 2/2 — reinforced (2+ " + tfWord + " closes held)" : "Bullish 1/2 — fresh flip, could still fake out") : (confN >= 2 ? "Bearish 2/2 — reinforced" : "Bearish 1/2 — fresh flip")
+        confCol2 = trend == 1 ? (confN >= 2 ? color.new(#00c853, 20) : color.new(color.orange, 25)) : (confN >= 2 ? color.new(#d50000, 20) : color.new(color.orange, 25))
+        table.cell(t, 0, 8, "CONFIRM", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 8, confTxt2, text_color = color.white, bgcolor = confCol2, text_halign = text.align_center, text_size = txtSize)
+
+        // ── HOLD vs TRADE: system's compounded return vs buy&hold since first signal ──
+        coreOpenMult = na(coreEntry) or coreEntry <= 0 ? 1.0 : close / coreEntry
+        coreRet = coreOn ? (coreEq * coreOpenMult - 1) * 100 : na
+        hvtNums = "   [ signals " + f_pc(sysRet) + "  ·  core/200w " + f_pc(coreRet) + "  ·  hold " + f_pc(bhRet) + " ]"
+        hvtTxt = na(bhRet) or tradeCount < 5 ? "COLLECTING DATA (need 5+ trades)" : (bhRet > sysRet * 1.3 and bhRet > 0 ? "HOLD — buy&hold beat the system here (compounder)" : sysRet > bhRet ? "TRADE — system beat buy&hold here" : "EITHER — similar results, your choice") + hvtNums
+        hvtCol = na(bhRet) or tradeCount < 5 ? color.new(color.gray, 40) : bhRet > sysRet * 1.3 and bhRet > 0 ? color.new(#2962ff, 20) : sysRet > bhRet ? color.new(#00c853, 20) : color.new(color.orange, 25)
+        table.cell(t, 0, 9, "HOLD vs TRADE", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 9, hvtTxt, text_color = color.white, bgcolor = hvtCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── Last Flip: price + date (Bullmania-style) ──
+        lfTxt = na(lastFlipPx) or na(flipBarIdx) ? "—" : "level " + str.tostring(lastFlipPx, format.mintick) + " crossed on " + str.format_time(time[bar_index - flipBarIdx], "yyyy-MM-dd")
+        table.cell(t, 0, 10, "Last Flip", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 10, lfTxt, text_color = color.white, bgcolor = color.new(color.gray, 60), text_halign = text.align_center, text_size = txtSize)
+
+        // ── Tripwire: intraweek price vs the buy level (only meaningful while flat) ──
+        twTxt = trend == 1 ? "—  (in position; watching exit level instead)" : close > moneyLine ? "⚡ PRICE ABOVE BUY LEVEL — unconfirmed until wk close (early-entry zone)" : "below buy level — waiting  (" + str.tostring((close - moneyLine) / moneyLine * 100, "#.#") + "% away)"
+        twCol = trend == 1 ? color.new(color.gray, 60) : close > moneyLine ? color.new(#00c853, 15) : color.new(color.gray, 50)
+        table.cell(t, 0, 11, "TRIPWIRE", text_color = color.white, bgcolor = color.new(color.teal, 10), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 11, twTxt, text_color = color.white, bgcolor = twCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── Trend Stage: where price sits vs its own highs, and how mature the move is ──
+        offHi = hi52 > 0 ? (close - hi52) / hi52 * 100 : na
+        weeksIn = na(flipBarIdx) ? na : bar_index - flipBarIdx
+        atNewHigh = close >= hiAll * 0.995
+        stageTxt = trend != 1 ? "—  (no active uptrend)" : atNewHigh ? "BREAKOUT — at/near all-time highs, " + str.tostring(weeksIn) + tfBar + " into trend" : offHi > -3 ? "TESTING HIGHS — within 3% of 52-bar high, " + str.tostring(weeksIn) + tfBar + " in" : offHi > -15 ? "RECOVERING — " + str.tostring(-offHi, "#.#") + "% below 52-bar high, " + str.tostring(weeksIn) + tfBar + " in" : "EARLY — still " + str.tostring(-offHi, "#.#") + "% below 52-bar high, " + str.tostring(weeksIn) + tfBar + " in"
+        stageCol = trend != 1 ? color.new(color.gray, 60) : atNewHigh ? color.new(#00c853, 15) : offHi > -3 ? color.new(color.orange, 25) : color.new(color.blue, 30)
+        table.cell(t, 0, 12, "TREND STAGE", text_color = color.white, bgcolor = color.new(color.maroon, 15), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 12, stageTxt, text_color = color.white, bgcolor = stageCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── Downside Context: how deep/stretched the decline is (descriptive, NOT a bottom call) ──
+        ddPct = hi52 > 0 ? (close - hi52) / hi52 * 100 : na
+        vs200w = ma200bar > 0 ? (close - ma200bar) / ma200bar * 100 : na
+        rsiCold = not na(rsiV) and rsiV <= 35
+        downTxt = trend == 1 ? "—  (in uptrend)" : not na(vs200w) and vs200w <= 2 and vs200w >= -8 ? "AT 200-WEEK LINE — historic cycle-low zone (" + str.tostring(ddPct, "#.#") + "% off high)" : not na(vs200w) and vs200w < -8 ? "BELOW 200-WEEK LINE — deep bear territory (" + str.tostring(ddPct, "#.#") + "% off high)" : rsiCold ? "STRETCHED — RSI " + str.tostring(rsiV, "#") + ", " + str.tostring(ddPct, "#.#") + "% off high, still above 200w" : "DECLINING — " + str.tostring(ddPct, "#.#") + "% off high, no exhaustion signs yet"
+        downCol = trend == 1 ? color.new(color.gray, 60) : not na(vs200w) and vs200w <= 2 and vs200w >= -8 ? color.new(#00c853, 30) : rsiCold ? color.new(color.orange, 30) : color.new(color.gray, 45)
+        table.cell(t, 0, 13, "DOWNSIDE CONTEXT", text_color = color.white, bgcolor = color.new(color.maroon, 15), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 13, downTxt, text_color = color.white, bgcolor = downCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── WHAT TO DO: full plain-English instruction, always on screen ──
+        wtdRegime = trend == 1 ? "State is BULLISH. Line sits at " + str.tostring(moneyLine, format.mintick) + ". It turns bearish only on a " + tfWord + " CLOSE below that. No order is implied — decide your own size and horizon." : "State is BEARISH. Line sits at " + str.tostring(moneyLine, format.mintick) + ". It turns bullish only on a " + tfWord + " CLOSE above that."
+        wtdTxt = regimeMode ? wtdRegime : buySignal ? "ENTER now (" + sizeHint + "). Set your exit at " + str.tostring(moneyLine, format.mintick) + ". Do nothing else until a " + tfWord + " close breaks it." : sellSignal ? "EXIT now at market. Then wait — do not re-enter until a new BUY prints." : trend == 1 ? "HOLD. Do nothing. Sell only on a " + tfWord + " CLOSE below " + str.tostring(moneyLine, format.mintick) + " — that is " + (na(stopDist) ? "—" : str.tostring(stopDist, "#.#") + "% below here, the giveback you are accepting to stay in") + "." : trend == -1 and dailyTrend == 1 and score <= 4 ? "OPTIONAL scout: buy HALF size now, complete on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + ". Cut it if the daily rolls back over." : "STAY OUT. Wait for a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + (na(trigDist) ? "—" : str.tostring(trigDist, "#.#") + "% above") + "). That close IS the entry — buy at it, not before. Your first exit would then sit at that same level."
+        wtdCol = buySignal ? color.new(#00c853, 0) : sellSignal ? color.new(#d50000, 0) : trend == 1 ? color.new(#00c853, 35) : color.new(color.gray, 40)
+        table.cell(t, 0, 14, "WHAT TO DO", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 14, wtdTxt, text_color = color.white, bgcolor = wtdCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── BUSINESS QUALITY + VALUATION (reported financials) ──
+        if showFund
+            bqTxt = na(netMargin) and na(roeFY) ? "n/a (no financials for this symbol)" : "Net margin " + (na(netMargin) ? "—" : str.tostring(netMargin, "#.#") + "%") + "  |  ROE " + (na(roeFY) ? "—" : str.tostring(roeFY, "#.#") + "%") + "  |  Rev growth " + (na(revGrowth) ? "—" : (revGrowth >= 0 ? "+" : "") + str.tostring(revGrowth, "#.#") + "%") + "  |  D/E " + (na(deFY) ? "—" : str.tostring(deFY, "#.##"))
+            bqCol = na(netMargin) ? color.new(color.gray, 60) : netMargin >= 15 and (na(revGrowth) or revGrowth > 0) ? color.new(#00c853, 30) : netMargin >= 8 ? color.new(color.orange, 30) : color.new(#d50000, 30)
+            // A one-line read on what KIND of business the numbers describe.
+            // Derived only from reported figures — the script has no access to
+            // company descriptions, so this characterises, it does not explain.
+            hiM = not na(netMargin) and netMargin >= 15
+            hiG = not na(revGrowth) and revGrowth >= 15
+            hiR = not na(roeFY) and roeFY >= 15
+            hiD = not na(deFY) and deFY >= 1.5
+            rule40 = na(revGrowth) or na(netMargin) ? na : revGrowth + netMargin
+            bizTxt = na(netMargin) and na(roeFY) ? "n/a (no financials for this symbol)" : (hiM and hiG ? "high-margin grower — the compounder profile" : hiG and not hiM ? "growth without margin — profitability unproven" : hiM and not hiG ? "mature cash generator — margin without growth" : "low margin, low growth — commodity or cyclical") + (hiR ? "  ·  strong ROE" : "  ·  modest ROE") + (hiD ? "  ·  ⚠ leveraged" : "") + (na(rule40) ? "" : "  ·  Rule of 40: " + str.tostring(rule40, "#") + (rule40 >= 40 ? " ✓" : " ✗"))
+            table.cell(t, 0, 25, "BUSINESS TYPE", text_color = color.white, bgcolor = color.new(color.green, 25), text_halign = text.align_left, text_size = txtSize)
+            table.cell(t, 1, 25, bizTxt, text_color = color.white, bgcolor = na(netMargin) ? color.new(color.gray, 55) : hiM and hiG ? color.new(#00c853, 30) : hiM or hiG ? color.new(color.orange, 30) : color.new(color.gray, 40), text_halign = text.align_center, text_size = txtSize)
+
+            table.cell(t, 0, 15, "BUSINESS QUALITY", text_color = color.white, bgcolor = color.new(color.green, 25), text_halign = text.align_left, text_size = txtSize)
+            table.cell(t, 1, 15, bqTxt, text_color = color.white, bgcolor = bqCol, text_halign = text.align_center, text_size = txtSize)
+
+            // P/E in isolation says little: 40x on a 40%-grower is not the same
+            // as 40x on a flat business. PEG and earnings yield both come free
+            // from figures already fetched.
+            pegR  = na(peRatio) or na(revGrowth) or revGrowth <= 0 ? na : peRatio / revGrowth
+            eYld  = na(peRatio) or peRatio <= 0 ? na : 100 / peRatio
+            pegTx = na(pegR) ? "" : "  |  PEG " + str.tostring(pegR, "#.##") + (pegR < 1 ? " (growth outpaces price)" : pegR < 2 ? " (fair vs growth)" : " (priced ahead of growth)")
+            valTxt = na(peRatio) ? "n/a" : "P/E " + str.tostring(peRatio, "#.#") + (peRatio < 15 ? " — cheap zone" : peRatio < 30 ? " — moderate" : " — rich") + (na(eYld) ? "" : "  |  earnings yield " + str.tostring(eYld, "#.#") + "%") + pegTx
+            valCol = na(peRatio) ? color.new(color.gray, 60) : peRatio < 15 ? color.new(#00c853, 30) : peRatio < 30 ? color.new(color.orange, 30) : color.new(#d50000, 30)
+            table.cell(t, 0, 16, "VALUATION", text_color = color.white, bgcolor = color.new(color.green, 25), text_halign = text.align_left, text_size = txtSize)
+            table.cell(t, 1, 16, valTxt, text_color = color.white, bgcolor = valCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── Nearest support / resistance from swing pivots ──
+        srTxt = (na(sup1) ? "support —" : "support " + str.tostring(sup1, format.mintick) + " (" + str.tostring((sup1 - close) / close * 100, "#.#") + "%)") + "   |   " + (na(r1) ? "resistance —" : "resistance " + str.tostring(r1, format.mintick) + " (+" + str.tostring((r1 - close) / close * 100, "#.#") + "%)")
+        // ── REGIME (MTF): same line, three timeframes ──
+        // third column is the CHART's own state — costs no request, and means
+        // switching the chart to monthly gives you the monthly read for free
+        bullN = (regD == 1 ? 1 : 0) + (regW == 1 ? 1 : 0) + (trend == 1 ? 1 : 0)
+        anyNa = na(regD) or na(regW)
+        mtfTxt = "daily " + f_arw(regD) + "     weekly " + f_arw(regW) + "     " + tfWord + " " + f_arw(trend) + "     —  " + (anyNa ? "partial data" : bullN == 3 ? "ALIGNED BULL" : bullN == 0 ? "ALIGNED BEAR" : "CONFLICT (" + str.tostring(bullN) + "/3 bullish)")
+        mtfCol = anyNa ? color.new(color.gray, 55) : bullN == 3 ? color.new(#00c853, 20) : bullN == 0 ? color.new(#d50000, 20) : color.new(color.orange, 25)
+        table.cell(t, 0, 21, "REGIME (MTF)", text_color = color.white, bgcolor = color.new(color.teal, 10), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 21, mtfTxt, text_color = color.white, bgcolor = mtfCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── TIMEFRAME FIT: which bar size has actually suited this symbol ──
+        dN  = na(statD) ? 0 : math.floor(statD / 1000)
+        dPF = na(statD) ? na : (statD % 1000) / 10
+        wN  = na(statW) ? 0 : math.floor(statW / 1000)
+        wPF = na(statW) ? na : (statW % 1000) / 10
+        minTr = 8
+        dOK = dN >= minTr and not na(dPF)
+        wOK = wN >= minTr and not na(wPF)
+        tfVerdict = not dOK and not wOK ? "too few trades on either to judge" : not wOK ? "only daily has enough trades" : not dOK ? "only weekly has enough trades" : dPF > wPF * 1.2 ? "→ DAILY fits better" : wPF > dPF * 1.2 ? "→ WEEKLY fits better" : "→ similar; prefer WEEKLY (fewer trades, less cost)"
+        tfTxt = "daily PF " + (na(dPF) ? "—" : str.tostring(dPF, "#.##")) + " (" + str.tostring(dN) + " tr)   ·   weekly PF " + (na(wPF) ? "—" : str.tostring(wPF, "#.##")) + " (" + str.tostring(wN) + " tr)   " + tfVerdict
+        tfCol = not dOK and not wOK ? color.new(color.gray, 55) : (wOK and (na(dPF) or wPF >= dPF)) ? color.new(#2962ff, 25) : color.new(color.orange, 25)
+        table.cell(t, 0, 24, "TIMEFRAME FIT", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 24, tfTxt, text_color = color.white, bgcolor = tfCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── HOW TO PLAY: the two verdicts above, resolved into one instruction ──
+        // HOLD vs TRADE answers "do the signals beat doing nothing"; TIMEFRAME FIT
+        // answers "if trading, which bar size". Neither is useful alone, so this
+        // combines them. It is descriptive of the PAST on this symbol, not a
+        // forecast — and every figure behind it is in-sample.
+        bestTF  = not dOK and not wOK ? "" : not wOK ? " on DAILY" : not dOK ? " on WEEKLY" : dPF > wPF * 1.2 ? " on DAILY" : " on WEEKLY"
+        enough  = tradeCount >= 5 and not na(bhRet)
+        holdWon = enough and bhRet > sysRet * 1.3 and bhRet > 0
+        coreWon = enough and not na(coreRet) and coreRet > sysRet * 1.2 and coreRet > bhRet * 0.8
+        playTxt = not enough ? "COLLECTING DATA — fewer than 5 completed trades" : holdWon and not coreWon ? "HOLD IT. Buy & hold beat the signals here — the exits cost more than they saved." : coreWon ? "HOLD A CORE against the 200-bar line; trade only a satellite" + bestTF + "." : sysRet > bhRet ? "TRADE IT" + bestTF + ". The signals beat holding on this symbol." : "EITHER — signals and holding finished close; holding costs less to run."
+        playCol = not enough ? color.new(color.gray, 55) : holdWon and not coreWon ? color.new(#2962ff, 15) : coreWon ? color.new(color.purple, 20) : sysRet > bhRet ? color.new(#00c853, 20) : color.new(color.orange, 25)
+        table.cell(t, 0, 26, "HOW TO PLAY", text_color = color.white, bgcolor = color.new(color.black, 5), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 26, playTxt, text_color = color.white, bgcolor = playCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── TRIGGER: the price that changes the state, spelled out ──
+        trgTxt = na(moneyLine) ? "—" : trend == 1 ? "SELL / exit on a " + tfWord + " close below " + str.tostring(moneyLine, format.mintick) + "   (turns BEARISH)" : "BUY / enter on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + "   (turns BULLISH)"
+        trgCol = na(moneyLine) ? color.new(color.gray, 60) : trend == 1 ? color.new(#d50000, 35) : color.new(#00c853, 35)
+        table.cell(t, 0, 23, trend == 1 ? "SELL TRIGGER" : "BUY TRIGGER", text_color = color.white, bgcolor = color.new(color.black, 15), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 23, trgTxt, text_color = color.white, bgcolor = trgCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── SINCE FLIP: how long this regime has run and what it has paid ──
+        sfPct = na(flipClose) or flipClose <= 0 ? na : (close - flipClose) / flipClose * 100
+        sfWks = na(flipBarIdx) ? na : bar_index - flipBarIdx
+        sfTxt = na(sfPct) ? "no flip on record yet" : (trend == 1 ? "BULLISH" : "BEARISH") + " for " + str.tostring(sfWks) + tfBar + "  |  " + (sfPct >= 0 ? "+" : "") + str.tostring(sfPct, "#.#") + "% since the flip at " + str.tostring(flipClose, format.mintick)
+        sfCol = na(sfPct) ? color.new(color.gray, 60) : (trend == 1) == (sfPct >= 0) ? color.new(#00c853, 30) : color.new(color.orange, 30)
+        table.cell(t, 0, 20, "SINCE FLIP", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 20, sfTxt, text_color = color.white, bgcolor = sfCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── WHIPSAW: exits that bought back higher soon after ──
+        whipPct = tradeCount > 0 ? whipCount / tradeCount * 100 : na
+        whipTxt = tradeCount < 5 ? "COLLECTING DATA" : whipCount == 0 ? "none — no exit was re-bought higher within " + str.tostring(whipWeeks) + tfBar : str.tostring(whipCount) + " of " + str.tostring(tradeCount) + " exits bought back higher within " + str.tostring(whipWeeks) + tfBar + "  |  cost " + str.tostring(whipCost, "#.#") + "% total. Raise 'closes needed to SELL' to cut these."
+        whipCol = tradeCount < 5 ? color.new(color.gray, 40) : na(whipPct) or whipPct < 10 ? color.new(#00c853, 30) : whipPct < 25 ? color.new(color.orange, 30) : color.new(#d50000, 25)
+        table.cell(t, 0, 19, "WHIPSAW", text_color = color.white, bgcolor = color.new(color.maroon, 10), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 19, whipTxt, text_color = color.white, bgcolor = whipCol, text_halign = text.align_center, text_size = txtSize)
+
+        // ── CORE EXIT: the slow line you hold a compounder against ──
+        core200 = ma200bar
+        coreGap = not na(core200) and core200 > 0 ? (close - core200) / core200 * 100 : na
+        coreTxt = na(core200) ? "n/a — needs " + str.tostring(ma200barLen) + " bars of history" : close > core200 ? "HOLD CORE — 200-bar line at " + str.tostring(core200, format.mintick) + " (price " + (coreGap >= 0 ? "+" : "") + str.tostring(coreGap, "#.#") + "% above). Core exits ONLY on a " + tfWord + " close below it." : "CORE BROKEN — " + tfWord + " close is below the 200-bar line at " + str.tostring(core200, format.mintick) + ". This is the long-term exit, not a dip."
+        coreCol = na(core200) ? color.new(color.gray, 60) : close > core200 ? color.new(#2962ff, 25) : color.new(#d50000, 20)
+        table.cell(t, 0, 18, "CORE EXIT (200w)", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 18, coreTxt, text_color = color.white, bgcolor = coreCol, text_halign = text.align_center, text_size = txtSize)
+
+        riskTxt = not inPos ? (na(trigDist) ? "—" : "no position — buy trigger sits " + str.tostring(trigDist, "#.#") + "% ABOVE price. Size is only meaningful once a stop exists below entry.") : na(stopDist) ? "—" : "stop is " + str.tostring(stopDist, "#.#") + "% away  |  at " + str.tostring(riskPct, "#.#") + "% risk that is a " + str.tostring(math.min(posSize, 100), "#.#") + "% position" + (stopDist > 15 ? "  — WIDE stop, ATR is inflated; size down hard" : stopDist > 8 ? "  — moderate" : "  — tight")
+        riskCol = not inPos or na(stopDist) ? color.new(color.gray, 55) : stopDist <= 8 ? color.new(#00c853, 25) : stopDist <= 15 ? color.new(color.orange, 25) : color.new(#d50000, 20)
+        table.cell(t, 0, 22, "RISK & SIZE", text_color = color.white, bgcolor = color.new(color.purple, 10), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 22, riskTxt, text_color = color.white, bgcolor = riskCol, text_halign = text.align_center, text_size = txtSize)
+
+        table.cell(t, 0, 17, "S/R LEVELS", text_color = color.white, bgcolor = color.new(color.olive, 15), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 17, srTxt, text_color = color.white, bgcolor = color.new(color.gray, 55), text_halign = text.align_center, text_size = txtSize)
+
+    if compactMode and not regimeMode
+        // smart note: surfaces the single most relevant secondary fact
+        noteTxt = buySignal ? "ENTER now (" + sizeHint + "); exit at " + str.tostring(moneyLine, format.mintick) : sellSignal ? "EXIT now at market; wait for next BUY" : trend == 1 ? "HOLD — sell only on a " + tfWord + " close below " + str.tostring(moneyLine, format.mintick) + " (" + (na(stopDist) ? "—" : str.tostring(stopDist, "#.#") + "% below") + ")" : trend == -1 and dailyTrend == 1 and score <= 4 ? "optional scout: half size now, complete on " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) : "STAY OUT — buy only on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + (na(trigDist) ? "—" : str.tostring(trigDist, "#.#") + "% above")+ ")"
+        noteCol = trend == -1 and (dailyTrend == 1 and score <= 4 or close > moneyLine) ? color.new(#00c853, 30) : color.new(color.gray, 55)
+        table.cell(t, 0, 3, thinHist ? "⚠ HISTORY" : "NOTE", text_color = color.white, bgcolor = color.new(color.teal, 15), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 3, noteTxt, text_color = color.white, bgcolor = noteCol, text_halign = text.align_center, text_size = txtSize)
+        // compact: long-term verdict (hold-vs-trade + structural health in one line)
+        cLtTxt = (na(bhRet) or tradeCount < 5 ? "fit: collecting data" : bhRet > sysRet * 1.3 and bhRet > 0 ? "HOLD-type (compounder)" : sysRet > bhRet ? "TRADE-type (signals win here)" : "either") + "  |  " + (above200 and bullStack and trend == 1 ? "healthy uptrend" : above200 and trend == 1 ? "uptrend rebuilding" : trend == 1 ? "recovery unproven" : above200 ? "pullback in uptrend" : "downtrend")
+        cLtCol = above200 and bullStack and trend == 1 ? color.new(#00c853, 30) : trend == 1 or above200 ? color.new(color.orange, 30) : color.new(#d50000, 30)
+        // Confirm score — five quality checks, shown as n/5 like the trend row
+        // it sits under. This does NOT decide bullish/bearish; the flip line
+        // does that. It says how much agreement is behind the current state.
+        cfTxt = thinHist ? "⚠ only " + str.tostring(histDays, "#") + "d of history — score not meaningful" : (trend == 1 ? "Bullish " : "Bearish ") + str.tostring(score) + "/9   Daily " + (c1 ? "✓" : "✗") + "  200d " + (c2 ? "✓" : "✗") + "  Stack " + (c3 ? "✓" : "✗") + "  Vol " + (c4 ? "✓" : "✗") + "  RSI " + (c5 ? "✓" : "✗") + "  ADX " + (c6 ? "✓" : "✗") + "  Mom " + (c7 ? "✓" : "✗") + "  Ext " + (c8 ? "✓" : "✗") + (wRedundant ? "" : "  Wkly " + (c9 ? "✓" : "✗"))
+        cfCol = thinHist ? color.new(#d50000, 15) : score >= 8 ? color.new(#00c853, 25) : score >= 6 ? color.new(color.orange, 25) : color.new(#d50000, 25)
+        table.cell(t, 0, 5, "CONFIRM", text_color = color.white, bgcolor = color.new(color.purple, 15), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 5, cfTxt, text_color = color.white, bgcolor = cfCol, text_halign = text.align_center, text_size = txtSize)
+        cTrgTxt = na(moneyLine) ? "—" : (trend == 1 ? "SELL on a " + tfWord + " close below " : "BUY on a " + tfWord + " close above ") + str.tostring(moneyLine, format.mintick)
+        table.cell(t, 0, 6, trend == 1 ? "SELL TRIGGER" : "BUY TRIGGER", text_color = color.white, bgcolor = color.new(color.black, 15), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 6, cTrgTxt, text_color = color.white, bgcolor = trend == 1 ? color.new(#d50000, 35) : color.new(#00c853, 35), text_halign = text.align_center, text_size = txtSize)
+        table.cell(t, 0, 4, "LONG-TERM", text_color = color.white, bgcolor = color.new(color.blue, 20), text_halign = text.align_left, text_size = txtSize)
+        table.cell(t, 1, 4, cLtTxt, text_color = color.white, bgcolor = cLtCol, text_halign = text.align_center, text_size = txtSize)
+
+// ═══════════════════════════════════════════════════════════════
+// SCANNER — same engine per symbol, bottom-right overview
+// ═══════════════════════════════════════════════════════════════
+// Everything below is evaluated in the REQUESTED symbol's own context, on its own
+// bars. `_n` gives a deterministic warm-up guard, and returning the [1] values makes
+// the reading independent of where each chart happens to sit inside its live bar.
+f_scanTrend() =>
+    _tr = ta.tr(true)
+    _atr = ta.rma(_tr, atrLen)
+    _hh = ta.highest(high, longLen)
+    _ll = ta.lowest(low, shortLen)
+    _lsB = _hh - atrMultL * _atr
+    _ssB = _ll + atrMultS * _atr
+    var float _ls = na
+    var float _ss = na
+    _ls := close[1] > nz(_ls[1], _lsB) ? math.max(_lsB, nz(_ls[1], _lsB)) : _lsB
+    _ss := close[1] < nz(_ss[1], _ssB) ? math.min(_ssB, nz(_ss[1], _ssB)) : _ssB
+    var int _t = 1
+    var int _bn = 0
+    var int _an = 0
+    _bn := _t == 1 and close < _ls ? _bn + 1 : 0
+    _an := _t == -1 and close > _ss ? _an + 1 : 0
+    _t := _t == -1 and _an >= entryConfirm ? 1 : _t == 1 and _bn >= exitConfirm ? -1 : _t
+    _lvl = _t == 1 ? _ls : _ss
+    _dist = _lvl > 0 ? (close - _lvl) / _lvl * 100 : na
+    _fresh = _t != _t[1]
+    // warm-up guard: the trailing stop is path-dependent, so suppress output until
+    // it has had enough bars to converge. Without this, a short-history symbol shows
+    // a state that is really just an artefact of its seed value.
+    var int _n = 0
+    _n += 1
+    _warm = _n > math.max(scanWarm, atrLen * 2)
+    // read the last CLOSED bar of this symbol when confirmed mode is on
+    // A bar is done when its close time has passed, regardless of whether a NEW
+    // bar has opened yet. On a Saturday the week that ended Friday is finished,
+    // but `[1]` would still point a week further back and `barstate.isconfirmed`
+    // is still false — so both would read a full week stale exactly when you sit
+    // down to review. `_done` reads the CURRENT bar once the session is over.
+    _done = time_close <= timenow
+    _off  = not scanConfirmed or _done ? 0 : 1
+    _T  = _off == 0 ? _t : _t[1]
+    _D  = _off == 0 ? _dist : _dist[1]
+    _F  = _off == 0 ? _fresh : _fresh[1]
+    _W  = _off == 0 ? _warm : _warm[1]
+    _TM = _off == 0 ? time_close : time_close[1]
+    // live bar disagrees with the confirmed bar = a flip is FORMING right now.
+    // Packed into the same slot as `fresh` rather than adding a 5th tuple
+    // element: each element of a request.security tuple counts against
+    // TradingView's series budget, and 32 x 5 exceeds it. Bit 1 = confirmed
+    // flip, bit 2 = live crossing.
+    _P = _off == 1 and _W and _t != _t[1]
+    // how long has this symbol been in its current regime?
+    var int _fb = na
+    if _t != _t[1]
+        _fb := bar_index
+    _bars0 = na(_fb) ? 0 : bar_index - _fb
+    _BARS  = _off == 0 ? _bars0 : nz(_bars0[1], 0)
+    // Slot packing: bits 1-2 are the two flags, everything above is the bar
+    // count. A 5th tuple element blows TradingView's series budget (32 x 5),
+    // so age rides along inside the flag instead of beside it.
+    _FLAG = math.min(_BARS, 500) * 4 + (_W and _F ? 1 : 0) + (_P ? 2 : 0)
+    [_W ? _T : na, _W ? _D : na, _FLAG, _TM]
+
+[st1, sd1, sf1, sq1] = request.security(s1, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st2, sd2, sf2, sq2] = request.security(s2, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st3, sd3, sf3, sq3] = request.security(s3, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st4, sd4, sf4, sq4] = request.security(s4, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st5, sd5, sf5, sq5] = request.security(s5, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st6, sd6, sf6, sq6] = request.security(s6, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st7, sd7, sf7, sq7] = request.security(s7, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st8, sd8, sf8, sq8] = request.security(s8, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st9, sd9, sf9, sq9] = request.security(s9, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st10, sd10, sf10, sq10] = request.security(s10, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st11, sd11, sf11, sq11] = request.security(s11, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st12, sd12, sf12, sq12] = request.security(s12, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st13, sd13, sf13, sq13] = request.security(s13, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st14, sd14, sf14, sq14] = request.security(s14, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st15, sd15, sf15, sq15] = request.security(s15, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st16, sd16, sf16, sq16] = request.security(s16, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st17, sd17, sf17, sq17] = request.security(s17, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st18, sd18, sf18, sq18] = request.security(s18, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st19, sd19, sf19, sq19] = request.security(s19, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st20, sd20, sf20, sq20] = request.security(s20, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st21, sd21, sf21, sq21] = request.security(s21, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st22, sd22, sf22, sq22] = request.security(s22, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st23, sd23, sf23, sq23] = request.security(s23, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st24, sd24, sf24, sq24] = request.security(s24, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st25, sd25, sf25, sq25] = request.security(s25, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st26, sd26, sf26, sq26] = request.security(s26, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st27, sd27, sf27, sq27] = request.security(s27, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st28, sd28, sf28, sq28] = request.security(s28, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st29, sd29, sf29, sq29] = request.security(s29, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st30, sd30, sf30, sq30] = request.security(s30, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st31, sd31, sf31, sq31] = request.security(s31, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+[st32, sd32, sf32, sq32] = request.security(s32, scanTF, f_scanTrend(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off, ignore_invalid_symbol = true, currency = scanNoFx ? currency.NONE : syminfo.currency, calc_bars_count = scanBars)
+
+// build priority-sorted focus list: fresh flips first, then nearest-to-trigger
+scPos = scanPos == "Top Right" ? position.top_right : scanPos == "Middle Right" ? position.middle_right : scanPos == "Bottom Left" ? position.bottom_left : position.bottom_right
+var table sc = table.new(scPos, 2, 40, border_width = 1)
+
+f_score(_t, _d, _f) =>
+    // lower score = more urgent
+    _f == 1 ? 0.0 : na(_d) ? 999.0 : math.abs(_d)
+
+// "up 7%" read as a 7% GAIN. It never meant that — it is the distance between
+// price and the LINE, i.e. headroom above the exit (bullish) or the gap still to
+// climb to the trigger (bearish). A symbol can sit "up 7%" while the trade is
+// down. The wording now says which.
+f_tag(_t, _d, _f) =>
+    na(_t) or na(_d) ? "— no data" : _f == 1 and _t == 1 ? "★ NEW BUY" : _f == 1 and _t == -1 ? "★ NEW SELL" : _t == -1 and _d > -3 ? "◆ NEAR BUY " + str.tostring(_d, "#.#") + "%" : _t == 1 and _d < 3 ? "◆ NEAR SELL " + str.tostring(_d, "#.#") + "%" : _t == 1 ? str.tostring(_d, "#") + "% above exit" : str.tostring(math.abs(_d), "#") + "% below trigger"
+
+f_tagCol(_t, _d, _f) =>
+    na(_t) or na(_d) ? color.new(color.gray, 55) : _f == 1 and _t == 1 ? color.new(#00c853, 0) : _f == 1 and _t == -1 ? color.new(#d50000, 0) : (_t == -1 and not na(_d) and _d > -3) or (_t == 1 and not na(_d) and _d < 3) ? color.new(color.orange, 10) : _t == 1 ? color.new(#00c853, 60) : color.new(#d50000, 60)
+
+// ── BREADTH: how much of the list is on the same side right now ──
+// Position sizing treats every trade as independent. It is not: when most
+// of the list flips the same way in the same week, that is ONE bet held in
+// several names, and the true risk is far larger than the sum of the
+// individual 1% figures suggests.
+bN = 0
+tN = 0
+for bi = 1 to 32
+    bt = switch bi
+        1 => st1
+        2 => st2
+        3 => st3
+        4 => st4
+        5 => st5
+        6 => st6
+        7 => st7
+        8 => st8
+        9 => st9
+        10 => st10
+        11 => st11
+        12 => st12
+        13 => st13
+        14 => st14
+        15 => st15
+        16 => st16
+        17 => st17
+        18 => st18
+        19 => st19
+        20 => st20
+        21 => st21
+        22 => st22
+        23 => st23
+        24 => st24
+        25 => st25
+        26 => st26
+        27 => st27
+        28 => st28
+        29 => st29
+        30 => st30
+        31 => st31
+        32 => st32
+        => int(na)
+    if not na(bt)
+        tN += 1
+        bN += bt == 1 ? 1 : 0
+bPct = tN > 0 ? bN / tN * 100 : na
+
+if showScanner and barstate.islast
+    table.clear(sc, 0, 0, 1, 34)
+    scores = array.new_float()
+    idxs   = array.new_int()
+    array.push(scores, f_score(st1, sd1, sf1)), array.push(idxs, 1)
+    array.push(scores, f_score(st2, sd2, sf2)), array.push(idxs, 2)
+    array.push(scores, f_score(st3, sd3, sf3)), array.push(idxs, 3)
+    array.push(scores, f_score(st4, sd4, sf4)), array.push(idxs, 4)
+    array.push(scores, f_score(st5, sd5, sf5)), array.push(idxs, 5)
+    array.push(scores, f_score(st6, sd6, sf6)), array.push(idxs, 6)
+    array.push(scores, f_score(st7, sd7, sf7)), array.push(idxs, 7)
+    array.push(scores, f_score(st8, sd8, sf8)), array.push(idxs, 8)
+    array.push(scores, f_score(st9, sd9, sf9)), array.push(idxs, 9)
+    array.push(scores, f_score(st10, sd10, sf10)), array.push(idxs, 10)
+    array.push(scores, f_score(st11, sd11, sf11)), array.push(idxs, 11)
+    array.push(scores, f_score(st12, sd12, sf12)), array.push(idxs, 12)
+    array.push(scores, f_score(st13, sd13, sf13)), array.push(idxs, 13)
+    array.push(scores, f_score(st14, sd14, sf14)), array.push(idxs, 14)
+    array.push(scores, f_score(st15, sd15, sf15)), array.push(idxs, 15)
+    array.push(scores, f_score(st16, sd16, sf16)), array.push(idxs, 16)
+    array.push(scores, f_score(st17, sd17, sf17)), array.push(idxs, 17)
+    array.push(scores, f_score(st18, sd18, sf18)), array.push(idxs, 18)
+    array.push(scores, f_score(st19, sd19, sf19)), array.push(idxs, 19)
+    array.push(scores, f_score(st20, sd20, sf20)), array.push(idxs, 20)
+    array.push(scores, f_score(st21, sd21, sf21)), array.push(idxs, 21)
+    array.push(scores, f_score(st22, sd22, sf22)), array.push(idxs, 22)
+    array.push(scores, f_score(st23, sd23, sf23)), array.push(idxs, 23)
+    array.push(scores, f_score(st24, sd24, sf24)), array.push(idxs, 24)
+    array.push(scores, f_score(st25, sd25, sf25)), array.push(idxs, 25)
+    array.push(scores, f_score(st26, sd26, sf26)), array.push(idxs, 26)
+    array.push(scores, f_score(st27, sd27, sf27)), array.push(idxs, 27)
+    array.push(scores, f_score(st28, sd28, sf28)), array.push(idxs, 28)
+    array.push(scores, f_score(st29, sd29, sf29)), array.push(idxs, 29)
+    array.push(scores, f_score(st30, sd30, sf30)), array.push(idxs, 30)
+    array.push(scores, f_score(st31, sd31, sf31)), array.push(idxs, 31)
+    // Slot 32 holds the chart's own symbol. Pin it to the top of the list with a
+    // score below any real one, so the symbol you are actually looking at is
+    // always present — the urgency sort would otherwise drop a settled trend
+    // (e.g. TCS at +12% above its line) below the display cut.
+    array.push(scores, addChartSym ? -1.0 : f_score(st32, sd32, sf32)), array.push(idxs, 32)
+    table.cell(sc, 0, 0, "FOCUS LIST v62", text_color = color.white, bgcolor = color.new(color.blue, 20), text_halign = text.align_left, text_size = txtSize)
+    // diagnostic: the bar each symbol was read at. Same date on two different
+    // charts = the Focus List is genuinely aligned.
+    // Every symbol should be read at the SAME bar. If they are not, the scan is
+    // getting uneven history and the levels cannot be compared — that is the
+    // failure this whole header exists to catch.
+    sqAll  = array.from(sq1, sq2, sq3, sq4, sq5, sq6, sq7, sq8, sq9, sq10, sq11, sq12, sq13, sq14, sq15, sq16, sq17, sq18, sq19, sq20, sq21, sq22, sq23, sq24, sq25, sq26, sq27, sq28, sq29, sq30, sq31, sq32)
+    asOfT  = array.max(sqAll)
+    asOfMin = array.min(sqAll)
+    // tolerance: symbols on different exchanges open their bar at different times
+    // of day. Only a gap of several days means they are on different BARS.
+    // Tolerance must scale with the scan timeframe, not be a fixed number of days.
+    // A symbol on a later-closing exchange legitimately reports one bar behind:
+    // on an NSE chart the week ends 10:00 UTC Friday, but NASDAQ's week ends at
+    // 20:00 UTC, and lookahead_off correctly refuses to return a bar that closes
+    // after the chart bar did. That one-bar offset is the anti-repainting rule
+    // working, not a fault — so only a gap of MORE than one bar is a real problem.
+    tolMs  = math.round(timeframe.in_seconds(scanTF) * 1000 * tolBars)
+    mixed  = not na(asOfT) and not na(asOfMin) and (asOfT - asOfMin) > tolMs
+    asOfTx = showAsOf and nz(asOfT, 0) > 0 ? "  ·  as of w/e " + str.format_time(asOfT, "dd MMM", syminfo.timezone) + (mixed ? "  ⚠ MIXED DATES" : "") + "  ⚡=live" : ""
+    hdrCol = mixed ? color.new(#d50000, 10) : color.new(color.blue, 20)
+    table.cell(sc, 1, 0, scanTF + "  " + chartMkt + "  (top " + str.tostring(maxShow) + ")" + asOfTx, text_color = color.white, bgcolor = hdrCol, text_halign = text.align_center, text_size = txtSize)
+
+    // ── BREADTH footer: how much of the scanned list is on the same side ──
+    // Sizing treats each trade as independent. It is not: when most of the list
+    // flips the same way in the same week, that is ONE bet spread across names.
+    brTxt = tN < 5 ? "not enough scanned symbols to judge" : str.tostring(bN) + "/" + str.tostring(tN) + " bullish (" + str.tostring(bPct, "#") + "%)" + (bPct >= 80 ? "  ⚠ CROWDED LONG — one bet, not many" : bPct <= 20 ? "  ⚠ CROWDED SHORT — risk-off" : bPct >= 60 ? "  broad strength" : bPct <= 40 ? "  broad weakness" : "  mixed — signals independent")
+    brCol = tN < 5 ? color.new(color.gray, 55) : bPct >= 80 or bPct <= 20 ? color.new(#d50000, 20) : bPct >= 60 or bPct <= 40 ? color.new(color.orange, 30) : color.new(#00c853, 35)
+    table.cell(sc, 0, 33, "BREADTH", text_color = color.white, bgcolor = color.new(color.maroon, 5), text_halign = text.align_left, text_size = txtSize)
+    table.cell(sc, 1, 33, brTxt, text_color = color.white, bgcolor = brCol, text_halign = text.align_center, text_size = txtSize)
+    shown = 0
+    // names already rendered, so the chart symbol in slot 32 cannot appear twice
+    seenNames = array.new_string()
+    while shown < maxShow and array.size(scores) > 0
+        best = 0
+        for k = 1 to array.size(scores) - 1
+            if array.get(scores, k) < array.get(scores, best)
+                best := k
+        id = array.get(idxs, best)
+        array.remove(scores, best), array.remove(idxs, best)
+        sym = switch id
+            1 => s1
+            2 => s2
+            3 => s3
+            4 => s4
+            5 => s5
+            6 => s6
+            7 => s7
+            8 => s8
+            9 => s9
+            10 => s10
+            11 => s11
+            12 => s12
+            13 => s13
+            14 => s14
+            15 => s15
+            16 => s16
+            17 => s17
+            18 => s18
+            19 => s19
+            20 => s20
+            21 => s21
+            22 => s22
+            23 => s23
+            24 => s24
+            25 => s25
+            26 => s26
+            27 => s27
+            28 => s28
+            29 => s29
+            30 => s30
+            31 => s31
+            32 => s32
+            => s1
+        tv = switch id
+            1 => st1
+            2 => st2
+            3 => st3
+            4 => st4
+            5 => st5
+            6 => st6
+            7 => st7
+            8 => st8
+            9 => st9
+            10 => st10
+            11 => st11
+            12 => st12
+            13 => st13
+            14 => st14
+            15 => st15
+            16 => st16
+            17 => st17
+            18 => st18
+            19 => st19
+            20 => st20
+            21 => st21
+            22 => st22
+            23 => st23
+            24 => st24
+            25 => st25
+            26 => st26
+            27 => st27
+            28 => st28
+            29 => st29
+            30 => st30
+            31 => st31
+            32 => st32
+            => st1
+        dv = switch id
+            1 => sd1
+            2 => sd2
+            3 => sd3
+            4 => sd4
+            5 => sd5
+            6 => sd6
+            7 => sd7
+            8 => sd8
+            9 => sd9
+            10 => sd10
+            11 => sd11
+            12 => sd12
+            13 => sd13
+            14 => sd14
+            15 => sd15
+            16 => sd16
+            17 => sd17
+            18 => sd18
+            19 => sd19
+            20 => sd20
+            21 => sd21
+            22 => sd22
+            23 => sd23
+            24 => sd24
+            25 => sd25
+            26 => sd26
+            27 => sd27
+            28 => sd28
+            29 => sd29
+            30 => sd30
+            31 => sd31
+            32 => sd32
+            => sd1
+        fv = switch id
+            1 => sf1
+            2 => sf2
+            3 => sf3
+            4 => sf4
+            5 => sf5
+            6 => sf6
+            7 => sf7
+            8 => sf8
+            9 => sf9
+            10 => sf10
+            11 => sf11
+            12 => sf12
+            13 => sf13
+            14 => sf14
+            15 => sf15
+            16 => sf16
+            17 => sf17
+            18 => sf18
+            19 => sf19
+            20 => sf20
+            21 => sf21
+            22 => sf22
+            23 => sf23
+            24 => sf24
+            25 => sf25
+            26 => sf26
+            27 => sf27
+            28 => sf28
+            29 => sf29
+            30 => sf30
+            31 => sf31
+            32 => sf32
+            => sf1
+        qv = switch id
+            1 => sq1
+            2 => sq2
+            3 => sq3
+            4 => sq4
+            5 => sq5
+            6 => sq6
+            7 => sq7
+            8 => sq8
+            9 => sq9
+            10 => sq10
+            11 => sq11
+            12 => sq12
+            13 => sq13
+            14 => sq14
+            15 => sq15
+            16 => sq16
+            17 => sq17
+            18 => sq18
+            19 => sq19
+            20 => sq20
+            21 => sq21
+            22 => sq22
+            23 => sq23
+            24 => sq24
+            25 => sq25
+            26 => sq26
+            27 => sq27
+            28 => sq28
+            29 => sq29
+            30 => sq30
+            31 => sq31
+            32 => sq32
+            => int(na)
+        // a symbol that is invalid, or still inside its warm-up window, is skipped
+        // entirely instead of occupying a slot with a misleading tag
+        symMkt = f_mkt(f_exch(sym))
+        mktOK  = not mktFilter or symMkt == "ANY" or symMkt == chartMkt
+        nm = syminfo.ticker(sym)   // pinned chart symbol is reached first, so a
+                                   // duplicate elsewhere in the set is the one dropped
+        dup = array.includes(seenNames, nm)
+        if not na(tv) and not na(dv) and shown < 32 and mktOK and not dup
+            shown += 1
+            array.push(seenNames, nm)
+            fvBits = fv % 4
+            fvFlip = fvBits % 2            // bit 1: confirmed flip on the closed bar
+            pv     = fvBits >= 2 ? 1 : 0   // bit 2: live bar is crossing right now
+            fvAge  = math.floor(fv / 4)    // bars in the current regime
+            ageTxt = fvAge <= 0 ? "" : "  " + str.tostring(fvAge) + tfBar
+            stale = not na(qv) and not na(asOfT) and (asOfT - qv) > tolMs
+            table.cell(sc, 0, shown, (stale ? "⧗ " : "") + syminfo.ticker(sym), text_color = color.white, bgcolor = stale ? color.new(#d50000, 45) : color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+            // ⚡ = the live bar has already crossed but the bar has not closed.
+            // Early warning, and explicitly NOT a confirmed signal.
+            table.cell(sc, 1, shown, (pv == 1 ? "⚡ " : "") + f_tag(tv, dv, fvFlip) + ageTxt, text_color = color.white, bgcolor = pv == 1 ? color.new(#7c4dff, 15) : f_tagCol(tv, dv, fvFlip), text_halign = text.align_center, text_size = txtSize)
+
+// ═══════════════════════════════════════════════════════════════
+// ALERTS
+// ═══════════════════════════════════════════════════════════════
+// score is out of 9 now, not 5 — the old ">= 4" fired on almost everything
+alertcondition(buySignal and score >= 7, title = "BUY — Grade A (7+/9 checks)", message = "{{ticker}} {{interval}}: BUY signal, GRADE A at {{close}} — 7+ of 9 checks agree")
+alertcondition(sellSignal and score >= 7, title = "SELL — well confirmed (7+/9)", message = "{{ticker}} {{interval}}: SELL signal at {{close}} — downtrend well confirmed")
+alertcondition(buySignal, title = "BUY — any grade", message = "{{ticker}} {{interval}}: BUY signal at {{close}} — check grade on chart")
+
+// breadth on the last bar, for the alert below
+gBull = 0
+gTot  = 0
+for gi = 1 to 32
+    gt = switch gi
+        1 => st1
+        2 => st2
+        3 => st3
+        4 => st4
+        5 => st5
+        6 => st6
+        7 => st7
+        8 => st8
+        9 => st9
+        10 => st10
+        11 => st11
+        12 => st12
+        13 => st13
+        14 => st14
+        15 => st15
+        16 => st16
+        17 => st17
+        18 => st18
+        19 => st19
+        20 => st20
+        21 => st21
+        22 => st22
+        23 => st23
+        24 => st24
+        25 => st25
+        26 => st26
+        27 => st27
+        28 => st28
+        29 => st29
+        30 => st30
+        31 => st31
+        32 => st32
+        => int(na)
+    if not na(gt)
+        gTot += 1
+        gBull += gt == 1 ? 1 : 0
+gPct = gTot > 0 ? gBull / gTot * 100 : na
+alertcondition(buySignal and not na(gPct) and gPct >= 80, title = "BUY while list is CROWDED LONG", message = "{{ticker}} {{interval}}: BUY at {{close}}, but 80%+ of the scanned list is already bullish — this is a crowded bet, size down.")
+alertcondition(not na(gPct) and gPct >= 80 and nz(gPct[1], 0) < 80, title = "Breadth crossed into CROWDED LONG", message = "Scanned list breadth just crossed 80% bullish — combined risk across open positions is now far above the per-trade figure.")
+alertcondition(not na(gPct) and gPct <= 20 and nz(gPct[1], 100) > 20, title = "Breadth crossed into CROWDED SHORT", message = "Scanned list breadth just fell below 20% bullish — broad risk-off.")
+alertcondition(sellSignal, title = "SELL", message = "{{ticker}} {{interval}}: SELL signal at {{close}}")
+
+// intraweek tripwire: fires the moment price trades ABOVE the buy flip level while still bearish
+// (unconfirmed — the weekly close can still fall back below; this is the EARLY-PRICE heads-up)
+tripwireUp = trend == -1 and close > moneyLine
+alertcondition(tripwireUp, title = "⚡ PRICE ABOVE BUY LEVEL (unconfirmed)", message = "{{ticker}}: price {{close}} is ABOVE the buy flip level intrabar — unconfirmed until the bar closes. Early-entry zone.")
