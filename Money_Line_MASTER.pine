@@ -61,27 +61,28 @@
 //   entry are different objects and do not share a distance. The BUY TRIGGER
 //   row also quotes the gap in ATR units now and flags it beyond 2.5 ATR, so
 //   an unreachable trigger cannot sit there looking like a normal reading.
-// CALIBRATION AGAINST THE REFERENCE — two differences, both now settled
-//   1. THE BAND IS A PERCENTAGE, NOT AN ATR MULTIPLE. Read off the CALIBRATION
-//      row, same weekly bar: SOL ATR is 15.0% of price, BTC 8.7%. The reference
-//      was BULLISH on SOL and BEARISH on BTC, so its entry sat below price on
-//      one and above it on the other — needing an ATR multiple under 1.50 and
-//      over 2.41 at the same time. No multiplier is both, which is why several
-//      rounds of tuning each fixed one symbol and broke the other. As
-//      percentages the readings agree: 27.1% above low(3) on BTC, 25.5-28.8%
-//      on SOL. Anything in 26.3%-29.1% gives the correct state on both.
-//   2. THE REFERENCE DOES NOT RATCHET. Against its levels:
-//        SOL exit  65.89   vs our raw 65.93     (0.06%)  vs ratcheted 65.93
-//        BTC entry 79,463.76 vs our raw 79,687.50 (0.28%) vs ratcheted 73,639.72 (7.33%)
-//      The ratcheted BTC entry was a running minimum held over from a low of
-//      57,757 while low(3) had recovered to 62,500. That stale minimum is what
-//      made this script turn bullish on BTC on 17 Aug while the reference
-//      stayed bearish. With the ratchet off, SOL is bullish and BTC bearish —
-//      both matching.
-//   The exit side still rests on one reading (SOL), where 35.8% and 2.5 ATR
-//   happen to coincide, so that number is provisional.
+// CALIBRATION AGAINST THE REFERENCE - what actually mattered
+//   The difference was never the band width. It was the RATCHET.
+//     SOL exit  65.89     vs raw 66.72 @2.5 ATR  (1.27%)
+//     BTC entry 79,463.76 vs raw 79,568.93 @2.5  (0.13%)
+//                         vs RATCHETED 73,639.72 (7.33%)
+//   The ratcheted BTC entry was a running minimum held over from a low of
+//   57,757 while low(3) had recovered to 62,500 - a level the market had left
+//   behind. That stale minimum, not the multiplier, is what turned this script
+//   bullish on BTC while the reference stayed bearish. With the ratchet off,
+//   ATR 2.5 puts SOL long and BTC short, both matching, both within 1.3%.
 //
-//   Defaults: Percent basis, entry 27.5%, exit 35.8%, ratchet OFF.
+//   A CORRECTION, recorded so it is not repeated: an earlier revision claimed
+//   no ATR multiple could satisfy both symbols - SOL appearing to need < 1.50
+//   and BTC > 2.41. That test compared BOTH symbols on their ENTRY side. SOL
+//   was already long, so its entry is dormant and its state is set by the
+//   EXIT; only BTC, being short, is governed by its entry. The constraint never
+//   applied, and the contradiction was an artefact of the test, not the data.
+//   The percent basis it motivated is kept as an option but is calibrated on
+//   crypto only: 27.5% is 1.8 ATR on SOL, 3.2 on BTC and 4.3 on GOOGL, which
+//   is why equities broke under it.
+//
+//   Defaults: ATR basis, 2.5 both sides, ratchet OFF.
 //
 // WHAT CHANGED IN v63 — the line no longer moves when you zoom
 //   The flip rule is recursive, so its levels depend on which bar the
@@ -128,7 +129,7 @@ longLen   = input.int(5, "Long (Bullish) Lookback", minval = 1, group = "1. Line
 shortLen  = input.int(3, "Short (Bearish) Lookback", minval = 1, group = "1. Line Settings")
 atrLen    = input.int(21, "ATR Length", minval = 1, group = "1. Line Settings")
 useRatchet = input.bool(false, "Ratchet the line (never let it loosen)", tooltip = "ON  — the level is carried forward as a running extreme: the exit may only rise while long, the entry may only fall while short. This is how a classic trailing stop behaves and is what this script did through v62.\n\nOFF (default) — the flip is tested against the band computed from the CURRENT window, so the level moves with the recent high or low in both directions.\n\nWHY OFF IS THE DEFAULT. Measured against the reference indicator on the same weekly bar:\n  SOL, reference exit stop 65.89 — our raw band 65.93 (0.06% apart)\n  BTC, reference entry trigger 79,463.76 — our raw band 79,687.50 (0.28% apart)\nOur RATCHETED BTC entry was 73,639.72, which is 7.33% away and matches nothing. It was a running minimum left over from a low of 57,757 earlier in the decline, while low(3) had since recovered to 62,500. That stale minimum is exactly what made this script flip bullish on BTC on 17 Aug while the reference stayed bearish.\n\nThe trade-off is real: without the ratchet the exit can move DOWN during an uptrend if the recent high rolls over, so it is a channel rather than a true trailing stop. Turn it ON if you want a stop that never loosens, and accept that entries will then fire earlier than the reference after a deep decline.", group = "1. Line Settings")
-bandMode  = input.string("Percent", "Band basis", options = ["Percent", "ATR"], tooltip = "How far the line sits from the recent extreme.\n\nPERCENT (default) — a fixed % of the extreme. ATR — a multiple of ATR(21), which is what this script used through v62.\n\nWHY THE DEFAULT CHANGED. Solved against the reference indicator on two symbols on the same weekly bar, 24 Aug 2026, using the CALIBRATION row rather than inference:\n  SOL  ATR 14.39 (15.0% of price)  low(3) 74.09  price 95.68  reference BULLISH\n  BTC  ATR 6827.57 (8.7% of price) low(3) 62500  price 78928  reference BEARISH\nFor SOL to be bullish the entry trigger must be under price, which needs an ATR multiple below 1.50. For BTC to be bearish it must be above price, which needs one above 2.41. No single multiplier is both, so no ATR setting can reproduce the reference on both symbols at once — which is why several rounds of multiplier tuning each fixed one symbol and broke the other.\n\nAs percentages the same two readings agree: the reference's trigger is 27.1% above low(3) on BTC and 25.5-28.8% on SOL, even though ATR is 8.7% of price on one and 15.0% on the other. Any value between 26.3% and 29.1% gives the correct state on both.\n\nSwitch to ATR to restore the old behaviour.", group = "1. Line Settings")
+bandMode  = input.string("ATR", "Band basis", options = ["ATR", "Auto", "Percent"], tooltip = "How far the line sits from the recent extreme.\n\nATR (default) — a multiple of ATR(21), so the band widens and narrows with the symbol's own volatility and stays a sensible distance from price on every asset class. AUTO — Percent on crypto, ATR everywhere else, decided per symbol so the Focus List does the right thing on each row. PERCENT — a fixed % of the extreme, calibrated on crypto only.\n\nWHY ATR IS THE DEFAULT: a fixed percentage is a different number of ATRs on every asset. At 27.5% it is 1.8 ATR on SOL (ATR 15.1% of price), 3.2 on BTC (8.7%) and 4.3 on GOOGL (6.4%). On GOOGL that demanded a 23% rally before the line could turn bullish and put the exit 29% below price, which is why equities looked broken and why the line and the chart drifted so far apart. ATR scales with each symbol's own range instead, so the line tracks price on every asset — GOOGL's exit sits 6% below price at ATR 2.5 rather than 29%.\n\nAnd with the ratchet OFF, ATR 2.5 matches the reference anyway: SOL's exit reads 66.72 against its 65.89 (1.27%) and BTC's entry 79,568.93 against its 79,463.76 (0.13%), with SOL correctly long and BTC correctly short.\n\nWHY THE DEFAULT CHANGED. Solved against the reference indicator on two symbols on the same weekly bar, 24 Aug 2026, using the CALIBRATION row rather than inference:\n  SOL  ATR 14.39 (15.0% of price)  low(3) 74.09  price 95.68  reference BULLISH\n  BTC  ATR 6827.57 (8.7% of price) low(3) 62500  price 78928  reference BEARISH\nFor SOL to be bullish the entry trigger must be under price, which needs an ATR multiple below 1.50. For BTC to be bearish it must be above price, which needs one above 2.41. No single multiplier is both, so no ATR setting can reproduce the reference on both symbols at once — which is why several rounds of multiplier tuning each fixed one symbol and broke the other.\n\nAs percentages the same two readings agree: the reference's trigger is 27.1% above low(3) on BTC and 25.5-28.8% on SOL, even though ATR is 8.7% of price on one and 15.0% on the other. Any value between 26.3% and 29.1% gives the correct state on both.\n\nSwitch to ATR to restore the old behaviour.", group = "1. Line Settings")
 pctL      = input.float(35.8, "Percent — EXIT, % below the recent high", minval = 0.5, step = 0.1, tooltip = "Used when Band basis is Percent. 35.8% is taken from the one exit reading available: the reference's stop at 65.89 against a high(5) of 102.70 on SOL. On that symbol ATR*2.5 comes to 37.5%, so both models fit this single point and it does NOT discriminate between them — unlike the entry side, where they disagree sharply. Treat this number as provisional until a second exit reading on another symbol confirms it.", group = "1. Line Settings")
 pctS      = input.float(27.5, "Percent — ENTRY, % above the recent low", minval = 0.5, step = 0.1, tooltip = "Used when Band basis is Percent. The reference implies 27.1% on BTC and 25.5-28.8% on SOL. The band that gives the correct state on both is 26.3% to 29.1%; 27.5 sits in the middle of it.", group = "1. Line Settings")
 atrMultL  = input.float(2.5, "ATR Multiplier — LONG stop (the EXIT)", minval = 0.1, step = 0.05, tooltip = "How far below the recent HIGH the exit sits while you are long. Wide is correct here — an exit's job is to survive noise and stay in the trend — but 3.0 was wider than the reference indicator this script is calibrated against.\n\nSolved on SOLUSD weekly, 24 Aug 2026: with the stop reading 58.03 at mult 3.0 and the ATR row reading 2.7 ATR, highest(high,5) works out to 101.00. The reference's long stop read 65.89, which implies (101.00 - 65.89) / 14.32 = 2.45. Hence 2.5.\n\nBE CLEAR ABOUT WHAT THIS DOES NOT FIX: the ATR on this symbol is currently 14.8% of price, so even at 2.5 the stop sits about 33% below price. Most of that gap is genuine volatility, not a setting. Lowering the multiplier further to close the gap means being stopped out by ordinary weekly noise. The RISK & SIZE row is the right response to a wide stop — size down — not a tighter multiplier.", group = "1. Line Settings")
@@ -282,8 +283,12 @@ f_flip() =>
     // two symbols whose ATR is 8.7% and 15.0% of price those are not the same
     // band, and only the percent form put both on the same side as the
     // reference. See the "Band basis" tooltip for the arithmetic.
-    _lsB = bandMode == "Percent" ? _hi * (1 - pctL / 100) : _hi - atrMultL * _atr
-    _ssB = bandMode == "Percent" ? _lo * (1 + pctS / 100) : _lo + atrMultS * _atr
+    // Resolved HERE, not at global scope: inside request.security syminfo.type
+    // describes the requested symbol, so each Focus List row picks its own
+    // basis instead of inheriting whatever the chart happens to be.
+    _pct = bandMode == "Percent" or (bandMode == "Auto" and syminfo.type == "crypto")
+    _lsB = _pct ? _hi * (1 - pctL / 100) : _hi - atrMultL * _atr
+    _ssB = _pct ? _lo * (1 + pctS / 100) : _lo + atrMultS * _atr
     var float _ls = na
     var float _ss = na
     // captured BEFORE the ratchet runs: the levels that were in force for this
@@ -434,6 +439,7 @@ rsiV = ta.rsi(close, 14)
 // trigger really is: 17% above price sounds survivable on a weekly crypto
 // chart and is in fact 3 ATR, which almost nothing closes through in one bar.
 // Quoting the gap in ATR units is what makes an unreachable trigger obvious.
+calBandPct = bandMode == "Percent" or (bandMode == "Auto" and syminfo.type == "crypto")
 atrNow = ta.rma(ta.tr(true), atrLen)
 // The three raw numbers every level in this script is built from. Exposed
 // because calibrating against another indicator by reading finished levels off
@@ -542,8 +548,8 @@ plot(show100bar ? ma100bar : na, "100-bar MA", color = color.new(#2962ff, 20), l
 plot(atrNow,  "cal · ATR",      display = display.data_window)
 plot(hi5Now,  "cal · high(n)",  display = display.data_window)
 plot(lo3Now,  "cal · low(n)",   display = display.data_window)
-plot(bandMode == "Percent" ? hi5Now * (1 - pctL / 100) : hi5Now - atrMultL * atrNow, "cal · raw exit",  display = display.data_window)
-plot(bandMode == "Percent" ? lo3Now * (1 + pctS / 100) : lo3Now + atrMultS * atrNow, "cal · raw entry", display = display.data_window)
+plot(calBandPct ? hi5Now * (1 - pctL / 100) : hi5Now - atrMultL * atrNow, "cal · raw exit",  display = display.data_window)
+plot(calBandPct ? lo3Now * (1 + pctS / 100) : lo3Now + atrMultS * atrNow, "cal · raw entry", display = display.data_window)
 
 // ── CORE variant: buy the same first signal, then hold until a weekly close
 // breaks the 200-week line. Runs from the SAME start date as the system and the
@@ -718,12 +724,12 @@ if barstate.islast
     // mode only, which made it invisible in regime mode — the mode most likely
     // to be on screen while comparing against another indicator.
     calRaw = na(atrNow) or na(hi5Now) or na(lo3Now)
-    calPct = bandMode == "Percent"
+    calPct = bandMode == "Percent" or (bandMode == "Auto" and syminfo.type == "crypto")
     calX   = calPct ? hi5Now * (1 - pctL / 100) : hi5Now - atrMultL * atrNow
     calE   = calPct ? lo3Now * (1 + pctS / 100) : lo3Now + atrMultS * atrNow
     // both readings are printed whichever mode is active, because comparing
     // against another indicator means solving BOTH and seeing which one agrees
-    calTxt = calRaw ? "—" : bandMode + "  ·  ATR(" + str.tostring(atrLen) + ") " + str.tostring(atrNow, format.mintick) + " (" + str.tostring(close > 0 ? atrNow / close * 100 : na, "#.#") + "% of price)  ·  high(" + str.tostring(longLen) + ") " + str.tostring(hi5Now, format.mintick) + "  ·  low(" + str.tostring(shortLen) + ") " + str.tostring(lo3Now, format.mintick) + "  ·  raw exit " + str.tostring(calX, format.mintick) + "  ·  raw entry " + str.tostring(calE, format.mintick) + "  ·  IN FORCE " + str.tostring(moneyLine, format.mintick) + "  ·  their level vs low(3): pct = (L/" + str.tostring(lo3Now, format.mintick) + "-1)  ATR = (L-" + str.tostring(lo3Now, format.mintick) + ")/" + str.tostring(atrNow, format.mintick)
+    calTxt = calRaw ? "—" : (calPct ? "Percent" : "ATR") + (bandMode == "Auto" ? " (auto)" : "") + "  ·  ATR(" + str.tostring(atrLen) + ") " + str.tostring(atrNow, format.mintick) + " (" + str.tostring(close > 0 ? atrNow / close * 100 : na, "#.#") + "% of price)  ·  high(" + str.tostring(longLen) + ") " + str.tostring(hi5Now, format.mintick) + "  ·  low(" + str.tostring(shortLen) + ") " + str.tostring(lo3Now, format.mintick) + "  ·  raw exit " + str.tostring(calX, format.mintick) + "  ·  raw entry " + str.tostring(calE, format.mintick) + "  ·  IN FORCE " + str.tostring(moneyLine, format.mintick) + "  ·  their level vs low(3): pct = (L/" + str.tostring(lo3Now, format.mintick) + "-1)  ATR = (L-" + str.tostring(lo3Now, format.mintick) + ")/" + str.tostring(atrNow, format.mintick)
 
     // Row 0 — ACTION
     // quality grade alone is not a size. A grade-A signal whose stop is 20% away
