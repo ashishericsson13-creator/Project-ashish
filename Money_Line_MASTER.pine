@@ -511,6 +511,22 @@ plot(show50bar ? ma50bar : na, "50-bar MA", color = color.new(color.orange, 20),
 ma100bar = ta.sma(close, ma100barLen)
 plot(show100bar ? ma100bar : na, "100-bar MA", color = color.new(#2962ff, 20), linewidth = 2)
 
+// ── CALIBRATION SERIES — Data Window only, every bar ──────────────────
+// The CALIBRATION table row can only ever describe the LAST bar, because a
+// table is drawn once. That makes it useless for checking this line against
+// another indicator on a HISTORICAL bar, which is the only way to tell whether
+// two lines agree in general or merely happen to agree today.
+// These three carry the raw inputs for whatever bar the crosshair is on. Open
+// the Data Window (Alt+D) and hover any bar to read them, then solve
+//     their multiplier = (their level - low(n)) / ATR
+// display.data_window keeps them off the chart, so they add no clutter and —
+// unlike a plotted series — cannot drag the price scale around.
+plot(atrNow,  "cal · ATR",      display = display.data_window)
+plot(hi5Now,  "cal · high(n)",  display = display.data_window)
+plot(lo3Now,  "cal · low(n)",   display = display.data_window)
+plot(hi5Now - atrMultL * atrNow, "cal · raw exit",  display = display.data_window)
+plot(lo3Now + atrMultS * atrNow, "cal · raw entry", display = display.data_window)
+
 // ── CORE variant: buy the same first signal, then hold until a weekly close
 // breaks the 200-week line. Runs from the SAME start date as the system and the
 // buy&hold figures so the three numbers are directly comparable.
