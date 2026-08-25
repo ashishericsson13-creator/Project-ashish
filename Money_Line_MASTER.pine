@@ -539,6 +539,25 @@ c8 = na(ext200) ? true : math.abs(ext200) <= extMax
 wRedundant = timeframe.isweekly or timeframe.ismonthly
 c9 = wRedundant or na(regW) ? true : regW == trend
 
+// ── MTF READ — three timeframes only when there ARE three ─────────────
+// The regime rows show daily, weekly and the CHART's own state. On a 1D or
+// 1W chart that third column is not a third timeframe: it IS the daily or
+// the weekly read, arrived at without a request. Printing it anyway put
+// "weekly ▼ bear     weekly ▼ bear" on one line and, worse, counted the
+// same read twice — two agreeing timeframes were reported as "2/3 bullish",
+// and ALIGNED could never print on a weekly chart where the daily disagreed.
+// Where it duplicates, the chart column folds into the row it repeats: the
+// chart's own value is used there (no request lag, never na) and the tally
+// is denominated over the two reads that actually exist.
+mtfDupD = timeframe.isdaily and timeframe.multiplier == 1
+mtfDupW = timeframe.isweekly and timeframe.multiplier == 1
+mtfDup  = mtfDupD or mtfDupW
+mtfD    = mtfDupD ? trend : regD
+mtfW    = mtfDupW ? trend : regW
+mtfN    = mtfDup ? 2 : 3
+mtfBull = (mtfD == 1 ? 1 : 0) + (mtfW == 1 ? 1 : 0) + (mtfDup or trend != 1 ? 0 : 1)
+mtfNa   = na(mtfD) or na(mtfW)
+
 score = (c1 ? 1 : 0) + (c2 ? 1 : 0) + (c3 ? 1 : 0) + (c4 ? 1 : 0) + (c5 ? 1 : 0) + (c6 ? 1 : 0) + (c7 ? 1 : 0) + (c8 ? 1 : 0) + (c9 ? 1 : 0)
 // A grade is a claim about evidence. On a symbol with too little history the
 // score is arithmetic, not evidence, so it gets no letter.
@@ -793,12 +812,11 @@ if barstate.islast
 
     // ═══ REGIME PANEL — the whole table collapses to state, nothing else ═══
     if regimeMode
-        rgD = f_arw(regD)
-        rgW = f_arw(regW)
-        rgC = f_arw(trend)
-        nBull = (regD == 1 ? 1 : 0) + (regW == 1 ? 1 : 0) + (trend == 1 ? 1 : 0)
-        conflu = na(regD) or na(regW) ? "partial data" : nBull == 3 ? "ALIGNED BULL" : nBull == 0 ? "ALIGNED BEAR" : "CONFLICT (" + str.tostring(nBull) + "/3 bull)"
-        confluCol = na(regD) or na(regW) ? color.new(color.gray, 55) : nBull == 3 ? color.new(#00c853, 20) : nBull == 0 ? color.new(#d50000, 20) : color.new(color.orange, 25)
+        rgD = f_arw(mtfD) + (mtfDupD ? "   ← this chart" : "")
+        rgW = f_arw(mtfW) + (mtfDupW ? "   ← this chart" : "")
+        rgC = mtfDup ? "= " + (mtfDupD ? "daily" : "weekly") + " above — not a third read" : f_arw(trend)
+        conflu = mtfNa ? "partial data" : mtfBull == mtfN ? "ALIGNED BULL" : mtfBull == 0 ? "ALIGNED BEAR" : "CONFLICT (" + str.tostring(mtfBull) + "/" + str.tostring(mtfN) + " bull)"
+        confluCol = mtfNa ? color.new(color.gray, 55) : mtfBull == mtfN ? color.new(#00c853, 20) : mtfBull == 0 ? color.new(#d50000, 20) : color.new(color.orange, 25)
         sfP = na(flipClose) or flipClose <= 0 ? na : (close - flipClose) / flipClose * 100
         sfB = na(flipBarIdx) ? na : bar_index - flipBarIdx
         rgRows = array.from("Confirm", trend == 1 ? "SELL trigger" : "BUY trigger", "Last Flip", "Flip Date", "Since Flip", "Risk to line", "Daily", "Weekly", "Chart (" + tfWord + ")", "Confluence")
@@ -944,13 +962,13 @@ if barstate.islast
 
         // ── Nearest support / resistance from swing pivots ──
         srTxt = (na(sup1) ? "support —" : "support " + str.tostring(sup1, format.mintick) + " (" + str.tostring((sup1 - close) / close * 100, "#.#") + "%)") + "   |   " + (na(r1) ? "resistance —" : "resistance " + str.tostring(r1, format.mintick) + " (+" + str.tostring((r1 - close) / close * 100, "#.#") + "%)")
-        // ── REGIME (MTF): same line, three timeframes ──
-        // third column is the CHART's own state — costs no request, and means
-        // switching the chart to monthly gives you the monthly read for free
-        bullN = (regD == 1 ? 1 : 0) + (regW == 1 ? 1 : 0) + (trend == 1 ? 1 : 0)
-        anyNa = na(regD) or na(regW)
-        mtfTxt = "daily " + f_arw(regD) + "     weekly " + f_arw(regW) + "     " + tfWord + " " + f_arw(trend) + "     —  " + (anyNa ? "partial data" : bullN == 3 ? "ALIGNED BULL" : bullN == 0 ? "ALIGNED BEAR" : "CONFLICT (" + str.tostring(bullN) + "/3 bullish)")
-        mtfCol = anyNa ? color.new(color.gray, 55) : bullN == 3 ? color.new(#00c853, 20) : bullN == 0 ? color.new(#d50000, 20) : color.new(color.orange, 25)
+        // ── REGIME (MTF): one line, every timeframe that is genuinely its own ──
+        // The third column is the CHART's own state — it costs no request, so
+        // a monthly or 4H chart gives that read for free. On 1D or 1W it is
+        // not a third read at all (see mtfDup): there the line prints two
+        // columns and tallies out of two, rather than repeating one twice.
+        mtfTxt = "daily " + f_arw(mtfD) + (mtfDupD ? " (chart)" : "") + "     weekly " + f_arw(mtfW) + (mtfDupW ? " (chart)" : "") + (mtfDup ? "" : "     " + tfWord + " " + f_arw(trend)) + "     —  " + (mtfNa ? "partial data" : mtfBull == mtfN ? "ALIGNED BULL" : mtfBull == 0 ? "ALIGNED BEAR" : "CONFLICT (" + str.tostring(mtfBull) + "/" + str.tostring(mtfN) + " bullish)")
+        mtfCol = mtfNa ? color.new(color.gray, 55) : mtfBull == mtfN ? color.new(#00c853, 20) : mtfBull == 0 ? color.new(#d50000, 20) : color.new(color.orange, 25)
         table.cell(t, 0, 21, "REGIME (MTF)", text_color = color.white, bgcolor = color.new(color.teal, 10), text_halign = text.align_left, text_size = txtSize)
         table.cell(t, 1, 21, mtfTxt, text_color = color.white, bgcolor = mtfCol, text_halign = text.align_center, text_size = txtSize)
 
