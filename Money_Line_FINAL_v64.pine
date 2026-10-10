@@ -1643,9 +1643,17 @@ var array<int>   boLvlBar = array.new_int()
 
 // Arrays are passed in rather than captured, so this is one function instead
 // of two near-identical copies.
+// CE10235, and why the shape of this function matters: every if/else in Pine
+// is an EXPRESSION, and both arms must agree on a type. array.set() returns
+// void while array.shift() returns the element it removed, so ending the two
+// arms on those two calls made this "void; series int" and would not compile.
+// Both arms now end on a void call (array.set / array.push) — the size cap
+// moved ABOVE the pushes so a shift is never the last statement — and the
+// function returns _found explicitly, which also keeps the if/else out of
+// return position.
 f_boMerge(array<float> _px, array<int> _hit, array<int> _bar, float _new, float _tol, int _bi) =>
+    int _found = -1
     if not na(_new) and not na(_tol) and _tol > 0
-        int _found = -1
         if array.size(_px) > 0
             for i = 0 to array.size(_px) - 1
                 if math.abs(array.get(_px, i) - _new) <= _tol
@@ -1659,13 +1667,14 @@ f_boMerge(array<float> _px, array<int> _hit, array<int> _bar, float _new, float 
             array.set(_px,  _found, _o + (_new - _o) / _n)
             array.set(_hit, _found, _n)
         else
-            array.push(_px,  _new)
-            array.push(_hit, 1)
-            array.push(_bar, _bi)
-            if array.size(_px) > 60
+            if array.size(_px) >= 60
                 array.shift(_px)
                 array.shift(_hit)
                 array.shift(_bar)
+            array.push(_px,  _new)
+            array.push(_hit, 1)
+            array.push(_bar, _bi)
+    _found
 
 boTol = na(atrV) ? na : boTolATR * atrV
 if not na(ph)

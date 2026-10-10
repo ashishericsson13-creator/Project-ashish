@@ -1658,8 +1658,8 @@ var array<int>   boLvlBar = array.new_int()
 // captured so this is one function instead of two near-identical copies — the
 // mistake the flip rule made for sixty-odd versions.
 f_boMerge(array<float> _px, array<int> _hit, array<int> _bar, float _new, float _tol, int _bi) =>
+    int _found = -1
     if not na(_new) and not na(_tol) and _tol > 0
-        int _found = -1
         if array.size(_px) > 0
             for i = 0 to array.size(_px) - 1
                 if math.abs(array.get(_px, i) - _new) <= _tol
@@ -1673,13 +1673,18 @@ f_boMerge(array<float> _px, array<int> _hit, array<int> _bar, float _new, float 
             array.set(_px,  _found, _o + (_new - _o) / _n)
             array.set(_hit, _found, _n)
         else
-            array.push(_px,  _new)
-            array.push(_hit, 1)
-            array.push(_bar, _bi)
-            if array.size(_px) > 60
+            // CE10235: array.set() is void, array.shift() returns the removed
+            // element, so ending the two arms on those made this
+            // "void; series int". Cap moved above the pushes so both arms end
+            // void, and _found is returned explicitly.
+            if array.size(_px) >= 60
                 array.shift(_px)
                 array.shift(_hit)
                 array.shift(_bar)
+            array.push(_px,  _new)
+            array.push(_hit, 1)
+            array.push(_bar, _bi)
+    _found
 
 boTol = na(atrNow) ? na : boTolATR * atrNow
 if not na(ph)
