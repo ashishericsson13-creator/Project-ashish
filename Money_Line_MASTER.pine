@@ -3,9 +3,14 @@
 // MONEY LINE MASTER v45
 //
 // WHAT IT IS
-//   An ATR trailing-stop regime line. Above it = bullish, below = bearish.
-//   The line follows whatever timeframe the chart is on. Everything else in
-//   this script qualifies that one fact — none of it changes the signal.
+//   TWO models, reported separately and never merged.
+//   1. An ATR trailing-stop REGIME line. Above it = bullish, below = bearish.
+//      Slow and late by design; it tells you which side of the trend you are
+//      on, not when to buy. The line follows the chart's timeframe.
+//   2. A BREAKOUT engine: defended horizontal levels, falling trendlines, and
+//      a ten-check test of whether a break is real. This is the one that
+//      answers "is this the bar to enter".
+//   They are allowed to disagree. When they do, that is the information.
 //
 // WHAT IT WILL NOT DO
 //   It does not predict. It reports which side of a line price closed on,
@@ -14,6 +19,7 @@
 //   the three return figures). Its value there is the exit, not the entry.
 //
 // THE ROWS THAT MATTER MOST
+//   BREAKOUT        the verdict, the gate, and k1-k10 (own console, top right)
 //   RISK & SIZE     how far the exit sits and what position that allows
 //   HOLD vs TRADE   signals vs core-200w vs buy&hold, from your start year
 //   WHIPSAW         exits that bought back higher, and what they cost
@@ -29,6 +35,50 @@
 // HARD LIMIT
 //   40 request.*() calls, and it uses all 40. Any new symbol, timeframe or
 //   fundamental breaks the whole script silently. Reuse existing data instead.
+//
+// WHAT CHANGED IN v64 — a second model: BREAKOUT
+//   Until now this script had exactly one opinion, the ATR trailing stop, and
+//   it is a REGIME instrument: deliberately slow, late by construction, and on
+//   a weekly chart often 20-30% from price. Asked "is this the bar to buy" it
+//   has never had an answer, because that is not the question it computes.
+//
+//   v64 adds the lines a trader actually draws, and scores them separately:
+//     HORIZONTAL  prices defended more than once. The touch count is the whole
+//                 point — one swing high is noise, three at the same price is a
+//                 decision. Pivots are clustered within 0.5 ATR and merged, and
+//                 a level must reach `boMinTouch` before it can be broken.
+//                 (v62 drew every pivot as S/R, so it drew mostly noise.)
+//     TRENDLINE   falling highs, extended right. Only a DESCENDING line counts
+//                 as resistance; a rising line of highs is not a ceiling.
+//     ATR MODEL   the Money Line flip that was already here.
+//
+//   k1-k10 then ask whether the break is real: volume surge, close strength,
+//   RSI on side and not spent, MACD crossed and expanding, the ATR model's
+//   agreement, the 200-bar mean, ADX, and extension. These are NOT the c1-c9
+//   confirm checks and must never be added to them — c1-c9 score "how well
+//   confirmed is the regime I am already in", k1-k10 score "is THIS BREAKOUT
+//   real". Different questions, separate rows.
+//
+//   VOLUME AND CLOSE STRENGTH ARE A GATE, NOT TWO POINTS. Most failed
+//   breakouts fail on exactly those two — nobody came, or sellers took it back
+//   inside the bar — so a setup that misses either is not an entry at any
+//   score. Without the gate a 8/10 with no volume reads as STRONG BUY, which
+//   is the single most expensive false positive this kind of script produces.
+//
+//   THE TWO MODELS ARE ALLOWED TO DISAGREE, and the MODELS row says so rather
+//   than hiding it. A breakout under a bearish Money Line is the scout entry;
+//   a bullish Money Line with no breakout is a trend you are already late to.
+//   Merging them into one number would destroy exactly that information.
+//
+//   The breakout stop is the broken level minus 0.5 ATR, NOT the Money Line.
+//   Sizing a breakout trade off a regime stop 25% away is how 2% risk becomes
+//   25% risk. Both are printed; size off the one you are actually trading.
+//
+//   STILL OPEN, and it affects the ATR half only: the reference multiplier is
+//   not settled. SOL brackets it at 2.50-2.55, POL implies nearer 3.0, and
+//   every solve so far has INFERRED ATR instead of reading it off the
+//   CALIBRATION row. Read it before trusting the ATR model's exact levels.
+//   The breakout half does not depend on that number.
 //
 // WHAT CHANGED IN v63 — signal correctness
 //   The flip rule lived in three near-identical copies and all three judged a
@@ -112,7 +162,7 @@
 // deeper record, lower it for a lighter script — but keep it EQUAL to the
 // "History window per symbol" input in group 3, or the chart and the Focus List
 // go back to disagreeing.
-indicator("Money Line MASTER v63", overlay = true, max_labels_count = 500, max_lines_count = 500, calc_bars_count = 750)
+indicator("Money Line MASTER v64", overlay = true, max_labels_count = 500, max_lines_count = 500, calc_bars_count = 750)
 
 // ═══════════════════════════════════════════════════════════════
 //  THE SYNTHESIS (from everything we tested):
@@ -1539,3 +1589,341 @@ alertcondition(sellSignal, title = "SELL", message = "{{ticker}} {{interval}}: S
 // printing on the live bar, or a multi-close confirmation count is still running.
 tripwireUp = barUnconfirmed and (buySignal or (trend == -1 and close > moneyLine))
 alertcondition(tripwireUp, title = "⚡ PRICE ABOVE BUY LEVEL (unconfirmed)", message = "{{ticker}}: price {{close}} is ABOVE the buy flip level intrabar — unconfirmed until the bar closes. Early-entry zone.")
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BREAKOUT ENGINE — the lines a trader actually draws, scored
+//
+// WHY THIS EXISTS, AND WHAT IT IS NOT
+//   The Money Line answers one question: which side of an ATR trailing stop
+//   did price close on. That is a REGIME read. It is deliberately slow, it
+//   fires late by construction, and on a weekly chart it can sit 20-30% from
+//   price. It is the wrong instrument for "is this the bar to buy".
+//   A breakout is a different object: price leaving a level that other people
+//   are watching, with enough force to keep going. It needs a level, an event,
+//   and participation. None of those are in the Money Line.
+//
+//   So this section runs ALONGSIDE the ATR model and the two are reported
+//   separately. They are allowed to disagree, and when they do that IS the
+//   information — an early breakout under a bearish Money Line is the scout
+//   entry; a bullish Money Line with no breakout is a trend you are already
+//   late to. The verdict row never hides which of the two is talking.
+//
+// THE THREE WAYS A LEVEL BREAKS, and why all three are needed
+//   HORIZONTAL  a price other people defended more than once. Needs a TOUCH
+//               COUNT, which is the whole difference between a level and an
+//               accident. One swing high is noise; three at the same price is
+//               a decision. v62 drew every pivot as S/R and so drew mostly
+//               noise — see f_boPick's minTouch gate.
+//   TRENDLINE   falling highs. The AMZN/SNOW wedge. A close through a
+//               DESCENDING line is the classic call, and it fires earlier
+//               than any horizontal because the level comes down to meet
+//               price.
+//   ATR MODEL   the Money Line flip already in this script.
+//
+// THE SCORE IS NOT THE CONFIRM SCORE
+//   c1-c9 above score "how well confirmed is the REGIME I am already in".
+//   k1-k10 below score "is THIS BREAKOUT real". They answer different
+//   questions and must not be added together. The two sit on separate rows.
+//
+// WHAT MAKES A BREAKOUT FAIL, which is what k1-k10 are actually testing
+//   No volume (nobody came), a weak close (sellers took it back inside the
+//   bar), momentum already spent (RSI 85, MACD rolling), or price so far from
+//   the mean that the move is the end of a run rather than the start. Each
+//   check below is one of those failure modes, stated as a pass condition.
+// ═══════════════════════════════════════════════════════════════════════════
+boOn       = input.bool(true, "Enable BREAKOUT engine", group = "5. Breakout")
+boMinTouch = input.int(2, "Horizontal level: minimum touches to count", minval = 1, maxval = 6, tooltip = "How many times price must have reacted at a price before this script will treat it as a level.\n\n1 = every swing pivot becomes a level, which is what v62 did and why the chart filled with lines that had never been defended.\n2 (default) = a price that turned the market away at least twice. This is the setting that separates a level from an accident.\n3+ = only heavily defended prices. Fewer signals, and on fast-moving symbols you may get none.", group = "5. Breakout")
+boTolATR   = input.float(0.50, "Horizontal level: cluster width (ATR)", minval = 0.05, maxval = 3.0, step = 0.05, tooltip = "Two swing pivots within this distance are treated as the SAME level and their touch counts merge. Expressed in ATR so it scales with the symbol's own volatility instead of being a fixed percentage that is too wide on one chart and too narrow on the next.\n\nToo small and a level that was defended three times reads as three separate one-touch levels. Too large and unrelated highs merge into one meaningless band.", group = "5. Breakout")
+boBufPct   = input.float(0.15, "Breakout buffer (% beyond the level)", minval = 0.0, maxval = 5.0, step = 0.05, tooltip = "How far beyond the level a close must land before it counts as a break. Stops a close that lands exactly ON the level from registering, which is the single most common false positive.", group = "5. Breakout")
+boFresh    = input.int(3, "Breakout stays 'live' for N bars", minval = 1, maxval = 20, tooltip = "A breakout is a dated event, not a permanent state. After this many bars the verdict stops calling it an entry and the setup has to be re-made. Keeps the panel from saying BUY NOW for six months because something broke out in March.", group = "5. Breakout")
+boVolSurge = input.float(1.50, "Volume surge required (x 20-bar average)", minval = 0.5, maxval = 5.0, step = 0.1, tooltip = "Breakout-bar volume as a multiple of the 20-bar average. A level breaking on below-average volume is the textbook failed breakout: the price moved but nobody came.\n\n1.5 is the common floor. Raise it on liquid large caps, lower it on symbols whose volume is reported thinly.", group = "5. Breakout")
+boRsiMax   = input.float(80.0, "RSI ceiling (above this the move is spent)", minval = 60, maxval = 95, step = 1, tooltip = "RSI above this on the breakout means you are buying the end of a run, not the start. This is the check that keeps the script from issuing a BUY into a vertical blow-off.", group = "5. Breakout")
+boStopATR  = input.float(0.50, "Breakout stop: ATR below the broken level", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "A broken resistance becomes support. The trade is wrong if price closes back under it, so the stop goes this far below the level — not at the Money Line, which on a weekly chart can be 25% away and is a REGIME stop, not a trade stop.\n\nBoth are shown in the console. Size off whichever one you are actually trading.", group = "5. Breakout")
+boTLPiv    = input.int(6, "Trendline pivot strength (bars each side)", minval = 2, maxval = 30, tooltip = "How many bars must sit on each side of a high for it to anchor a trendline. Larger = fewer, more significant anchors and a line that re-draws less often. Smaller = a line that chases every wiggle.", group = "5. Breakout")
+boShowTL   = input.bool(true, "Draw trendlines", group = "5. Breakout")
+boShowLvl  = input.bool(true, "Draw qualified horizontal levels", group = "5. Breakout")
+boShowVert = input.bool(true, "Draw a vertical line at each breakout", group = "5. Breakout")
+boPos      = input.string("Top Right", "Breakout console position", options = ["Top Right", "Top Left", "Middle Right", "Bottom Left", "Bottom Right"], group = "5. Breakout")
+
+// ── HORIZONTAL LEVELS WITH TOUCH COUNTS ──────────────────────────────
+// Three parallel arrays rather than one array of a user type: price, how many
+// times it has been touched, and the bar it was first seen on. Age matters —
+// a level defended twice over two years is a different object from one
+// defended twice last month, and the console quotes it.
+var array<float> boLvlPx  = array.new_float()
+var array<int>   boLvlHit = array.new_int()
+var array<int>   boLvlBar = array.new_int()
+
+// Merge a new pivot into the level set. The arrays are passed in rather than
+// captured so this is one function instead of two near-identical copies — the
+// mistake the flip rule made for sixty-odd versions.
+f_boMerge(array<float> _px, array<int> _hit, array<int> _bar, float _new, float _tol, int _bi) =>
+    if not na(_new) and not na(_tol) and _tol > 0
+        int _found = -1
+        if array.size(_px) > 0
+            for i = 0 to array.size(_px) - 1
+                if math.abs(array.get(_px, i) - _new) <= _tol
+                    _found := i
+                    break
+        if _found >= 0
+            // running mean, so the level settles on where price actually
+            // reacted instead of wherever the most recent wick happened to end
+            int   _n = array.get(_hit, _found) + 1
+            float _o = array.get(_px, _found)
+            array.set(_px,  _found, _o + (_new - _o) / _n)
+            array.set(_hit, _found, _n)
+        else
+            array.push(_px,  _new)
+            array.push(_hit, 1)
+            array.push(_bar, _bi)
+            if array.size(_px) > 60
+                array.shift(_px)
+                array.shift(_hit)
+                array.shift(_bar)
+
+boTol = na(atrNow) ? na : boTolATR * atrNow
+if not na(ph)
+    f_boMerge(boLvlPx, boLvlHit, boLvlBar, ph, boTol, bar_index - pivLen)
+if not na(pl)
+    f_boMerge(boLvlPx, boLvlHit, boLvlBar, pl, boTol, bar_index - pivLen)
+
+// Nearest level above/below that has been touched enough times to count.
+f_boPick(array<float> _px, array<int> _hit, array<int> _bar, int _min, bool _above, float _ref) =>
+    float _bestPx  = na
+    int   _bestHit = 0
+    int   _bestBar = na
+    if array.size(_px) > 0
+        for i = 0 to array.size(_px) - 1
+            float _v = array.get(_px, i)
+            int   _h = array.get(_hit, i)
+            if _h >= _min and (_above ? _v > _ref : _v < _ref)
+                if na(_bestPx) or (_above ? _v < _bestPx : _v > _bestPx)
+                    _bestPx  := _v
+                    _bestHit := _h
+                    _bestBar := array.get(_bar, i)
+    [_bestPx, _bestHit, _bestBar]
+
+[boRes, boResHit, boResBar] = f_boPick(boLvlPx, boLvlHit, boLvlBar, boMinTouch, true,  close)
+[boSup, boSupHit, boSupBar] = f_boPick(boLvlPx, boLvlHit, boLvlBar, boMinTouch, false, close)
+
+// The level IN FORCE before this bar opened. Testing against the current bar's
+// level is the same fault the flip rule had through v62: once price closes
+// above a resistance, that resistance is recomputed to the next one up, so a
+// test against it can never fire.
+boResRef = boRes[1]
+boSupRef = boSup[1]
+boBrkHorzUp = boOn and not na(boResRef) and close > boResRef * (1 + boBufPct / 100) and close[1] <= boResRef
+boBrkHorzDn = boOn and not na(boSupRef) and close < boSupRef * (1 - boBufPct / 100) and close[1] >= boSupRef
+
+// ── TRENDLINES (falling highs / rising lows) ─────────────────────────
+// Two most recent confirmed swing pivots, extended right. A pivot needs
+// boTLPiv bars either side, so the line re-anchors only when a new swing has
+// actually completed — it does not chase the live bar.
+boPH = ta.pivothigh(high, boTLPiv, boTLPiv)
+boPL = ta.pivotlow(low,  boTLPiv, boTLPiv)
+var float boHiAPx = na
+var int   boHiABar = na
+var float boHiBPx = na
+var int   boHiBBar = na
+var float boLoAPx = na
+var int   boLoABar = na
+var float boLoBPx = na
+var int   boLoBBar = na
+if not na(boPH)
+    boHiAPx  := boHiBPx
+    boHiABar := boHiBBar
+    boHiBPx  := boPH
+    boHiBBar := bar_index - boTLPiv
+if not na(boPL)
+    boLoAPx  := boLoBPx
+    boLoABar := boLoBBar
+    boLoBPx  := boPL
+    boLoBBar := bar_index - boTLPiv
+
+float boTLUp = na
+float boTLDn = na
+if not na(boHiAPx) and not na(boHiBPx) and not na(boHiABar) and not na(boHiBBar) and boHiBBar > boHiABar
+    boTLUp := boHiBPx + (boHiBPx - boHiAPx) / (boHiBBar - boHiABar) * (bar_index - boHiBBar)
+if not na(boLoAPx) and not na(boLoBPx) and not na(boLoABar) and not na(boLoBBar) and boLoBBar > boLoABar
+    boTLDn := boLoBPx + (boLoBPx - boLoAPx) / (boLoBBar - boLoABar) * (bar_index - boLoBBar)
+
+// Only a DESCENDING line is resistance worth breaking, and only an ASCENDING
+// line is support worth losing. A rising line of highs is not a ceiling.
+boTLFalling = not na(boHiAPx) and not na(boHiBPx) and boHiBPx < boHiAPx
+boTLRising  = not na(boLoAPx) and not na(boLoBPx) and boLoBPx > boLoAPx
+boBrkTLUp = boOn and boTLFalling and not na(boTLUp) and not na(boTLUp[1]) and close > boTLUp and close[1] <= boTLUp[1]
+boBrkTLDn = boOn and boTLRising  and not na(boTLDn) and not na(boTLDn[1]) and close < boTLDn and close[1] >= boTLDn[1]
+
+// ── THE EVENT ────────────────────────────────────────────────────────
+boBrkUp = boBrkHorzUp or boBrkTLUp or (boOn and buySignal)
+boBrkDn = boBrkHorzDn or boBrkTLDn or (boOn and sellSignal)
+boKindUp = boBrkHorzUp and boBrkTLUp ? "HORIZONTAL + TRENDLINE" : boBrkHorzUp ? "HORIZONTAL" : boBrkTLUp ? "TRENDLINE" : buySignal ? "ATR MONEY LINE" : na
+boKindDn = boBrkHorzDn and boBrkTLDn ? "HORIZONTAL + TRENDLINE" : boBrkHorzDn ? "HORIZONTAL" : boBrkTLDn ? "TRENDLINE" : sellSignal ? "ATR MONEY LINE" : na
+
+boAgeUp = ta.barssince(boBrkUp)
+boAgeDn = ta.barssince(boBrkDn)
+boLiveUp = not na(boAgeUp) and boAgeUp <= boFresh and (na(boAgeDn) or boAgeUp < boAgeDn)
+boLiveDn = not na(boAgeDn) and boAgeDn <= boFresh and (na(boAgeUp) or boAgeDn < boAgeUp)
+
+// Captured AT the breakout bar: these two describe the event itself and are
+// meaningless read off a later bar.
+boVolAt  = ta.valuewhen(boBrkUp or boBrkDn, volRatio, 0)
+boCloAt  = ta.valuewhen(boBrkUp or boBrkDn, (close - low) / math.max(high - low, syminfo.mintick), 0)
+// The level that actually broke depends on WHICH line broke. Quoting the
+// horizontal level after a trendline break would put the stop on a price
+// nothing happened at.
+boLvlNow = boBrkHorzUp ? boResRef : boBrkTLUp ? boTLUp : boBrkHorzDn ? boSupRef : boBrkTLDn ? boTLDn : (buySignal or sellSignal) ? moneyLine : na
+boLvlAt  = ta.valuewhen(boBrkUp or boBrkDn, nz(boLvlNow, close), 0)
+var string boKindTxt = na
+if boBrkUp
+    boKindTxt := boKindUp
+if boBrkDn
+    boKindTxt := boKindDn
+
+// ── k1-k10: IS THIS BREAKOUT REAL ────────────────────────────────────
+// Direction-aware, same discipline as c1-c9: in a breakdown the bearish
+// reading is the PASS. Scoring a short setup against bullish conditions would
+// report every valid breakdown as a failure.
+boDir = boLiveUp ? 1 : boLiveDn ? -1 : 0
+k1  = na(boVolAt)  ? false : boVolAt >= boVolSurge                                       // participation
+k2  = na(boCloAt)  ? false : (boDir >= 0 ? boCloAt >= 0.60 : boCloAt <= 0.40)            // closed strong, not rejected
+k3  = na(rsiV)     ? false : (boDir >= 0 ? rsiV > 50 : rsiV < 50)                        // momentum on side
+k4  = na(rsiV)     ? false : (boDir >= 0 ? rsiV < boRsiMax : rsiV > 100 - boRsiMax)      // not already spent
+k5  = na(macdL) or na(macdS) ? false : (boDir >= 0 ? macdL > macdS : macdL < macdS)      // MACD cross on side
+k6  = na(macdH)    ? false : (boDir >= 0 ? macdH > 0 and macdH > macdH[1] : macdH < 0 and macdH < macdH[1])  // thrust expanding
+k7  = boDir >= 0 ? trend == 1 : trend == -1                                              // ATR model agrees
+k8  = na(ma200bar) ? false : (boDir >= 0 ? close > ma200bar : close < ma200bar)          // right side of the slow line
+k9  = na(adxV)     ? false : adxV >= adxMin                                              // actually trending
+k10 = na(ext200)   ? false : math.abs(ext200) <= extMax                                  // not stretched
+boScore = (k1?1:0)+(k2?1:0)+(k3?1:0)+(k4?1:0)+(k5?1:0)+(k6?1:0)+(k7?1:0)+(k8?1:0)+(k9?1:0)+(k10?1:0)
+
+// ── VERDICT ──────────────────────────────────────────────────────────
+// Deliberately conservative about the word ENTER. A breakout that cannot show
+// volume AND a strong close is not an entry however good the rest looks, so
+// those two are a gate rather than two more points — most failed breakouts
+// fail on exactly those two and a score alone would let them through.
+boGate   = k1 and k2
+boVerdict = not boOn ? "OFF" : thinHist ? "NO CALL — too little history" : boDir == 0 ? "NO SETUP" : boDir == 1 ? (boGate and boScore >= 8 ? "STRONG BUY" : boGate and boScore >= 6 ? "BUY" : boScore >= 6 ? "WATCH — no volume/weak close" : boScore >= 4 ? "WATCH" : "STAND ASIDE") : (boGate and boScore >= 8 ? "STRONG SELL" : boGate and boScore >= 6 ? "SELL" : boScore >= 6 ? "WATCH — no volume/weak close" : boScore >= 4 ? "WATCH" : "STAND ASIDE")
+boActing = boVerdict == "STRONG BUY" or boVerdict == "BUY" or boVerdict == "STRONG SELL" or boVerdict == "SELL"
+
+// Trade geometry. The broken level is the stop reference, NOT the Money Line:
+// on a weekly chart the Money Line is a regime stop that can sit 25% away, and
+// sizing a breakout trade off it is how a 2% risk becomes a 25% one.
+boEntry  = close
+boStop   = boDir == 1 ? nz(boLvlAt, close) - boStopATR * atrNow : boDir == -1 ? nz(boLvlAt, close) + boStopATR * atrNow : na
+boRisk   = na(boStop) ? na : math.abs(boEntry - boStop)
+boTarget = boDir == 1 ? boRes : boDir == -1 ? boSup : na
+boRR     = na(boTarget) or na(boRisk) or boRisk <= 0 ? na : math.abs(boTarget - boEntry) / boRisk
+boSizePc = na(boRisk) or boEntry <= 0 or boRisk <= 0 ? na : riskPct / (boRisk / boEntry * 100) * 100
+
+// ── DRAWING ──────────────────────────────────────────────────────────
+// Everything is redrawn on the last bar only. Drawing per-bar would burn the
+// 500-object budget in a few hundred bars and silently stop rendering.
+plotshape(boBrkHorzUp, "Breakout — horizontal", style = shape.triangleup,   location = location.belowbar, color = color.new(#00e676, 0), size = size.small, text = "BO", textcolor = color.new(#00e676, 0))
+plotshape(boBrkTLUp,   "Breakout — trendline",  style = shape.triangleup,   location = location.belowbar, color = color.new(#2962ff, 0), size = size.tiny,  text = "TL", textcolor = color.new(#2962ff, 0))
+plotshape(boBrkHorzDn, "Breakdown — horizontal",style = shape.triangledown, location = location.abovebar, color = color.new(#ff1744, 0), size = size.small, text = "BD", textcolor = color.new(#ff1744, 0))
+plotshape(boBrkTLDn,   "Breakdown — trendline", style = shape.triangledown, location = location.abovebar, color = color.new(color.orange, 0), size = size.tiny, text = "TL", textcolor = color.new(color.orange, 0))
+
+var array<line> boVerts = array.new<line>()
+if boOn and boShowVert and (boBrkUp or boBrkDn) and barstate.isconfirmed
+    array.push(boVerts, line.new(bar_index, low, bar_index, high, extend = extend.both, color = boBrkUp ? color.new(#00e676, 55) : color.new(#ff1744, 55), style = line.style_dotted, width = 1))
+    if array.size(boVerts) > 12
+        line.delete(array.shift(boVerts))
+
+var line  boResLn = na
+var line  boSupLn = na
+var label boResLb = na
+var label boSupLb = na
+var line  boTLUpLn = na
+var line  boTLDnLn = na
+var label boVerdLb = na
+
+if barstate.islast and boOn
+    line.delete(boResLn)
+    line.delete(boSupLn)
+    line.delete(boTLUpLn)
+    line.delete(boTLDnLn)
+    label.delete(boResLb)
+    label.delete(boSupLb)
+    label.delete(boVerdLb)
+    if boShowLvl and not na(boRes)
+        boResLn := line.new(bar_index - 100, boRes, bar_index + 12, boRes, extend = extend.right, color = color.new(#ff5252, 0), style = line.style_solid, width = 2)
+        boResLb := label.new(bar_index + 12, boRes, "R " + str.tostring(boRes, format.mintick) + "  ·  " + str.tostring(boResHit, "#") + " touches", style = label.style_label_left, color = color.new(#ff5252, 25), textcolor = color.white, size = size.tiny)
+    if boShowLvl and not na(boSup)
+        boSupLn := line.new(bar_index - 100, boSup, bar_index + 12, boSup, extend = extend.right, color = color.new(#00e676, 0), style = line.style_solid, width = 2)
+        boSupLb := label.new(bar_index + 12, boSup, "S " + str.tostring(boSup, format.mintick) + "  ·  " + str.tostring(boSupHit, "#") + " touches", style = label.style_label_left, color = color.new(#00e676, 25), textcolor = color.white, size = size.tiny)
+    if boShowTL and boTLFalling and not na(boTLUp)
+        boTLUpLn := line.new(boHiABar, boHiAPx, boHiBBar, boHiBPx, extend = extend.right, color = color.new(#ffd600, 0), width = 2)
+    if boShowTL and boTLRising and not na(boTLDn)
+        boTLDnLn := line.new(boLoABar, boLoAPx, boLoBBar, boLoBPx, extend = extend.right, color = color.new(#ffd600, 0), width = 2)
+    if boActing
+        boVerdLb := label.new(bar_index, boDir == 1 ? low : high, boVerdict + "  " + str.tostring(boScore, "#") + "/10", style = boDir == 1 ? label.style_label_up : label.style_label_down, color = boDir == 1 ? color.new(#00c853, 0) : color.new(#d50000, 0), textcolor = color.white, size = size.normal)
+
+// ── BREAKOUT CONSOLE ─────────────────────────────────────────────────
+f_boTick(bool _v) => _v ? "✓" : "✗"
+f_boCol(bool _v)  => _v ? color.new(#00c853, 55) : color.new(#d50000, 55)
+
+boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
+var table bot = table.new(boPosMap, 2, 17, border_width = 2)
+
+if barstate.islast and boOn
+    table.clear(bot, 0, 0, 1, 16)
+    vCol = boVerdict == "STRONG BUY" ? color.new(#00c853, 0) : boVerdict == "BUY" ? color.new(#00c853, 30) : boVerdict == "STRONG SELL" ? color.new(#d50000, 0) : boVerdict == "SELL" ? color.new(#d50000, 30) : boVerdict == "NO SETUP" ? color.new(color.gray, 40) : color.new(color.orange, 25)
+    table.cell(bot, 0, 0, "BREAKOUT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 0, boVerdict + (boDir == 0 ? "" : "   " + str.tostring(boScore, "#") + "/10"), text_color = color.white, bgcolor = vCol, text_halign = text.align_center, text_size = txtSize)
+
+    boAgeTxt = boDir == 0 ? "no fresh break in the last " + str.tostring(boFresh, "#") + " bars" : (na(boKindTxt) ? "—" : boKindTxt) + "  ·  " + str.tostring(boDir == 1 ? boAgeUp : boAgeDn, "#") + " bar(s) ago"
+    table.cell(bot, 0, 1, "What broke", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 1, boAgeTxt, text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
+
+    table.cell(bot, 0, 2, "Level", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 2, na(boLvlAt) or boDir == 0 ? "—" : str.tostring(boLvlAt, format.mintick) + "   (now " + str.tostring(close, format.mintick) + ")", text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
+
+    // the gate, called out because it is a gate and not two more points
+    table.cell(bot, 0, 3, "GATE  vol + close", text_color = color.white, bgcolor = color.new(color.teal, 10), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 3, boGate ? "✓ PASSED" : "✗ FAILED — not an entry at any score", text_color = color.white, bgcolor = f_boCol(boGate), text_halign = text.align_center, text_size = txtSize)
+
+    table.cell(bot, 0, 4, f_boTick(k1) + " Volume surge", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 4, na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x  (need " + str.tostring(boVolSurge, "#.##") + "x)", text_color = color.white, bgcolor = f_boCol(k1), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 0, 5, f_boTick(k2) + " Close strength", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 5, na(boCloAt) ? "—" : str.tostring(boCloAt * 100, "#") + "% of the bar's range", text_color = color.white, bgcolor = f_boCol(k2), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 0, 6, f_boTick(k3 and k4) + " RSI", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 6, na(rsiV) ? "—" : str.tostring(rsiV, "#.#") + (k4 ? "" : "  ⚠ spent") + (k3 ? "" : "  ⚠ wrong side of 50"), text_color = color.white, bgcolor = f_boCol(k3 and k4), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 0, 7, f_boTick(k5 and k6) + " MACD", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 7, na(macdH) ? "—" : (k5 ? "cross ✓" : "cross ✗") + "   " + (k6 ? "thrust expanding ✓" : "thrust flat/fading ✗"), text_color = color.white, bgcolor = f_boCol(k5 and k6), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 0, 8, f_boTick(k7) + " ATR Money Line", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 8, (trend == 1 ? "▲ bull" : "▼ bear") + (k7 ? "  — agrees" : "  — DISAGREES (scout entry)"), text_color = color.white, bgcolor = f_boCol(k7), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 0, 9, f_boTick(k8) + " 200-bar mean", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 9, na(ma200bar) ? "—" : str.tostring(ma200bar, format.mintick), text_color = color.white, bgcolor = f_boCol(k8), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 0, 10, f_boTick(k9) + " ADX trending", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 10, na(adxV) ? "—" : str.tostring(adxV, "#.#") + "  (need " + str.tostring(adxMin, "#") + ")", text_color = color.white, bgcolor = f_boCol(k9), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 0, 11, f_boTick(k10) + " Not over-extended", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 11, na(ext200) ? "—" : f_pc(ext200) + " from the mean  (max " + str.tostring(extMax, "#") + "%)", text_color = color.white, bgcolor = f_boCol(k10), text_halign = text.align_center, text_size = txtSize)
+
+    table.cell(bot, 0, 12, "Entry / Stop", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 12, boDir == 0 or na(boStop) ? "—" : str.tostring(boEntry, format.mintick) + "  /  " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)", text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 0, 13, "Target / R:R", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 13, na(boRR) ? "— (no level beyond)" : str.tostring(boTarget, format.mintick) + "   R:R " + str.tostring(boRR, "#.##") + (boRR < 1.5 ? "  ⚠ thin" : ""), text_color = color.white, bgcolor = na(boRR) or boRR < 1.5 ? color.new(color.orange, 35) : color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 0, 14, "Size at " + str.tostring(riskPct, "#.#") + "% risk", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 14, na(boSizePc) ? "—" : str.tostring(math.min(boSizePc, 100), "#.#") + "% of account", text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
+
+    // The two models, side by side and never merged. This row is the answer to
+    // "the lines say one thing and the ATR model says another" — which is the
+    // normal case at a turn, not an error.
+    table.cell(bot, 0, 15, "MODELS", text_color = color.white, bgcolor = color.new(color.gray, 20), text_halign = text.align_left, text_size = txtSize)
+    agreeTxt = boDir == 0 ? "lines: quiet   ·   ATR: " + (trend == 1 ? "bull" : "bear") : (boDir == 1 ? "lines: BULL" : "lines: BEAR") + "   ·   ATR: " + (trend == 1 ? "bull" : "bear") + (k7 ? "   → ALIGNED" : "   → SPLIT")
+    table.cell(bot, 1, 15, agreeTxt, text_color = color.white, bgcolor = k7 and boDir != 0 ? color.new(#00c853, 45) : color.new(color.gray, 45), text_halign = text.align_center, text_size = txtSize)
+
+    table.cell(bot, 0, 16, "Next level", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    // touches AND age: a level defended twice over two years is a different
+    // object from one defended twice last month, and only the pair says which.
+    boResAge = na(boResBar) ? na : bar_index - boResBar
+    boSupAge = na(boSupBar) ? na : bar_index - boSupBar
+    nxtTxt = (na(boRes) ? "R —" : "R " + str.tostring(boRes, format.mintick) + "  " + str.tostring(boResHit, "#") + "t/" + str.tostring(boResAge, "#") + "b") + "   ·   " + (na(boSup) ? "S —" : "S " + str.tostring(boSup, format.mintick) + "  " + str.tostring(boSupHit, "#") + "t/" + str.tostring(boSupAge, "#") + "b")
+    table.cell(bot, 1, 16, nxtTxt, text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
+
+// ── ALERTS ───────────────────────────────────────────────────────────
+alertcondition(boBrkHorzUp, title = "BREAKOUT — horizontal level", message = "{{ticker}} {{interval}}: closed above a defended level at {{close}}")
+alertcondition(boBrkTLUp,   title = "BREAKOUT — falling trendline", message = "{{ticker}} {{interval}}: closed above the falling trendline at {{close}}")
+alertcondition(boBrkHorzDn, title = "BREAKDOWN — horizontal level", message = "{{ticker}} {{interval}}: closed below a defended level at {{close}}")
+alertcondition(boBrkTLDn,   title = "BREAKDOWN — rising trendline",  message = "{{ticker}} {{interval}}: closed below the rising trendline at {{close}}")
