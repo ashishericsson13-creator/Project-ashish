@@ -1752,8 +1752,22 @@ boLiveDn = not na(boAgeDn) and boAgeDn <= boFresh and (na(boAgeUp) or boAgeDn < 
 
 // Captured AT the breakout bar — these two describe the EVENT and are
 // meaningless read off a later bar.
-boVolAt = ta.valuewhen(boBrkUp or boBrkDn, volRatio, 0)
-boCloAt = ta.valuewhen(boBrkUp or boBrkDn, (close - low) / math.max(high - low, syminfo.mintick), 0)
+//
+// WHY THIS DOES NOT USE volRatio, which is right there and looks correct.
+//   volRatio substitutes the PREVIOUS finished bar whenever the live bar is
+//   still filling (line 340), because a forming bar's volume is partial. That
+//   is exactly right for c4, which describes the symbol NOW. It is wrong here.
+//   k1 must describe the BREAKOUT BAR, and a break that fires on the live bar
+//   would then be scored on the volume of the bar BEFORE it — a different
+//   week entirely. Observed on BRK.B weekly: a 9/10 setup with a 94% close
+//   was gated out by "0.86x volume" that belonged to the previous week.
+//   So k1 reads the breaking bar's OWN volume, partial or not.
+boVolOwn = volAvg > 0 ? volume / volAvg : na
+boVolAt  = ta.valuewhen(boBrkUp or boBrkDn, boVolOwn, 0)
+boCloAt  = ta.valuewhen(boBrkUp or boBrkDn, (close - low) / math.max(high - low, syminfo.mintick), 0)
+// Did the break fire on a bar that has not closed? Then volume is still
+// accumulating and the close can still move, so neither k1 nor k2 is settled.
+boLiveBar = barstate.islast and time_close > timenow
 // The level that broke depends on WHICH line broke. Quoting the horizontal
 // level after a trendline break would put the stop at a price nothing
 // happened at.
@@ -1782,8 +1796,17 @@ k9  = na(adxV)    ? false : adxV >= adxMin                                      
 k10 = na(ext200)  ? false : math.abs(ext200) <= extMax                                 // not stretched
 boScore = (k1?1:0)+(k2?1:0)+(k3?1:0)+(k4?1:0)+(k5?1:0)+(k6?1:0)+(k7?1:0)+(k8?1:0)+(k9?1:0)+(k10?1:0)
 
+// A partial bar can CONFIRM a pass — volume only ever goes up — but it can
+// never confirm a FAIL. Reporting "no volume" on a bar that is still filling
+// is a false negative, and on a weekly chart it would stand for days. So an
+// unsettled gate is reported as PENDING, which is not an entry and is not a
+// rejection either. This is the same discipline the ⚠ UNCONFIRMED row already
+// applies to the flip itself.
+boBrkAge    = boDir == 1 ? boAgeUp : boDir == -1 ? boAgeDn : na
+boBrkUnconf = boDir != 0 and not na(boBrkAge) and boBrkAge == 0 and boLiveBar
+boPending   = boBrkUnconf and not (k1 and k2)
 boGate    = k1 and k2
-boVerdict = not boOn ? "OFF" : thinHist ? "NO CALL — too little history" : boDir == 0 ? "NO SETUP" : boDir == 1 ? (boGate and boScore >= 8 ? "STRONG BUY" : boGate and boScore >= 6 ? "BUY" : boScore >= 6 ? "WATCH — no volume / weak close" : boScore >= 4 ? "WATCH" : "STAND ASIDE") : (boGate and boScore >= 8 ? "STRONG SELL" : boGate and boScore >= 6 ? "SELL" : boScore >= 6 ? "WATCH — no volume / weak close" : boScore >= 4 ? "WATCH" : "STAND ASIDE")
+boVerdict = not boOn ? "OFF" : thinHist ? "NO CALL — too little history" : boDir == 0 ? "NO SETUP" : boPending ? "PENDING — bar still forming" : boDir == 1 ? (boGate and boScore >= 8 ? "STRONG BUY" : boGate and boScore >= 6 ? "BUY" : boScore >= 6 ? "WATCH — no volume / weak close" : boScore >= 4 ? "WATCH" : "STAND ASIDE") : (boGate and boScore >= 8 ? "STRONG SELL" : boGate and boScore >= 6 ? "SELL" : boScore >= 6 ? "WATCH — no volume / weak close" : boScore >= 4 ? "WATCH" : "STAND ASIDE")
 boActing  = boVerdict == "STRONG BUY" or boVerdict == "BUY" or boVerdict == "STRONG SELL" or boVerdict == "SELL"
 
 // Trade geometry off the BROKEN LEVEL, not the Money Line.
@@ -1825,8 +1848,16 @@ if barstate.islast and boOn and not syncMode
         boVerdLb := label.new(bar_index, boDir == 1 ? low : high, boVerdict + "  " + str.tostring(boScore, "#") + "/10", style = boDir == 1 ? label.style_label_up : label.style_label_down, color = boDir == 1 ? color.new(#00c853, 0) : color.new(#d50000, 0), textcolor = color.white, size = size.normal)
 
 // ── THE CONSOLE ──────────────────────────────────────────────────────
-f_boTick(bool _v) => _v ? "✓" : "✗"
-f_boCol(bool _v)  => _v ? color.new(#00c853, 55) : color.new(#d50000, 55)
+// NO SETUP is not the same as FAILED. With boDir == 0 the k-checks still
+// evaluate (boDir >= 0 takes the long arm), so without this the console
+// printed a red "✗ FAILED — not an entry at any score" GATE and red RSI and
+// volume rows describing a breakout that never happened. Observed on TCS
+// weekly: "nothing broke in the last 3 bars" sitting above six red rows.
+// When there is nothing to assess the rows go neutral and read "—".
+boAssess = boDir != 0
+f_boTick(bool _v) => not boAssess ? "·" : _v ? "✓" : "✗"
+f_boCol(bool _v)  => not boAssess ? color.new(color.gray, 60) : _v ? color.new(#00c853, 55) : color.new(#d50000, 55)
+f_boTxt(bool _v, string _s) => not boAssess ? "—" : _s
 
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
 var table bot = table.new(boPosMap, 2, 17, border_width = 2)
@@ -1837,7 +1868,7 @@ if barstate.islast and boOn
     table.cell(bot, 0, 0, "BREAKOUT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 0, boVerdict + (boDir == 0 ? "" : "   " + str.tostring(boScore, "#") + "/10"), text_color = color.white, bgcolor = boVCol, text_halign = text.align_center, text_size = txtSize)
 
-    boWhat = boDir == 0 ? "nothing broke in the last " + str.tostring(boFresh, "#") + " bars" : (na(boKindTxt) ? "—" : boKindTxt) + "  ·  " + str.tostring(boDir == 1 ? boAgeUp : boAgeDn, "#") + " bar(s) ago"
+    boWhat = boDir == 0 ? "nothing broke in the last " + str.tostring(boFresh, "#") + " bars" : (na(boKindTxt) ? "—" : boKindTxt) + "  ·  " + str.tostring(boDir == 1 ? boAgeUp : boAgeDn, "#") + " bar(s) ago" + (boBrkUnconf ? "   ⧗ BAR NOT CLOSED" : "")
     table.cell(bot, 0, 1, "What broke", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 1, boWhat, text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
 
@@ -1845,18 +1876,18 @@ if barstate.islast and boOn
     table.cell(bot, 1, 2, na(boLvlAt) or boDir == 0 ? "—" : str.tostring(boLvlAt, format.mintick) + "   (now " + str.tostring(close, format.mintick) + ")", text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
 
     table.cell(bot, 0, 3, "GATE  vol + close", text_color = color.white, bgcolor = color.new(color.teal, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(bot, 1, 3, boGate ? "✓ PASSED" : "✗ FAILED — not an entry at any score", text_color = color.white, bgcolor = f_boCol(boGate), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 1, 3, not boAssess ? "— nothing to assess" : boGate ? "✓ PASSED" : boPending ? "⧗ NOT SETTLED — bar still filling" : "✗ FAILED — not an entry at any score", text_color = color.white, bgcolor = not boAssess ? color.new(color.gray, 60) : boGate ? f_boCol(true) : boPending ? color.new(color.orange, 35) : f_boCol(false), text_halign = text.align_center, text_size = txtSize)
 
     table.cell(bot, 0, 4, f_boTick(k1) + " Volume surge", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(bot, 1, 4, na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x   (need " + str.tostring(boVolSurge, "#.##") + "x)", text_color = color.white, bgcolor = f_boCol(k1), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 1, 4, f_boTxt(k1, na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x   (need " + str.tostring(boVolSurge, "#.##") + "x)" + (boBrkUnconf and not k1 ? "  ⧗ still filling" : "")), text_color = color.white, bgcolor = k1 ? f_boCol(true) : boBrkUnconf ? color.new(color.orange, 35) : f_boCol(false), text_halign = text.align_center, text_size = txtSize)
     table.cell(bot, 0, 5, f_boTick(k2) + " Close strength", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(bot, 1, 5, na(boCloAt) ? "—" : str.tostring(boCloAt * 100, "#") + "% of the bar's range", text_color = color.white, bgcolor = f_boCol(k2), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 1, 5, f_boTxt(k2, na(boCloAt) ? "—" : str.tostring(boCloAt * 100, "#") + "% of the bar's range"), text_color = color.white, bgcolor = f_boCol(k2), text_halign = text.align_center, text_size = txtSize)
     table.cell(bot, 0, 6, f_boTick(k3 and k4) + " RSI", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(bot, 1, 6, na(rsiV) ? "—" : str.tostring(rsiV, "#.#") + (k4 ? "" : "  ⚠ spent") + (k3 ? "" : "  ⚠ wrong side of 50"), text_color = color.white, bgcolor = f_boCol(k3 and k4), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 1, 6, na(rsiV) ? "—" : str.tostring(rsiV, "#.#") + (not boAssess ? "" : (k4 ? "" : "  ⚠ spent") + (k3 ? "" : "  ⚠ wrong side of 50")), text_color = color.white, bgcolor = f_boCol(k3 and k4), text_halign = text.align_center, text_size = txtSize)
     table.cell(bot, 0, 7, f_boTick(k5 and k6) + " MACD", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 7, na(macdH) ? "—" : (k5 ? "cross ✓" : "cross ✗") + "    " + (k6 ? "thrust expanding ✓" : "thrust flat / fading ✗"), text_color = color.white, bgcolor = f_boCol(k5 and k6), text_halign = text.align_center, text_size = txtSize)
     table.cell(bot, 0, 8, f_boTick(k7) + " ATR Money Line", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(bot, 1, 8, (trend == 1 ? "▲ bull" : "▼ bear") + (k7 ? "  — agrees" : "  — DISAGREES (scout entry)"), text_color = color.white, bgcolor = f_boCol(k7), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 1, 8, (trend == 1 ? "▲ bull" : "▼ bear") + (not boAssess ? "" : k7 ? "  — agrees" : "  — DISAGREES (scout entry)"), text_color = color.white, bgcolor = f_boCol(k7), text_halign = text.align_center, text_size = txtSize)
     table.cell(bot, 0, 9, f_boTick(k8) + " 200-bar mean", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 9, na(ma200bar) ? "—" : str.tostring(ma200bar, format.mintick), text_color = color.white, bgcolor = f_boCol(k8), text_halign = text.align_center, text_size = txtSize)
     table.cell(bot, 0, 10, f_boTick(k9) + " ADX trending", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
