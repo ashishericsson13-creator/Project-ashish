@@ -1933,6 +1933,72 @@ boTgtSrc = boDir == 1 and na(boRes) and not na(suTgt1) ? " (measured move)" : ""
 boRR     = na(boTarget) or na(boRisk) or boRisk <= 0 ? na : math.abs(boTarget - boEntry) / boRisk
 boSizePc = na(boRisk) or boEntry <= 0 or boRisk <= 0 ? na : riskPct / (boRisk / boEntry * 100) * 100
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// v64c — STRUCTURE: the converging pair, the apex, and the 3-line channel
+//
+// WHAT WAS MISSING
+//   This script drew a falling resistance and a rising support as two
+//   UNRELATED lines. The thing a trader actually reads is the RELATIONSHIP
+//   between them: are they closing on each other, how fast, and where do they
+//   meet. That is the whole content of a wedge or triangle — the two lines
+//   alone are just two lines. Nothing here named the pattern, measured the
+//   gap, or found the apex.
+//
+// WHY IT IS BUILT ON THE SHORT SWINGS AND NOT THE PRO LINES
+//   The PRO scan needs many confirmed swings. On SPCX daily — 119 bars of
+//   loaded history — it reported "swings H1 L1, no valid res line, no valid
+//   sup line" and drew nothing at all, while the short swing anchors
+//   (hiA/hiB, loA/loB at line 596) were perfectly well formed. Any structure
+//   read that only works on a decade of history is useless on exactly the
+//   charts people most want it for: recent listings and fast movers. So this
+//   reads the short anchors, which form in ~40 bars.
+//
+// THE APEX IS ALSO A DRAWING FIX
+//   v62's trendlines use extend.right, so they project forever and reach
+//   absurd prices — part of why the axis gets dragged. A converging pair has
+//   a natural right-hand end: the point where they cross. These are drawn TO
+//   the apex and stop there, which is both what a trader draws by hand and
+//   far kinder to the price scale.
+//
+// THE CHANNEL GETS A MIDLINE
+//   When the two slopes run parallel instead of converging it is a channel,
+//   not a wedge, and the midline is the third rail people trade against.
+//   v62 drew the two outer rails (proChLn); the middle one completes it.
+//
+// A PATTERN IS NOT A DIRECTION, AND THIS DOES NOT VOTE
+//   A symmetrical triangle resolves either way; a falling wedge is only
+//   bullish-by-convention. So none of this touches the gate, the verdict or
+//   k1-k10. It names the structure, measures it, and says when the decision
+//   is due. The breakout engine still decides on the break itself.
+// ═══════════════════════════════════════════════════════════════════════════
+wgOn     = input.bool(true, "Draw the converging pair / channel + apex", group = "8. Structure")
+wgMaxBar = input.int(60, "Apex: ignore if further out than N bars", minval = 5, maxval = 400, tooltip = "Two nearly-parallel lines meet hundreds of bars away, which is not an apex anyone trades. Past this distance the pair is reported as a channel rather than a wedge, and the lines are not drawn to a meeting point.", group = "8. Structure")
+wgFlat   = input.float(0.02, "Flat-slope tolerance (ATR per bar)", minval = 0.001, maxval = 0.5, step = 0.005, tooltip = "A slope smaller than this per bar counts as horizontal, which is what separates an ASCENDING triangle (flat top, rising lows) from a symmetrical one. In ATR so it means the same thing on every symbol.", group = "8. Structure")
+wgShowMid = input.bool(true, "Channel: draw the midline (3rd rail)", group = "8. Structure")
+
+// slopes, in price per bar, from the anchors v62 already maintains
+wgHave = not na(hiA_px) and not na(hiB_px) and not na(loA_px) and not na(loB_px) and not na(tlUpNow) and not na(tlLoNow) and hiB_bar > hiA_bar and loB_bar > loA_bar
+wgResSl = wgHave ? (hiB_px - hiA_px) / (hiB_bar - hiA_bar) : na
+wgSupSl = wgHave ? (loB_px - loA_px) / (loB_bar - loA_bar) : na
+wgGap   = wgHave ? tlUpNow - tlLoNow : na
+// closing speed. Positive = support is gaining on resistance = converging.
+wgConv  = wgHave ? wgSupSl - wgResSl : na
+wgApexN = wgHave and not na(wgConv) and wgConv > 0 and not na(wgGap) and wgGap > 0 ? wgGap / wgConv : na
+wgApexOk = not na(wgApexN) and wgApexN <= wgMaxBar
+wgTol   = na(atrV) ? na : wgFlat * atrV
+wgResFlat = wgHave and not na(wgTol) and math.abs(wgResSl) <= wgTol
+wgSupFlat = wgHave and not na(wgTol) and math.abs(wgSupSl) <= wgTol
+
+// Named the way a chartist names them, which is by what the two slopes do —
+// not by any forecast attached to the name.
+wgType = not wgOn or not wgHave ? "—" : wgApexOk ? (wgResFlat and wgSupSl > 0 ? "ASCENDING TRIANGLE" : wgSupFlat and wgResSl < 0 ? "DESCENDING TRIANGLE" : wgResSl < 0 and wgSupSl > 0 ? "SYMMETRICAL TRIANGLE" : wgResSl < 0 and wgSupSl < 0 ? "FALLING WEDGE" : wgResSl > 0 and wgSupSl > 0 ? "RISING WEDGE" : "CONVERGING") : (not na(wgConv) and wgConv < 0 ? "BROADENING" : "CHANNEL")
+wgIsChan = wgType == "CHANNEL" or wgType == "BROADENING"
+wgPct    = wgHave and close > 0 ? wgGap / close * 100 : na
+// where price sits between the two rails: 0 = on support, 100 = on resistance
+wgPos    = wgHave and not na(wgGap) and wgGap > 0 ? (close - tlLoNow) / wgGap * 100 : na
+wgWhy    = not wgOn ? "off" : not wgHave ? "no pair yet — need two swing highs and two swing lows" : wgType + (wgApexOk ? "  ·  apex in " + str.tostring(wgApexN, "#") + " bars" : "") + "  ·  gap " + str.tostring(wgPct, "#.#") + "%" + (na(wgPos) ? "" : "  ·  price " + str.tostring(math.max(math.min(wgPos, 999), -999), "#") + "% up the range")
+
 // ── DRAWING ──────────────────────────────────────────────────────────
 plotshape(boBrkHorzUp, "BO — defended level",     style = shape.triangleup,   location = location.belowbar, color = color.new(#00e676, 0), size = size.small, text = "BO", textcolor = color.new(#00e676, 0))
 plotshape(boBrkHorzDn, "BD — defended level",     style = shape.triangledown, location = location.abovebar, color = color.new(#ff1744, 0), size = size.small, text = "BD", textcolor = color.new(#ff1744, 0))
@@ -1955,6 +2021,10 @@ var label suT1Lb   = na
 var label suT2Lb   = na
 var line  suAthLn  = na
 var label suAthLb  = na
+var line  wgResLn  = na
+var line  wgSupLn  = na
+var line  wgMidLn  = na
+var label wgApexLb = na
 if barstate.islast and boOn and not syncMode
     line.delete(boResLn)
     line.delete(boSupLn)
@@ -1989,6 +2059,30 @@ if barstate.islast and boOn and not syncMode
         suT2Ln := line.new(bar_index - suBars + 1, suTgt2, bar_index + 12, suTgt2, extend = extend.right, color = color.new(#9c27b0, 55), style = line.style_dashed, width = 1)
         suT2Lb := label.new(bar_index + 12, suTgt2, "T2 " + str.tostring(suTgt2, format.mintick) + "  (1.618x)", style = label.style_label_left, color = color.new(#9c27b0, 55), textcolor = color.white, size = size.tiny)
     // the all-time high: the only level with no overhead supply behind it
+    // ── the converging pair, drawn TO the apex and stopped there ──
+    // Not extend.right: a wedge has a natural right-hand end where the two
+    // lines cross, and stopping there is both what a chartist draws and what
+    // keeps a steep projection from dragging the axis.
+    line.delete(wgResLn)
+    line.delete(wgSupLn)
+    line.delete(wgMidLn)
+    label.delete(wgApexLb)
+    if wgOn and wgHave and wgApexOk
+        // int(): math.round() returns a float and line.new needs a series int
+        // for its x coordinates, so this is a type error without the cast.
+        wgApexBar = bar_index + int(math.round(wgApexN))
+        wgApexPx  = tlUpNow + wgResSl * wgApexN
+        wgResLn := line.new(hiB_bar, hiB_px, wgApexBar, wgApexPx, color = color.new(#2962ff, 0), width = 2)
+        wgSupLn := line.new(loB_bar, loB_px, wgApexBar, wgApexPx, color = color.new(#2962ff, 0), width = 2)
+        wgApexLb := label.new(wgApexBar, wgApexPx, wgType + "\napex in " + str.tostring(wgApexN, "#") + " bars", style = label.style_label_left, color = color.new(#2962ff, 20), textcolor = color.white, size = size.tiny)
+    // ── a channel gets three rails, which is the shape people actually draw ──
+    if wgOn and wgHave and wgIsChan
+        wgResLn := line.new(hiB_bar, hiB_px, bar_index + 15, tlUpNow + wgResSl * 15, color = color.new(#2962ff, 15), width = 2)
+        wgSupLn := line.new(loB_bar, loB_px, bar_index + 15, tlLoNow + wgSupSl * 15, color = color.new(#2962ff, 15), width = 2)
+        if wgShowMid
+            wgMidSl = (wgResSl + wgSupSl) / 2
+            wgMidNw = (tlUpNow + tlLoNow) / 2
+            wgMidLn := line.new(bar_index - 40, wgMidNw - wgMidSl * 40, bar_index + 15, wgMidNw + wgMidSl * 15, color = color.new(#2962ff, 45), style = line.style_dashed, width = 1)
     if suOn and suShowATH and not na(hiAll)
         suAthLn := line.new(bar_index - 100, hiAll, bar_index + 12, hiAll, extend = extend.right, color = color.new(#ffc107, 20), style = line.style_dotted, width = 2)
         suAthLb := label.new(bar_index + 12, hiAll, (suNewATH ? "AT ALL-TIME HIGH " : "ATH ") + str.tostring(hiAll, format.mintick), style = label.style_label_left, color = color.new(#ffc107, 25), textcolor = color.black, size = size.tiny)
@@ -2006,10 +2100,10 @@ f_boCol(bool _v)  => not boAssess ? color.new(color.gray, 60) : _v ? color.new(#
 f_boTxt(bool _v, string _s) => not boAssess ? "—" : _s
 
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
-var table bot = table.new(boPosMap, 2, 19, border_width = 2)
+var table bot = table.new(boPosMap, 2, 20, border_width = 2)
 
 if barstate.islast and boOn
-    table.clear(bot, 0, 0, 1, 18)
+    table.clear(bot, 0, 0, 1, 19)
     boVCol = boVerdict == "STRONG BUY" ? color.new(#00c853, 0) : boVerdict == "BUY" ? color.new(#00c853, 30) : boVerdict == "STRONG SELL" ? color.new(#d50000, 0) : boVerdict == "SELL" ? color.new(#d50000, 30) : boVerdict == "NO SETUP" ? color.new(color.gray, 40) : color.new(color.orange, 25)
     table.cell(bot, 0, 0, "BREAKOUT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 0, boVerdict + (boDir == 0 ? "" : "   " + str.tostring(boScore, "#") + "/10"), text_color = color.white, bgcolor = boVCol, text_halign = text.align_center, text_size = txtSize)
@@ -2066,6 +2160,9 @@ if barstate.islast and boOn
     suCol = suGrade == "A+" ? color.new(#00c853, 10) : suGrade == "A" ? color.new(#00c853, 40) : suGrade == "B" ? color.new(color.orange, 35) : color.new(color.gray, 45)
     table.cell(bot, 0, 17, "SETUP  " + suGrade, text_color = color.white, bgcolor = color.new(#00bcd4, 25), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 17, suWhy, text_color = color.white, bgcolor = suCol, text_halign = text.align_center, text_size = txtSize)
+    wgCol = not wgHave ? color.new(color.gray, 55) : wgApexOk ? color.new(#2962ff, 30) : color.new(#2962ff, 55)
+    table.cell(bot, 0, 19, "STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 15), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 19, wgWhy, text_color = color.white, bgcolor = wgCol, text_halign = text.align_center, text_size = txtSize)
     table.cell(bot, 0, 18, "Measured move", text_color = color.white, bgcolor = color.new(#9c27b0, 25), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 18, not suIsBase or na(suTgt1) ? "— (no base to measure)" : "T1 " + str.tostring(suTgt1, format.mintick) + "   T2 " + str.tostring(suTgt2, format.mintick) + "   (base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) + ")", text_color = color.white, bgcolor = color.new(#9c27b0, 45), text_halign = text.align_center, text_size = txtSize)
 
