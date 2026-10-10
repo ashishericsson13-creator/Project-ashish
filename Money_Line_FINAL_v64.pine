@@ -44,7 +44,28 @@
 //   40 request.*() calls, and it uses all 40. Any new symbol, timeframe or
 //   fundamental breaks the whole script silently. Reuse existing data instead.
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Money Line MASTER v64", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000)
+// calc_bars_count PINS THE CALCULATION WINDOW. This is the fix for "the line
+// moves when I scroll or zoom out", and it is not cosmetic.
+//
+// The flip rule is RECURSIVE: today's level is built from yesterday's, all the
+// way back to whatever bar the calculation happened to start on. TradingView
+// loads history lazily, so scrolling left or zooming out hands the script MORE
+// bars, the recursion starts somewhere new, and EVERY level shifts underneath
+// price. Nothing about the market changed; the starting point did.
+//
+// Every request.security() below already passed calc_bars_count = scanBars, so
+// the Focus List was always immune. The chart's own line was the one place the
+// guard was missing - which is also why the panel and the Focus List row for
+// the SAME symbol could legitimately disagree. Both are pinned to 750 now.
+//
+// KEEP THIS EQUAL TO the "History window per symbol" input (scanBars, default
+// 750) or the chart and the Focus List go back to disagreeing.
+//
+// COST, stated plainly: only the last 750 bars are calculated. On weekly that
+// is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
+// "from 2010" backtest window effectively starts nearer 2012. Raise it for a
+// deeper record, lower it for a lighter script.
+indicator("Money Line MASTER v64", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // ═══════════════════════════════════════════════════════════════
 //  THE SYNTHESIS (from everything we tested):
@@ -399,13 +420,23 @@ lineColor = trend == 1 ? bullColor : bearColor
 mlPlot = plot(moneyLine, "Money Line", color = lineColor, linewidth = lineWidth, style = plot.style_stepline)
 srcPlot = plot(close, "Price (invisible)", display = display.none)
 fill(srcPlot, mlPlot, color = showFill ? (trend == 1 ? color.new(bullColor, 90) : color.new(bearColor, 90)) : na)
-plot(show200 ? ma200 : na, "200-day MA", color = color.new(color.red, 35), linewidth = 2)
+// CHART SYNC MODE — the fix for "the candles are squashed into a corner".
+// TradingView scales the axis to fit EVERYTHING the indicator draws, not just
+// price. A 200-bar mean far under price, a flip level 30% away, or a steep PRO
+// trendline projected right all pull the axis with them: on GOLD weekly that
+// put the scale at 250-6,000 for a symbol trading at 4,194, so the candles
+// occupied a fifth of the pane.
+// ON = compute everything exactly as before, draw only what sits near price.
+// Signals, scores and the Focus List are byte-identical either way - this
+// changes what is DRAWN, never what is decided.
+syncMode = input.bool(false, "Chart sync mode — hide MAs, S/R and PRO lines so the axis follows price", tooltip = "OFF (default) = unchanged; every line is drawn and the axis stretches to fit them all.\n\nON = the moving averages, the Auto S/R lines, the flip-level line and the projected PRO trendlines are not drawn, so TradingView scales the axis to the candles. Everything is still CALCULATED - the breakout engine still reads the PRO lines, the panel still reports them - they are simply not rendered.\n\nTurn this on when the candles look compressed into part of the pane.", group = "2. Display")
+plot(show200 and not syncMode ? ma200 : na, "200-day MA", color = color.new(color.red, 35), linewidth = 2)
 ma200bar = ta.sma(close, ma200barLen)
-plot(show200bar ? ma200bar : na, "200-bar MA", color = color.new(color.black, 0), linewidth = 3)
+plot(show200bar and not syncMode ? ma200bar : na, "200-bar MA", color = color.new(color.black, 0), linewidth = 3)
 ma50bar = ta.sma(close, ma50barLen)
-plot(show50bar ? ma50bar : na, "50-bar MA", color = color.new(color.orange, 20), linewidth = 2)
+plot(show50bar and not syncMode ? ma50bar : na, "50-bar MA", color = color.new(color.orange, 20), linewidth = 2)
 ma100bar = ta.sma(close, ma100barLen)
-plot(show100bar ? ma100bar : na, "100-bar MA", color = color.new(#2962ff, 20), linewidth = 2)
+plot(show100bar and not syncMode ? ma100bar : na, "100-bar MA", color = color.new(#2962ff, 20), linewidth = 2)
 
 // ── CORE variant: buy the same first signal, then hold until a weekly close
 // breaks the 200-week line. Runs from the SAME start date as the system and the
@@ -1769,7 +1800,7 @@ plotshape(boBrkHorzDn, "BD — defended level",     style = shape.triangledown, 
 
 var array<line> boVerts = array.new<line>()
 if boOn and boShowVert and (boBrkUp or boBrkDn) and barstate.isconfirmed
-    array.push(boVerts, line.new(bar_index, low, bar_index, high, extend = extend.both, color = boBrkUp ? color.new(#00e676, 55) : color.new(#ff1744, 55), style = line.style_dotted, width = 1))
+    array.push(boVerts, line.new(bar_index, low, bar_index, high + syminfo.mintick, extend = extend.both, color = boBrkUp ? color.new(#00e676, 55) : color.new(#ff1744, 55), style = line.style_dotted, width = 1))
     if array.size(boVerts) > 12
         line.delete(array.shift(boVerts))
 
@@ -1778,7 +1809,7 @@ var line  boSupLn = na
 var label boResLb = na
 var label boSupLb = na
 var label boVerdLb = na
-if barstate.islast and boOn
+if barstate.islast and boOn and not syncMode
     line.delete(boResLn)
     line.delete(boSupLn)
     label.delete(boResLb)
@@ -1855,3 +1886,59 @@ if barstate.islast and boOn
 // ── ALERTS ───────────────────────────────────────────────────────────
 alertcondition(boBrkHorzUp, title = "v64 BREAKOUT — defended level", message = "{{ticker}} {{interval}}: closed above a defended level at {{close}}")
 alertcondition(boBrkHorzDn, title = "v64 BREAKDOWN — defended level", message = "{{ticker}} {{interval}}: closed below a defended level at {{close}}")
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHART SYNC MODE — remove only what drags the axis
+//
+// WHY THIS IS A DELETE PASS AND NOT A GUARD ON THE DRAWING BLOCKS
+//   The obvious fix is `if showPro and not syncMode`. It is wrong here. The
+//   PRO block does not only draw — it COMPUTES proResNow, proSupNow,
+//   proResSlope and the touch counts inside the same block, and proBreakUp /
+//   proBreakDn are built from those further down. Gating the block would
+//   silently switch off a third of the breakout engine's inputs whenever a
+//   user ticked a display option. A display setting must never change a
+//   signal.
+//
+//   So everything is computed exactly as before and the drawables that can sit
+//   far from price are deleted at the end of the bar instead. Pine runs top to
+//   bottom, so an object deleted here never reaches the renderer and never
+//   reaches the autoscaler. proBreakUp, the panel, the Focus List and the
+//   breakout console are bit-identical with this on or off.
+//
+// WHAT IS REMOVED, and why each one can pull the axis
+//   PRO trendlines   projected with extend.right. A steep line carried far
+//                    enough right reaches any price you like — this is what
+//                    put GOLD's axis at 250-6,000 for a 4,194 symbol.
+//   PRO key levels   horizontal, but drawn from deep history, so they can sit
+//                    far above or below anything currently on screen.
+//   Auto S/R         same.
+//   Flip level line  on a bearish weekly chart the flip level is routinely
+//                    25-35% from price (your own panels: SOL 31.6%, POL 35.2%).
+//   Swing trendlines also extend.right.
+//
+// WHAT IS KEPT, because it is already at price
+//   The Money Line plot itself, the fill, BUY/SELL labels, the breakout
+//   markers, the vertical break lines and the score tag.
+// ═══════════════════════════════════════════════════════════════════════════
+if barstate.islast and syncMode
+    line.delete(proResLn)
+    line.delete(proSupLn)
+    line.delete(proChLn)
+    line.delete(proKRLn)
+    line.delete(proKSLn)
+    label.delete(proResLb)
+    label.delete(proSupLb)
+    label.delete(proKRLb)
+    label.delete(proKSLb)
+    line.delete(lnR1)
+    line.delete(lnR2)
+    line.delete(lnR3)
+    line.delete(lnS1)
+    line.delete(lnS2)
+    line.delete(lnS3)
+    label.delete(lbR1)
+    label.delete(lbS1)
+    line.delete(flipLn)
+    label.delete(flipLb)
+    line.delete(tlUpLn)
+    line.delete(tlLoLn)
