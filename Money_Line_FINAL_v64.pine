@@ -1739,10 +1739,122 @@ boSupRef = boSup[1]
 boBrkHorzUp = boOn and not na(boResRef) and close > boResRef * (1 + boBufPct / 100) and close[1] <= boResRef
 boBrkHorzDn = boOn and not na(boSupRef) and close < boSupRef * (1 - boBufPct / 100) and close[1] >= boSupRef
 
-// ── THE EVENT: four sources, three of them already in this script ────
-boBrkUp = boOn and (boBrkHorzUp or proBreakUp or tlBreakUp or buySignal)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// v64b — SETUP QUALITY: the four things your examples all had and this
+//        script could not see
+//
+// WHY THESE FOUR AND NOT TWENTY MORE INDICATORS
+//   Another oscillator adds nothing: RSI, MACD, ADX and volume already cover
+//   momentum, trend strength and participation, and a fifth correlated
+//   momentum reading would just vote with them and inflate the score. What
+//   was genuinely absent is STRUCTURE — where in its own history the move is
+//   happening. Every chart you sent was a structure call, not a momentum one:
+//     SNOW   two horizontals and the words "4 year base"
+//     PLTR   a range, then 161.8 / 261.8 / 423.6 and "New All-time High"
+//     AMZN   two converging lines — a range narrowing to nothing
+//     TSLA   a long curved base under one horizontal
+//   None of those is an indicator. All four are the same question: how long
+//   has price been coiled, and is it leaving that coil at a new high.
+//
+// WHAT IS ADDED, all chart-local — this file is already at 46 request.*()
+// calls against a documented cap of 40, so a relative-strength-vs-index
+// reading, which would otherwise be the obvious fifth addition, is NOT
+// possible here without removing something first.
+//
+//   1. THE BASE. The longest recent stretch price stayed inside one tight
+//      range. Drawn as a box, which is the SNOW/PLTR rectangle. A breakout
+//      from a 200-bar base and a breakout from a 20-bar wiggle are not the
+//      same event and should never score the same.
+//   2. NEW HIGH. 52-week and all-time. hi52/hiAll were already computed here
+//      and used for one panel row; they were never allowed to signal.
+//      "New All-time High" is the most-posted setup there is, because there
+//      is no overhead supply left to sell into.
+//   3. THE SQUEEZE. Bollinger width at its own 100-bar floor. This is what
+//      makes AMZN's converging lines a wedge rather than a drift, and it is
+//      the one state that reliably precedes expansion.
+//   4. MEASURED-MOVE TARGETS. The base height projected up, at 1.0 and 1.618.
+//      This is where PLTR's fib labels come from. The console could only ever
+//      quote "the next old level" as a target, which on a chart making new
+//      highs is nothing at all — exactly the case where targets matter most.
+//
+// THESE DO NOT JOIN k1-k10, FOR THE SAME REASON k1-k10 DO NOT JOIN c1-c9.
+//   k1-k10 ask "is this break real". These ask "was it worth breaking". A
+//   break can be perfectly real out of a shallow three-week chop. The gate
+//   and the verdict are unchanged; this block adds a quality GRADE beside
+//   them and real targets, and says plainly when the setup is thin.
+// ═══════════════════════════════════════════════════════════════════════════
+suOn      = input.bool(true, "Enable SETUP QUALITY (base, new high, squeeze, targets)", group = "7. Setup Quality")
+suBaseMax = input.float(25.0, "Base: max range width (% of its low)", minval = 3.0, maxval = 80.0, step = 0.5, tooltip = "How tight a stretch must be to count as a base. The script tries 200, 120, 80, 50, 30 and 20 bars and takes the LONGEST one that fits inside this width.\n\n25% suits weekly equities. Crypto needs more - 40-50% - because a quiet quarter there is still a 40% range. Too tight and nothing qualifies; too loose and an ordinary downtrend reads as a base.", group = "7. Setup Quality")
+suBaseMin = input.int(30, "Base: minimum bars to call it a base", minval = 10, maxval = 200, tooltip = "Below this the range is chop, not a base. On weekly, 30 bars is about seven months - roughly the point where enough holders are trapped for a breakout to matter.", group = "7. Setup Quality")
+suSqzPct  = input.float(15.0, "Squeeze: within % of the tightest band in 100 bars", minval = 2.0, maxval = 60.0, step = 1.0, tooltip = "Bollinger width is compared with its own lowest reading over the last 100 bars. Inside this margin the market is coiled.\n\nThis is a VOLATILITY state, not a direction. A squeeze says a big move is near; it never says which way. It belongs in the quality grade, never in the buy/sell decision.", group = "7. Setup Quality")
+suShowBox = input.bool(true, "Draw the base box", group = "7. Setup Quality")
+suShowTgt = input.bool(true, "Draw measured-move targets (1.0 / 1.618)", group = "7. Setup Quality")
+suShowATH = input.bool(true, "Draw the 52-week and all-time high lines", group = "7. Setup Quality")
+
+// ── 1. THE BASE ──────────────────────────────────────────────────────
+// Six fixed lengths rather than a search loop: ta.highest() needs a constant
+// length, and six pairs computed every bar is cheaper and more predictable
+// than any loop that tries to find the exact longest tight window.
+suH200 = ta.highest(high, 200), suL200 = ta.lowest(low, 200)
+suH120 = ta.highest(high, 120), suL120 = ta.lowest(low, 120)
+suH80  = ta.highest(high,  80), suL80  = ta.lowest(low,  80)
+suH50  = ta.highest(high,  50), suL50  = ta.lowest(low,  50)
+suH30  = ta.highest(high,  30), suL30  = ta.lowest(low,  30)
+suH20  = ta.highest(high,  20), suL20  = ta.lowest(low,  20)
+f_suW(float _h, float _l) => _l > 0 ? (_h - _l) / _l * 100 : na
+suT200 = bar_index >= 200 and f_suW(suH200, suL200) <= suBaseMax
+suT120 = bar_index >= 120 and f_suW(suH120, suL120) <= suBaseMax
+suT80  = bar_index >=  80 and f_suW(suH80,  suL80)  <= suBaseMax
+suT50  = bar_index >=  50 and f_suW(suH50,  suL50)  <= suBaseMax
+suT30  = bar_index >=  30 and f_suW(suH30,  suL30)  <= suBaseMax
+suT20  = bar_index >=  20 and f_suW(suH20,  suL20)  <= suBaseMax
+// longest wins: a 200-bar base that also fits in 20 bars is still a 200-bar base
+suBars = suT200 ? 200 : suT120 ? 120 : suT80 ? 80 : suT50 ? 50 : suT30 ? 30 : suT20 ? 20 : 0
+suHi   = suT200 ? suH200 : suT120 ? suH120 : suT80 ? suH80 : suT50 ? suH50 : suT30 ? suH30 : suT20 ? suH20 : na
+suLo   = suT200 ? suL200 : suT120 ? suL120 : suT80 ? suL80 : suT50 ? suL50 : suT30 ? suL30 : suT20 ? suL20 : na
+suIsBase = suOn and suBars >= suBaseMin
+// Tested against the PREVIOUS bar's ceiling, for the same reason every other
+// break in this script is: once price closes above it, suHi becomes the new
+// close and the test can never fire.
+suBaseBrk = suIsBase and not na(suHi[1]) and close > suHi[1] and close[1] <= suHi[1]
+
+// ── 2. NEW HIGH ──────────────────────────────────────────────────────
+// hi52 and hiAll were already here (line 512) and only ever fed one panel
+// row. 0.5% of tolerance so a close a tick under the old high still reads as
+// a new high rather than a near miss.
+suNewATH = suOn and close >= hiAll * 0.995
+suNew52  = suOn and close >= hi52  * 0.995
+suATHBrk = suOn and close > hiAll[1] and close[1] <= hiAll[1]
+
+// ── 3. THE SQUEEZE ───────────────────────────────────────────────────
+suBasis = ta.sma(close, 20)
+suDev   = ta.stdev(close, 20)
+suBBW   = suBasis > 0 ? (4 * suDev) / suBasis * 100 : na
+suBBWLo = ta.lowest(suBBW, 100)
+suSqz   = suOn and not na(suBBW) and not na(suBBWLo) and suBBWLo > 0 and suBBW <= suBBWLo * (1 + suSqzPct / 100)
+
+// ── 4. MEASURED-MOVE TARGETS ─────────────────────────────────────────
+// The base's own height projected from its ceiling. This is what a fib
+// extension label on a posted chart is: not magic, just the range repeated.
+suHeight = na(suHi) or na(suLo) ? na : suHi - suLo
+suTgt1   = na(suHeight) ? na : suHi + suHeight
+suTgt2   = na(suHeight) ? na : suHi + suHeight * 1.618
+
+// ── THE GRADE ────────────────────────────────────────────────────────
+// Deliberately a letter, not a number added to the 10. It qualifies the
+// breakout score; it does not dilute it.
+suPts   = (suIsBase ? 1 : 0) + (suNewATH ? 2 : suNew52 ? 1 : 0) + (suSqz ? 1 : 0)
+suGrade = not suOn ? "—" : suPts >= 4 ? "A+" : suPts == 3 ? "A" : suPts == 2 ? "B" : suPts == 1 ? "C" : "D"
+suWhy   = not suOn ? "off" : (suIsBase ? str.tostring(suBars, "#") + "-bar base (" + str.tostring(f_suW(suHi, suLo), "#.#") + "% wide)" : "no base — " + (suBars > 0 ? str.tostring(suBars, "#") + " bars only" : "range too wide")) + (suNewATH ? "  ·  AT ALL-TIME HIGH" : suNew52 ? "  ·  at 52w high" : "") + (suSqz ? "  ·  SQUEEZE" : "")
+
+// ── THE EVENT: six sources ──────────────────────────────────────────
+boBrkUp = boOn and (suBaseBrk or suATHBrk or boBrkHorzUp or proBreakUp or tlBreakUp or buySignal)
 boBrkDn = boOn and (boBrkHorzDn or proBreakDn or tlBreakDn or sellSignal)
-boKindUp = boBrkHorzUp ? "DEFENDED LEVEL" : proBreakUp ? "PRO TRENDLINE (" + str.tostring(proResT, "#") + " touches)" : tlBreakUp ? "SWING TRENDLINE" : buySignal ? "ATR MONEY LINE" : na
+// Named most-significant first: leaving a 200-bar base at an all-time high is
+// a different event from clipping a swing trendline, and the console should
+// say which one happened rather than whichever test ran first.
+boKindUp = suATHBrk ? "ALL-TIME HIGH" : suBaseBrk ? str.tostring(suBars, "#") + "-BAR BASE" : boBrkHorzUp ? "DEFENDED LEVEL" : proBreakUp ? "PRO TRENDLINE (" + str.tostring(proResT, "#") + " touches)" : tlBreakUp ? "SWING TRENDLINE" : buySignal ? "ATR MONEY LINE" : na
 boKindDn = boBrkHorzDn ? "DEFENDED LEVEL" : proBreakDn ? "PRO TRENDLINE (" + str.tostring(proSupT, "#") + " touches)" : tlBreakDn ? "SWING TRENDLINE" : sellSignal ? "ATR MONEY LINE" : na
 
 boAgeUp = ta.barssince(boBrkUp)
@@ -1771,7 +1883,7 @@ boLiveBar = barstate.islast and time_close > timenow
 // The level that broke depends on WHICH line broke. Quoting the horizontal
 // level after a trendline break would put the stop at a price nothing
 // happened at.
-boLvlNow = boBrkHorzUp ? boResRef : proBreakUp ? proResNow : tlBreakUp ? tlUpNow : boBrkHorzDn ? boSupRef : proBreakDn ? proSupNow : tlBreakDn ? tlLoNow : (buySignal or sellSignal) ? moneyLine : na
+boLvlNow = suATHBrk ? hiAll[1] : suBaseBrk ? suHi[1] : boBrkHorzUp ? boResRef : proBreakUp ? proResNow : tlBreakUp ? tlUpNow : boBrkHorzDn ? boSupRef : proBreakDn ? proSupNow : tlBreakDn ? tlLoNow : (buySignal or sellSignal) ? moneyLine : na
 boLvlAt = ta.valuewhen(boBrkUp or boBrkDn, nz(boLvlNow, close), 0)
 var string boKindTxt = na
 if boBrkUp
@@ -1813,7 +1925,11 @@ boActing  = boVerdict == "STRONG BUY" or boVerdict == "BUY" or boVerdict == "STR
 boEntry  = close
 boStop   = boDir == 1 ? nz(boLvlAt, close) - boStopATR * atrV : boDir == -1 ? nz(boLvlAt, close) + boStopATR * atrV : na
 boRisk   = na(boStop) ? na : math.abs(boEntry - boStop)
-boTarget = boDir == 1 ? boRes : boDir == -1 ? boSup : na
+// On a chart making new highs there is no old level above to aim at, and
+// that is precisely the case where a target is most needed. Fall back to the
+// base's measured move.
+boTarget = boDir == 1 ? nz(boRes, suTgt1) : boDir == -1 ? boSup : na
+boTgtSrc = boDir == 1 and na(boRes) and not na(suTgt1) ? " (measured move)" : ""
 boRR     = na(boTarget) or na(boRisk) or boRisk <= 0 ? na : math.abs(boTarget - boEntry) / boRisk
 boSizePc = na(boRisk) or boEntry <= 0 or boRisk <= 0 ? na : riskPct / (boRisk / boEntry * 100) * 100
 
@@ -1832,6 +1948,13 @@ var line  boSupLn = na
 var label boResLb = na
 var label boSupLb = na
 var label boVerdLb = na
+var box   suBox    = na
+var line  suT1Ln   = na
+var line  suT2Ln   = na
+var label suT1Lb   = na
+var label suT2Lb   = na
+var line  suAthLn  = na
+var label suAthLb  = na
 if barstate.islast and boOn and not syncMode
     line.delete(boResLn)
     line.delete(boSupLn)
@@ -1846,6 +1969,29 @@ if barstate.islast and boOn and not syncMode
         boSupLb := label.new(bar_index + 12, boSup, "DEFENDED S " + str.tostring(boSup, format.mintick) + "  ·  " + str.tostring(boSupHit, "#") + " touches", style = label.style_label_left, color = color.new(#00e676, 25), textcolor = color.white, size = size.tiny)
     if boActing
         boVerdLb := label.new(bar_index, boDir == 1 ? low : high, boVerdict + "  " + str.tostring(boScore, "#") + "/10", style = boDir == 1 ? label.style_label_up : label.style_label_down, color = boDir == 1 ? color.new(#00c853, 0) : color.new(#d50000, 0), textcolor = color.white, size = size.normal)
+    // ── the base box: the SNOW / PLTR rectangle, drawn only once it is long
+    // enough to mean something. Deliberately a box and not two lines, because
+    // the thing being communicated is the DURATION as much as the price.
+    box.delete(suBox)
+    line.delete(suT1Ln)
+    line.delete(suT2Ln)
+    line.delete(suAthLn)
+    label.delete(suT1Lb)
+    label.delete(suT2Lb)
+    label.delete(suAthLb)
+    if suOn and suShowBox and suIsBase and not na(suHi) and not na(suLo)
+        suBox := box.new(bar_index - suBars + 1, suHi, bar_index, suLo, border_color = color.new(#00bcd4, 20), border_width = 2, bgcolor = color.new(#00bcd4, 92), text = str.tostring(suBars, "#") + "-bar base  ·  " + str.tostring(f_suW(suHi, suLo), "#.#") + "% wide", text_color = color.new(#00bcd4, 0), text_size = size.small, text_halign = text.align_center, text_valign = text.align_top)
+    // measured-move targets. These are where a posted chart's 161.8 / 261.8
+    // labels come from — the range repeated, not a magic ratio.
+    if suOn and suShowTgt and suIsBase and not na(suTgt1)
+        suT1Ln := line.new(bar_index - suBars + 1, suTgt1, bar_index + 12, suTgt1, extend = extend.right, color = color.new(#9c27b0, 25), style = line.style_dashed, width = 1)
+        suT1Lb := label.new(bar_index + 12, suTgt1, "T1 " + str.tostring(suTgt1, format.mintick) + "  (1.0x base)", style = label.style_label_left, color = color.new(#9c27b0, 30), textcolor = color.white, size = size.tiny)
+        suT2Ln := line.new(bar_index - suBars + 1, suTgt2, bar_index + 12, suTgt2, extend = extend.right, color = color.new(#9c27b0, 55), style = line.style_dashed, width = 1)
+        suT2Lb := label.new(bar_index + 12, suTgt2, "T2 " + str.tostring(suTgt2, format.mintick) + "  (1.618x)", style = label.style_label_left, color = color.new(#9c27b0, 55), textcolor = color.white, size = size.tiny)
+    // the all-time high: the only level with no overhead supply behind it
+    if suOn and suShowATH and not na(hiAll)
+        suAthLn := line.new(bar_index - 100, hiAll, bar_index + 12, hiAll, extend = extend.right, color = color.new(#ffc107, 20), style = line.style_dotted, width = 2)
+        suAthLb := label.new(bar_index + 12, hiAll, (suNewATH ? "AT ALL-TIME HIGH " : "ATH ") + str.tostring(hiAll, format.mintick), style = label.style_label_left, color = color.new(#ffc107, 25), textcolor = color.black, size = size.tiny)
 
 // ── THE CONSOLE ──────────────────────────────────────────────────────
 // NO SETUP is not the same as FAILED. With boDir == 0 the k-checks still
@@ -1860,10 +2006,10 @@ f_boCol(bool _v)  => not boAssess ? color.new(color.gray, 60) : _v ? color.new(#
 f_boTxt(bool _v, string _s) => not boAssess ? "—" : _s
 
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
-var table bot = table.new(boPosMap, 2, 17, border_width = 2)
+var table bot = table.new(boPosMap, 2, 19, border_width = 2)
 
 if barstate.islast and boOn
-    table.clear(bot, 0, 0, 1, 16)
+    table.clear(bot, 0, 0, 1, 18)
     boVCol = boVerdict == "STRONG BUY" ? color.new(#00c853, 0) : boVerdict == "BUY" ? color.new(#00c853, 30) : boVerdict == "STRONG SELL" ? color.new(#d50000, 0) : boVerdict == "SELL" ? color.new(#d50000, 30) : boVerdict == "NO SETUP" ? color.new(color.gray, 40) : color.new(color.orange, 25)
     table.cell(bot, 0, 0, "BREAKOUT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 0, boVerdict + (boDir == 0 ? "" : "   " + str.tostring(boScore, "#") + "/10"), text_color = color.white, bgcolor = boVCol, text_halign = text.align_center, text_size = txtSize)
@@ -1898,7 +2044,7 @@ if barstate.islast and boOn
     table.cell(bot, 0, 12, "Entry / Stop", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 12, boDir == 0 or na(boStop) ? "—" : str.tostring(boEntry, format.mintick) + "  /  " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)", text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
     table.cell(bot, 0, 13, "Target / R:R", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(bot, 1, 13, na(boRR) ? "— (no level beyond)" : str.tostring(boTarget, format.mintick) + "    R:R " + str.tostring(boRR, "#.##") + (boRR < 1.5 ? "  ⚠ thin" : ""), text_color = color.white, bgcolor = na(boRR) or boRR < 1.5 ? color.new(color.orange, 35) : color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 1, 13, na(boRR) ? "— (no level beyond)" : str.tostring(boTarget, format.mintick) + boTgtSrc + "    R:R " + str.tostring(boRR, "#.##") + (boRR < 1.5 ? "  ⚠ thin" : ""), text_color = color.white, bgcolor = na(boRR) or boRR < 1.5 ? color.new(color.orange, 35) : color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
     table.cell(bot, 0, 14, "Size at " + str.tostring(riskPct, "#.#") + "% risk", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 14, na(boSizePc) ? "—" : str.tostring(math.min(boSizePc, 100), "#.#") + "% of account", text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
 
@@ -1913,6 +2059,15 @@ if barstate.islast and boOn
     boNext = (na(boRes) ? "R —" : "R " + str.tostring(boRes, format.mintick) + "  " + str.tostring(boResHit, "#") + "t/" + str.tostring(boResAge, "#") + "b") + "   ·   " + (na(boSup) ? "S —" : "S " + str.tostring(boSup, format.mintick) + "  " + str.tostring(boSupHit, "#") + "t/" + str.tostring(boSupAge, "#") + "b")
     table.cell(bot, 0, 16, "Next level", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
     table.cell(bot, 1, 16, boNext, text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
+
+    // SETUP QUALITY sits BELOW the verdict, not inside it: it says whether the
+    // thing that broke was worth breaking, which is a different question from
+    // whether the break is real.
+    suCol = suGrade == "A+" ? color.new(#00c853, 10) : suGrade == "A" ? color.new(#00c853, 40) : suGrade == "B" ? color.new(color.orange, 35) : color.new(color.gray, 45)
+    table.cell(bot, 0, 17, "SETUP  " + suGrade, text_color = color.white, bgcolor = color.new(#00bcd4, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 17, suWhy, text_color = color.white, bgcolor = suCol, text_halign = text.align_center, text_size = txtSize)
+    table.cell(bot, 0, 18, "Measured move", text_color = color.white, bgcolor = color.new(#9c27b0, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(bot, 1, 18, not suIsBase or na(suTgt1) ? "— (no base to measure)" : "T1 " + str.tostring(suTgt1, format.mintick) + "   T2 " + str.tostring(suTgt2, format.mintick) + "   (base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) + ")", text_color = color.white, bgcolor = color.new(#9c27b0, 45), text_halign = text.align_center, text_size = txtSize)
 
 // ── ALERTS ───────────────────────────────────────────────────────────
 alertcondition(boBrkHorzUp, title = "v64 BREAKOUT — defended level", message = "{{ticker}} {{interval}}: closed above a defended level at {{close}}")
@@ -1973,3 +2128,5 @@ if barstate.islast and syncMode
     label.delete(flipLb)
     line.delete(tlUpLn)
     line.delete(tlLoLn)
+alertcondition(suBaseBrk, title = "v64 BASE BREAKOUT (out of a long consolidation)", message = "{{ticker}} {{interval}}: closed above a multi-bar base at {{close}}")
+alertcondition(suATHBrk,  title = "v64 NEW ALL-TIME HIGH", message = "{{ticker}} {{interval}}: new all-time high at {{close}} — no overhead supply")
