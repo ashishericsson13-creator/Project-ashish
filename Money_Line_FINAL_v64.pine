@@ -1931,8 +1931,11 @@ lvlS    = na(boSup) ? (suIsBase and not na(suLo) and suLo < close ? suLo : na) :
 // and left the general one: a level you cannot reach is not a level,
 // whether or not a base happens to exist. Capped in ATR so it means the same
 // on every symbol.
-lvlRfar = na(lvlR) or na(emaAtr) or emaAtr <= 0 ? false : (lvlR - close) / emaAtr > lvlMaxATR
-lvlSfar = na(lvlS) or na(emaAtr) or emaAtr <= 0 ? false : (close - lvlS) / emaAtr > lvlMaxATR
+// atrV, not emaAtr: emaAtr is declared 120 lines below this point and using
+// it here was an undeclared-identifier error. atrV is v62's own chart ATR,
+// available since line 201, and is the same measure the Money Line uses.
+lvlRfar = na(lvlR) or na(atrV) or atrV <= 0 ? false : (lvlR - close) / atrV > lvlMaxATR
+lvlSfar = na(lvlS) or na(atrV) or atrV <= 0 ? false : (close - lvlS) / atrV > lvlMaxATR
 lvlRsrc = na(lvlR) ? "" : (not na(boRes) and lvlR == boRes ? " defended" : " base top")
 lvlSsrc = na(lvlS) ? "" : (not na(boSup) and lvlS == boSup ? " defended" : " base floor")
 
