@@ -2400,38 +2400,38 @@ botMinB  = input.int(10, "Bars of base required before it is tradable", minval =
 // into a trend and the line stops being a bottom reference.
 botMaxATR = input.float(6.0, "Stop calling it a bottom past this many ATR above average cost", minval = 1.0, maxval = 30.0, step = 0.5, group = "v64 · BOTTOM LINE")
 
-botLo = ta.lowest(low, botLook)
-var float botPV = 0.0
-var float botVV = 0.0
-var float botPX = 0.0
-var int   botN  = 0
-// nz(volume) because indices and some FX feeds report no volume at all; the
-// bar-count average below is the fallback so the line still draws there.
-// RELIANCE weekly reported "39.9% above the average cost since the low at
-// 989.6" while the line itself sat near 700 - an average that is BELOW the
-// low it names, which is impossible. botLo is the lowest low of the CURRENT
-// window, but the accumulator was anchored at the 2020 low, which had long
-// since rolled out of that window. Two different bars, reported as one. The
-// anchor's own low is stored now, and an anchor older than the lookback is
-// treated as matured, because it is no longer a cycle low in any useful sense.
-var float botAnc = na
-if low <= botLo or botN == 0
-    botPV := 0.0
-    botVV := 0.0
-    botPX := 0.0
-    botN  := 0
-    botAnc := low
-botPV += hlc3 * nz(volume)
-botVV += nz(volume)
-botPX += hlc3
-botN  += 1
-botAV    = botVV > 0 ? botPV / botVV : botN > 0 ? botPX / botN : na
+// The anchor is found fresh every bar: ta.lowestbars gives the offset of the
+// lowest low inside the lookback, and the average is summed from that bar
+// forward. That is the whole fix for a family of bugs - CRM reported
+// "anchored 750 bars back at 31.58", the first bar of the calculation window
+// in 2012, because the old incremental accumulator only re-anchored when a
+// NEW window low printed, which in a long uptrend never happens again after
+// the first bar. RELIANCE and NIFTY showed the same fault from the other
+// side: an average cost BELOW the low it named, because the anchor had
+// rolled out of the window while the reported low had not. Recomputing
+// cannot drift, because there is no stored state left to go stale.
+botOff = math.abs(ta.lowestbars(low, botLook))
+
+f_anchVwap(int _n) =>
+    _pv = 0.0
+    _vv = 0.0
+    _px = 0.0
+    for _i = 0 to _n
+        _pv += hlc3[_i] * nz(volume[_i])
+        _vv += nz(volume[_i])
+        _px += hlc3[_i]
+    // nz(volume) plus the bar-count fallback keeps the line drawing on
+    // indices and feeds that report no volume at all, such as TVC:GOLD.
+    _vv > 0 ? _pv / _vv : _px / (_n + 1)
+
+botAV    = na(botOff) ? na : f_anchVwap(botOff)
+botAnc   = na(botOff) ? na : low[botOff]
+botN     = nz(botOff)
 botRise  = not na(botAV) and not na(botAV[1]) and botAV > botAV[1]
 botAbove = not na(botAV) and close > botAV
 botReady = botN >= botMinB
 botStr   = na(botAV) or na(atrV) or atrV <= 0 ? na : (close - botAV) / atrV
-botMature = not na(botStr) and (botStr > botMaxATR or botN > botLook)
-botBuy   = botAbove and botRise and botReady and not botMature
+botMature = not na(botStr) and botStr > botMaxATR
 botDistP = na(botAV) ? na : (close - botAV) / close * 100
 
 // ── BOTTOM SCORE ───────────────────────────────────────────────────────────
@@ -2678,7 +2678,7 @@ f_boSummary(table _t) =>
         table.cell(_t, 0, 8, "9  LEVELS", text_color = color.white, bgcolor = color.new(color.olive, 20), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 8, (na(lvlR) or lvlRfar ? "resistance — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "resistance " + str.tostring(lvlR, format.mintick) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "support " + str.tostring(lvlS, format.mintick) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
 
-        bCol = not botOn or na(botAV) ? color.new(color.gray, 40) : botBuy ? color.new(#00c853, 20) : botAbove ? color.new(color.orange, 25) : color.new(#d50000, 25)
+        bCol = not botOn or na(botAV) ? color.new(color.gray, 40) : botConf ? color.new(#00c853, 20) : botAbove ? color.new(color.orange, 25) : color.new(#d50000, 25)
         gCol = not bqHave ? color.new(color.gray, 40) : bigBuy ? color.new(#1b5e20, 0) : botConf and bqN >= bigNeed ? color.new(#00c853, 25) : color.new(color.black, 20)
         table.cell(_t, 0, 11, "12  BUY BIG", text_color = color.white, bgcolor = color.new(#1b5e20, 10), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 11, bigSay, text_color = color.white, bgcolor = gCol, text_halign = text.align_left, text_size = txtSize)
