@@ -83,29 +83,29 @@ shortLen  = input.int(3, "Short (Bearish) Lookback", minval = 1, group = "1. Lin
 atrLen    = input.int(21, "ATR Length", minval = 1, group = "1. Line Settings")
 atrMultL  = input.float(3.0, "ATR Multiplier — LONG stop", minval = 0.1, step = 0.05, group = "1. Line Settings")
 atrMultS  = input.float(3.0, "ATR Multiplier — SHORT stop", minval = 0.1, step = 0.05, group = "1. Line Settings")
-exitConfirm  = input.int(1, "Bar closes needed to SELL (chart TF)", minval = 1, maxval = 4, tooltip = "1 = sell on the FIRST weekly close below the line (original behaviour). 2 = the break must hold for two weekly closes before it counts. Higher numbers kill whipsaws but give back more before you exit. Try 2 on assets where the HOLD vs TRADE row says HOLD.", group = "1. Line Settings")
+exitConfirm  = input.int(1, "Bar closes needed to SELL (chart TF)", minval = 1, maxval = 4, tooltip = "1 = sell on the FIRST weekly close below the line (original behaviour). 2 = the break must hold for two...", group = "1. Line Settings")
 entryConfirm = input.int(1, "Bar closes needed to BUY (chart TF)", minval = 1, maxval = 4, tooltip = "Same idea for entries. 1 = original.", group = "1. Line Settings")
-btUseStart = input.bool(true, "Limit stats to a start year", tooltip = "OFF = measure from the first bar TradingView loads, which is 1891 on GOLD and 1986 on MSFT. That makes Track Record, ASSET FIT and the return figures non-comparable between symbols, and on GOLD it includes the decades when the price was pegged by law. ON = every stat below is measured from your chosen year.", group = "4. Backtest Window")
+btUseStart = input.bool(true, "Limit stats to a start year", tooltip = "OFF = measure from the first bar TradingView loads, which is 1891 on GOLD and 1986 on MSFT. That makes...", group = "4. Backtest Window")
 btStartY   = input.int(2010, "Start year for all stats", minval = 1900, maxval = 2100, group = "4. Backtest Window")
-whipWeeks  = input.int(6, "Whipsaw = re-bought within N bars", minval = 1, maxval = 26, tooltip = "An exit that is followed by a BUY within N bars AT A HIGHER PRICE is counted as a whipsaw: you sold and paid up to get back in. The row at the bottom of the table counts them and totals what they cost.", group = "4. Backtest Window")
-adxMin = input.int(20, "Min ADX for a 'trending' check", minval = 10, maxval = 40, tooltip = "ADX measures how strongly price is trending, in either direction. Below this the market is ranging — the condition that produces whipsaw. 20 is the conventional threshold.", group = "4. Backtest Window")
-extMax = input.float(25.0, "Max % from the 200-day-equivalent mean", minval = 5, maxval = 100, step = 1, tooltip = "Beyond this distance from the long mean, a trend is stretched and mean-reversion risk rises. The check fails above it.", group = "4. Backtest Window")
-minHistDays = input.int(365, "Minimum symbol history (days) before trusting signals", minval = 30, maxval = 2000, tooltip = "Below this, the panel warns that the symbol has not existed long enough for a trailing stop to mean anything. Measured in calendar days, not bars — a newly listed stock produces plenty of 4H bars while still being only weeks old.", group = "4. Backtest Window")
-riskPct = input.float(1.0, "Account risk per trade %", minval = 0.1, maxval = 10, step = 0.1, tooltip = "How much of the account you are willing to lose if the trade goes straight from here to the flip line. The RISK & SIZE row turns this into a position size. A fresh signal with a tight stop allows a big position; the same signal after price has run far from the line allows a small one.", group = "4. Backtest Window")
-regimeMode = input.bool(false, "Regime mode — state, not orders", tooltip = "OFF = BUY/SELL labels and instructions, as now. ON = the chart just says what the state IS: green above the flip line, red below, with small bullish/bearish tags at the turns and no order language anywhere. IMPORTANT: this changes nothing in the maths. Trend, focus list, stats and returns are byte-identical either way. It changes what you are shown, not what the system does.", group = "5. Display Mode")
+whipWeeks  = input.int(6, "Whipsaw = re-bought within N bars", minval = 1, maxval = 26, tooltip = "An exit that is followed by a BUY within N bars AT A HIGHER PRICE is counted as a whipsaw: you sold and...", group = "4. Backtest Window")
+adxMin = input.int(20, "Min ADX for a 'trending' check", minval = 10, maxval = 40, tooltip = "ADX measures how strongly price is trending, in either direction. Below this the market is ranging — the...", group = "4. Backtest Window")
+extMax = input.float(25.0, "Max % from the 200-day-equivalent mean", minval = 5, maxval = 100, step = 1, tooltip = "Beyond this distance from the long mean, a trend is stretched and mean-reversion risk rises. The check...", group = "4. Backtest Window")
+minHistDays = input.int(365, "Minimum symbol history (days) before trusting signals", minval = 30, maxval = 2000, tooltip = "Below this, the panel warns that the symbol has not existed long enough for a trailing stop to mean...", group = "4. Backtest Window")
+riskPct = input.float(1.0, "Account risk per trade %", minval = 0.1, maxval = 10, step = 0.1, tooltip = "How much of the account you are willing to lose if the trade goes straight from here to the flip line. The...", group = "4. Backtest Window")
+regimeMode = input.bool(false, "Regime mode — state, not orders", tooltip = "OFF = BUY/SELL labels and instructions, as now. ON = the chart just says what the state IS: green above...", group = "5. Display Mode")
 
-scoutPct = input.float(0.80, "Scout entry: allowed while bearish confirmation <=", minval = 0.3, maxval = 1.0, step = 0.05, tooltip = "Share of the applicable confirmation checks. While bearish, a daily turn-up counts as a 'scout' entry only if the downtrend is NOT confirmed above this level. The old rule was <=4 of 5, which is about 0.80.", group = "4. Backtest Window")
+scoutPct = input.float(0.80, "Scout entry: allowed while bearish confirmation <=", minval = 0.3, maxval = 1.0, step = 0.05, tooltip = "Share of the applicable confirmation checks. While bearish, a daily turn-up counts as a 'scout' entry only...", group = "4. Backtest Window")
 minTrades = input.int(12, "Min completed trades before ASSET FIT / WHIPSAW / HOLD-vs-TRADE are shown", minval = 3, maxval = 50, tooltip = "5 trades is noise. Raise this for a stricter read.", group = "4. Backtest Window")
 
-minWin = input.float(35.0, "ASSET FIT: min win rate % (trend systems win < 50% by design)", minval = 10, maxval = 70, step = 1, tooltip = "ASSET FIT needs profit factor >= 1.5 AND a win rate above this. The old hard-coded 45 mislabelled normal trend-following results as MIXED.", group = "4. Backtest Window")
+minWin = input.float(35.0, "ASSET FIT: min win rate % (trend systems win < 50% by design)", minval = 10, maxval = 70, step = 1, tooltip = "ASSET FIT needs profit factor >= 1.5 AND a win rate above this. The old hard-coded 45 mislabelled normal...", group = "4. Backtest Window")
 
-sigMax     = input.int(12, "Show only the last N BUY/SELL labels (0 = all)", minval = 0, maxval = 200, tooltip = "Zoomed out on a daily chart the labels stack into a red wall. 12 keeps the picture readable. 0 draws every signal.", group = "2. Display")
+sigMax     = input.int(12, "Show only the last N BUY/SELL labels (0 = all)", minval = 0, maxval = 200, tooltip = "Zoomed out on a daily chart the labels stack into a red wall. 12 keeps the picture readable. 0 draws every...", group = "2. Display")
 sigSizeIn  = input.string("Small", "BUY/SELL label size", options = ["Tiny", "Small", "Normal"], group = "2. Display")
 
-showPro    = input.bool(true, "PRO LINES: long trendlines + channel + key levels", tooltip = "The long clean lines: best-fit falling/rising trendline through major swings, a parallel channel line, and the nearest horizontal level where price reacted several times.", group = "2. Display")
-proS       = input.int(10, "Pro lines: swing size (bars each side)", minval = 3, maxval = 40, tooltip = "Bigger = only major swings, fewer and longer lines. Smaller = tighter lines. Try 6 for a closer view, 16 for the big picture.", group = "2. Display")
+showPro    = input.bool(true, "PRO LINES: long trendlines + channel + key levels", tooltip = "The long clean lines: best-fit falling/rising trendline through major swings, a parallel channel line, and...", group = "2. Display")
+proS       = input.int(10, "Pro lines: swing size (bars each side)", minval = 3, maxval = 40, tooltip = "Bigger = only major swings, fewer and longer lines. Smaller = tighter lines. Try 6 for a closer view, 16...", group = "2. Display")
 proLB      = input.int(500, "Pro lines: look-back (bars)", minval = 100, maxval = 1500, group = "2. Display")
-proTol     = input.float(0.6, "Pro lines: tolerance %", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "How far a close may poke through a line before the line is rejected, and how close a swing must be to count as a touch.", group = "2. Display")
+proTol     = input.float(0.6, "Pro lines: tolerance %", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "How far a close may poke through a line before the line is rejected, and how close a swing must be to...", group = "2. Display")
 showChan   = input.bool(true, "Pro lines: parallel channel line", group = "2. Display")
 showKeyLv  = input.bool(true, "Pro lines: key horizontal levels", group = "2. Display")
 proColor   = input.color(color.new(#2962ff, 0), "Pro lines: trendline colour", group = "2. Display")
@@ -113,8 +113,8 @@ proLvlColor = input.color(color.new(#ffb300, 0), "Pro lines: key level colour", 
 
 showVL    = input.bool(true, "Vertical line at each BUY / SELL signal", tooltip = "A thin vertical line on the exact bar of each signal (same last-N cap as the labels).", group = "2. Display")
 showTLV   = input.bool(true, "Vertical line at each short-trendline break (TL)", tooltip = "Blue = broke above a falling line, orange = broke below a rising line. Keeps the last 10.", group = "2. Display")
-showProV  = input.bool(true, "Vertical line + label when price closes through a long trendline", tooltip = "Marks the exact bar where price closed above the long resistance line (green) or below the long support line (red).", group = "2. Display")
-proRecent = input.int(15, "Pro lines: keep a broken line visible for N bars", minval = 3, maxval = 60, tooltip = "A long line is normally dropped once price closes through it. This keeps it on the chart, with its breakout marker, for N bars after the break.", group = "2. Display")
+showProV  = input.bool(true, "Vertical line + label when price closes through a long trendline", tooltip = "Marks the exact bar where price closed above the long resistance line (green) or below the long support...", group = "2. Display")
+proRecent = input.int(15, "Pro lines: keep a broken line visible for N bars", minval = 3, maxval = 60, tooltip = "A long line is normally dropped once price closes through it. This keeps it on the chart, with its...", group = "2. Display")
 
 // ── 2. Display ──
 bullColor = input.color(color.new(#00e676, 0), "Bullish Color", group = "2. Display")
@@ -134,18 +134,18 @@ compactMode = input.bool(true, "Compact Mode (3-row table + smart note; untick f
 
 // ── 3. Scanner (bottom-right trend overview) ──
 showScanner = input.bool(true, "Show Focus List (bottom right)", group = "3. Focus List")
-scanUseChart = input.bool(false, "Focus List follows the chart timeframe", tooltip = "ON = the scan runs on whatever timeframe you are viewing, so switching chart TF switches the whole list with it. OFF = the list stays pinned to the timeframe below no matter what the chart shows.", group = "3. Focus List")
+scanUseChart = input.bool(false, "Focus List follows the chart timeframe", tooltip = "ON = the scan runs on whatever timeframe you are viewing, so switching chart TF switches the whole list...", group = "3. Focus List")
 scanTFin     = input.timeframe("W", "Focus List Timeframe (when not following)", group = "3. Focus List")
 scanTF       = scanUseChart ? timeframe.period : scanTFin
 scanPos     = input.string("Bottom Right", "Focus List Position", options = ["Bottom Right", "Top Right", "Middle Right", "Bottom Left"], group = "3. Focus List")
 maxShow     = input.int(20, "Max rows to display (most urgent first)", minval = 3, maxval = 32, group = "3. Focus List")
-scanConfirmed = input.bool(true, "Confirmed bars only (identical on every chart)", tooltip = "ON = each symbol is read at its own last CLOSED weekly bar. This is what makes the Focus List give the same answer whether you are on an NSE chart or a NASDAQ chart. OFF = live/forming bar, which drifts between charts because sessions and holidays differ.", group = "3. Focus List")
-scanBars      = input.int(750, "History window per symbol (bars)", minval = 100, maxval = 2000, tooltip = "Fixes how many bars each symbol is calculated over so the trailing-stop state cannot depend on how much history your current chart happens to have loaded. Keep this the same on every chart.", group = "3. Focus List")
+scanConfirmed = input.bool(true, "Confirmed bars only (identical on every chart)", tooltip = "ON = each symbol is read at its own last CLOSED weekly bar. This is what makes the Focus List give the...", group = "3. Focus List")
+scanBars      = input.int(750, "History window per symbol (bars)", minval = 100, maxval = 2000, tooltip = "Fixes how many bars each symbol is calculated over so the trailing-stop state cannot depend on how much...", group = "3. Focus List")
 scanNoFx      = input.bool(true, "Ignore chart currency conversion", tooltip = "Stops an INR chart from converting USD symbols (and vice versa).", group = "3. Focus List")
-addChartSym   = input.bool(true, "Always scan the chart's own symbol", tooltip = "Puts whatever symbol you have open into slot 32, so a chart that is not in the market set still gets a scanner row. Turn off to keep the fixed 32nd symbol instead.", group = "3. Focus List")
-mktFilter     = input.bool(false, "Show only symbols from the chart's market", tooltip = "ON = an NSE chart lists only NSE/BSE symbols, a US chart only US symbols, and so on. This removes the one-bar offset that appears when a symbol's exchange closes later than the chart's, which is the honest fix for it. Symbols entered without an exchange prefix always show. OFF = all 32 symbols, with the offset present on cross-market rows.", group = "3. Focus List")
-tolBars       = input.float(1.5, "Stale threshold (bars)", minval = 1.0, maxval = 5.0, step = 0.5, tooltip = "How far behind the newest symbol a row may read before it is flagged ⧗. Measured in scan bars, not days. 1.5 is the sensible floor for a mixed-exchange list: symbols on a later-closing exchange always report one bar behind on a chart whose session ended earlier, which is correct behaviour. Raise it if the warning fires constantly; lower it toward 1.0 only on a single-exchange list.", group = "3. Focus List")
-scanWarm      = input.int(120, "Warm-up bars before a symbol is trusted", minval = 40, maxval = 400, tooltip = "The trailing stop is path-dependent: it starts from an arbitrary seed and needs bars to forget it. Below this many bars a symbol's state is still partly an artefact of where its data began, so it is shown as 'warming up' rather than given a signal. Raise it if levels shift when you zoom; lower it if too many symbols are suppressed.", group = "3. Focus List")
+addChartSym   = input.bool(true, "Always scan the chart's own symbol", tooltip = "Puts whatever symbol you have open into slot 32, so a chart that is not in the market set still gets a...", group = "3. Focus List")
+mktFilter     = input.bool(false, "Show only symbols from the chart's market", tooltip = "ON = an NSE chart lists only NSE/BSE symbols, a US chart only US symbols, and so on. This removes the...", group = "3. Focus List")
+tolBars       = input.float(1.5, "Stale threshold (bars)", minval = 1.0, maxval = 5.0, step = 0.5, tooltip = "How far behind the newest symbol a row may read before it is flagged ⧗. Measured in scan bars, not days....", group = "3. Focus List")
+scanWarm      = input.int(120, "Warm-up bars before a symbol is trusted", minval = 40, maxval = 400, tooltip = "The trailing stop is path-dependent: it starts from an arbitrary seed and needs bars to forget it. Below...", group = "3. Focus List")
 showAsOf      = input.bool(true, "Show 'as of' date in Focus List header", tooltip = "Diagnostic: if two charts show the same as-of date, they are reading the same week.", group = "3. Focus List")
 // ── MARKET BUCKETS ───────────────────────────────────────────────────
 // Symbols only share a bar boundary if their sessions END together. NSE closes
@@ -429,7 +429,7 @@ fill(srcPlot, mlPlot, color = showFill ? (trend == 1 ? color.new(bullColor, 90) 
 // ON = compute everything exactly as before, draw only what sits near price.
 // Signals, scores and the Focus List are byte-identical either way - this
 // changes what is DRAWN, never what is decided.
-syncMode = input.bool(false, "Chart sync mode — hide MAs, S/R and PRO lines so the axis follows price", tooltip = "OFF (default) = unchanged; every line is drawn and the axis stretches to fit them all.\n\nON = the moving averages, the Auto S/R lines, the flip-level line and the projected PRO trendlines are not drawn, so TradingView scales the axis to the candles. Everything is still CALCULATED - the breakout engine still reads the PRO lines, the panel still reports them - they are simply not rendered.\n\nTurn this on when the candles look compressed into part of the pane.", group = "2. Display")
+syncMode = input.bool(false, "Chart sync mode — hide MAs, S/R and PRO lines so the axis follows price", tooltip = "OFF (default) = unchanged; every line is drawn and the axis stretches to fit them all.", group = "2. Display")
 plot(show200 and not syncMode ? ma200 : na, "200-day MA", color = color.new(color.red, 35), linewidth = 2)
 ma200bar = ta.sma(close, ma200barLen)
 plot(show200bar and not syncMode ? ma200bar : na, "200-bar MA", color = color.new(color.black, 0), linewidth = 3)
@@ -586,7 +586,7 @@ if barstate.islast and showSR
 // The breakout marker fires on the bar that CLOSES through a falling
 // resistance line (or below a rising support line).
 // ═══════════════════════════════════════════════════════════════
-showTL  = input.bool(true, "Show short-term trendlines + TL markers", tooltip = "Draws a line through the last two swing highs and the last two swing lows. Falling highs + a close above the line = breakout marker.", group = "2. Display")
+showTL  = input.bool(true, "Show short-term trendlines + TL markers", tooltip = "Draws a line through the last two swing highs and the last two swing lows. Falling highs + a close above...", group = "2. Display")
 tlPiv   = input.int(6, "Trendline pivot strength (bars each side)", minval = 2, maxval = 30, group = "2. Display")
 tlColor = input.color(color.new(#2962ff, 0), "Trendline colour", group = "2. Display")
 showMom = input.bool(true, "Show MOMENTUM row (RSI + MACD state)", group = "2. Display")
@@ -1650,34 +1650,33 @@ alertcondition(proBreakDn, title = "PRO LINE breakdown (closed below long suppor
 //   that matters when they disagree.
 // ═══════════════════════════════════════════════════════════════════════════
 boOn       = input.bool(true, "Enable BREAKOUT console", group = "6. Breakout Console")
-boMinTouch = input.int(2, "Horizontal level: minimum touches", minval = 1, maxval = 6, tooltip = "How many times price must have reacted at a price before it counts as a level.\n\n1 = every swing pivot is a level, which is what the Auto S/R rows above do and why they show levels that have never been defended.\n2 (default) = a price that turned the market away at least twice.\n3+ = heavily defended prices only; on fast movers you may get none.", group = "6. Breakout Console")
-boTolATR   = input.float(0.50, "Horizontal level: cluster width (ATR)", minval = 0.05, maxval = 3.0, step = 0.05, tooltip = "Two pivots within this distance are the SAME level and their touch counts merge. In ATR so it scales with the symbol instead of a fixed percentage that is too wide on one chart and too narrow on the next.", group = "6. Breakout Console")
-boBufPct   = input.float(0.15, "Breakout buffer (% beyond the level)", minval = 0.0, maxval = 5.0, step = 0.05, tooltip = "How far past the level a close must land to count. Stops a close landing exactly ON the level from registering — the most common false positive.", group = "6. Breakout Console")
-boFresh    = input.int(3, "Breakout stays 'live' for N bars", minval = 1, maxval = 20, tooltip = "A breakout is a dated event, not a permanent state. After this many bars the verdict stops calling it an entry. Keeps the console from saying BUY NOW for six months because something broke in March.", group = "6. Breakout Console")
-boVolSurge = input.float(1.50, "Volume surge required (x 20-bar avg)", minval = 0.5, maxval = 5.0, step = 0.1, tooltip = "Breakout-bar volume over the 20-bar average. A level breaking on below-average volume is the textbook failure: price moved, nobody came.", group = "6. Breakout Console")
+boMinTouch = input.int(2, "Horizontal level: minimum touches", minval = 1, maxval = 6, tooltip = "How many times price must have reacted at a price before it counts as a level.", group = "6. Breakout Console")
+boTolATR   = input.float(0.50, "Horizontal level: cluster width (ATR)", minval = 0.05, maxval = 3.0, step = 0.05, tooltip = "Two pivots within this distance are the SAME level and their touch counts merge. In ATR so it scales with...", group = "6. Breakout Console")
+boBufPct   = input.float(0.15, "Breakout buffer (% beyond the level)", minval = 0.0, maxval = 5.0, step = 0.05, tooltip = "How far past the level a close must land to count. Stops a close landing exactly ON the level from...", group = "6. Breakout Console")
+boFresh    = input.int(3, "Breakout stays 'live' for N bars", minval = 1, maxval = 20, tooltip = "A breakout is a dated event, not a permanent state. After this many bars the verdict stops calling it an...", group = "6. Breakout Console")
+boVolSurge = input.float(1.50, "Volume surge required (x 20-bar avg)", minval = 0.5, maxval = 5.0, step = 0.1, tooltip = "Breakout-bar volume over the 20-bar average. A level breaking on below-average volume is the textbook...", group = "6. Breakout Console")
 boRsiMax   = input.float(80.0, "RSI ceiling (above = move already spent)", minval = 60, maxval = 95, step = 1, tooltip = "RSI above this means buying the end of a run. This is the check that stops a BUY into a vertical blow-off.", group = "6. Breakout Console")
-boStopATR  = input.float(0.50, "Breakout stop: ATR below the broken level", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "A broken resistance becomes support; the trade is wrong if price closes back under it. NOT the Money Line, which on weekly can be 25% away and is a REGIME stop. Both are printed — size off the one you are trading.", group = "6. Breakout Console")
-boFlipMaxATR = input.float(4.0, "Polarity: stale once price is this many ATR above it", minval = 1.0, maxval = 20.0, step = 0.5, tooltip = "A broken resistance acts as support while price is near it. Once price has run this far above, it is no longer the level that matters and waiting for a pullback to it means waiting for a crash.\n\nIn ATR so it scales: 4 ATR is a long way on any symbol. The level is still drawn and still reported — it just stops being treated as a live entry.", group = "6. Breakout Console")
-boView     = input.string("Summary (10 lines)", "Console view", options = ["Summary (10 lines)", "Full detail (26 rows)"], tooltip = "SUMMARY is the whole panel in ten lines, built so the first three answer the only question that matters: what does each model say, and do they agree.\n\nFULL DETAIL is every check, every level and every target — a reference rather than a summary. Nothing is lost by using Summary; it is the same numbers, chosen.", group = "6. Breakout Console")
+boStopATR  = input.float(0.50, "Breakout stop: ATR below the broken level", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "A broken resistance becomes support; the trade is wrong if price closes back under it. NOT the Money Line,...", group = "6. Breakout Console")
+boFlipMaxATR = input.float(4.0, "Polarity: stale once price is this many ATR above it", minval = 1.0, maxval = 20.0, step = 0.5, tooltip = "A broken resistance acts as support while price is near it. Once price has run this far above, it is no...", group = "6. Breakout Console")
 boShowLvl  = input.bool(true, "Draw the defended horizontal levels", group = "6. Breakout Console")
 boShowVert = input.bool(true, "Vertical line at each scored breakout", group = "6. Breakout Console")
 boPos      = input.string("Top Right", "Console position", options = ["Top Right", "Top Left", "Middle Right", "Bottom Left", "Bottom Right"], group = "6. Breakout Console")
 suOn       = input.bool(true, "Enable SETUP QUALITY (base, new high, squeeze, targets)", group = "7. Setup Quality")
-suBaseMax  = input.float(25.0, "Base: max range width (% of its low)", minval = 3.0, maxval = 80.0, step = 0.5, tooltip = "How tight a stretch must be to count as a base. The script tries 200, 120, 80, 50, 30 and 20 bars and takes the LONGEST that fits inside this width.\n\n25% suits weekly equities. Crypto needs 40-50% because a quiet quarter there is still a 40% range. Too tight and nothing qualifies; too loose and an ordinary downtrend reads as a base.", group = "7. Setup Quality")
-suBaseMin  = input.int(30, "Base: minimum bars to call it a base", minval = 10, maxval = 200, tooltip = "Below this the range is chop, not a base. On weekly, 30 bars is about seven months — roughly where enough holders are trapped for a breakout to matter.", group = "7. Setup Quality")
-suSqzPct   = input.float(15.0, "Squeeze: within % of the tightest band in 100 bars", minval = 2.0, maxval = 60.0, step = 1.0, tooltip = "Bollinger width against its own lowest reading over 100 bars. Inside this margin the market is coiled.\n\nThis is a VOLATILITY state, not a direction. A squeeze says a big move is near; it never says which way. It belongs in the quality grade, never in the buy/sell decision.", group = "7. Setup Quality")
+suBaseMax  = input.float(25.0, "Base: max range width (% of its low)", minval = 3.0, maxval = 80.0, step = 0.5, tooltip = "How tight a stretch must be to count as a base. The script tries 200, 120, 80, 50, 30 and 20 bars and...", group = "7. Setup Quality")
+suBaseMin  = input.int(30, "Base: minimum bars to call it a base", minval = 10, maxval = 200, tooltip = "Below this the range is chop, not a base. On weekly, 30 bars is about seven months — roughly where enough...", group = "7. Setup Quality")
+suSqzPct   = input.float(15.0, "Squeeze: within % of the tightest band in 100 bars", minval = 2.0, maxval = 60.0, step = 1.0, tooltip = "Bollinger width against its own lowest reading over 100 bars. Inside this margin the market is coiled.", group = "7. Setup Quality")
 suShowBox  = input.bool(true, "Draw the base box", group = "7. Setup Quality")
 suShowTgt  = input.bool(true, "Draw measured-move targets (1.0 / 1.618)", group = "7. Setup Quality")
 suShowATH  = input.bool(true, "Draw the 52-week and all-time high lines", group = "7. Setup Quality")
 wgOn       = input.bool(true, "Draw the converging pair / channel + apex", group = "8. Structure")
-wgMaxBar   = input.int(60, "Apex: ignore if further out than N bars", minval = 5, maxval = 400, tooltip = "Two nearly-parallel lines meet hundreds of bars away, which is not an apex anyone trades. Past this the pair is reported as a channel and the lines are not drawn to a meeting point.", group = "8. Structure")
-wgFlat     = input.float(0.02, "Flat-slope tolerance (ATR per bar)", minval = 0.001, maxval = 0.5, step = 0.005, tooltip = "A slope smaller than this per bar counts as horizontal, which is what separates an ASCENDING triangle (flat top, rising lows) from a symmetrical one. In ATR so it means the same on every symbol.", group = "8. Structure")
+wgMaxBar   = input.int(60, "Apex: ignore if further out than N bars", minval = 5, maxval = 400, tooltip = "Two nearly-parallel lines meet hundreds of bars away, which is not an apex anyone trades. Past this the...", group = "8. Structure")
+wgFlat     = input.float(0.02, "Flat-slope tolerance (ATR per bar)", minval = 0.001, maxval = 0.5, step = 0.005, tooltip = "A slope smaller than this per bar counts as horizontal, which is what separates an ASCENDING triangle...", group = "8. Structure")
 wgShowMid  = input.bool(true, "Channel: draw the midline (3rd rail)", group = "8. Structure")
 flagOn     = input.bool(true, "Detect BULL / BEAR FLAGS (pole + channel)", group = "8. Structure")
-flagPoleLen = input.int(20, "Flag: bars of 'pole' to look back through", minval = 5, maxval = 100, tooltip = "How far back to look for the sharp move that the flag is resting after. The pole is what makes a flag a CONTINUATION pattern — without one, a falling channel is just a downtrend.", group = "8. Structure")
-flagLen    = input.int(12, "Flag: maximum bars the flag itself may run", minval = 3, maxval = 60, tooltip = "A flag is a pause, not a trend. Past this many bars the pullback has become its own move and should not be traded as a continuation.", group = "8. Structure")
+flagPoleLen = input.int(20, "Flag: bars of 'pole' to look back through", minval = 5, maxval = 100, tooltip = "How far back to look for the sharp move that the flag is resting after. The pole is what makes a flag a...", group = "8. Structure")
+flagLen    = input.int(12, "Flag: maximum bars the flag itself may run", minval = 3, maxval = 60, tooltip = "A flag is a pause, not a trend. Past this many bars the pullback has become its own move and should not be...", group = "8. Structure")
 flagPoleMin = input.float(20.0, "Flag: minimum pole size (%)", minval = 3.0, maxval = 200.0, step = 1.0, tooltip = "How far price must have run before the pause counts as a pole. Too small and every wobble becomes a flag.", group = "8. Structure")
-flagRetMax = input.float(50.0, "Flag: maximum retrace of the pole (%)", minval = 15.0, maxval = 90.0, step = 5.0, tooltip = "A flag that gives back more than this is no longer a pause in the move — it is a reversal of it. 50% is the usual line; 38% is stricter and catches only the tightest flags.", group = "8. Structure")
+flagRetMax = input.float(50.0, "Flag: maximum retrace of the pole (%)", minval = 15.0, maxval = 90.0, step = 5.0, tooltip = "A flag that gives back more than this is no longer a pause in the move — it is a reversal of it. 50% is...", group = "8. Structure")
 
 // ── DEFENDED HORIZONTAL LEVELS ───────────────────────────────────────
 // Reuses ph / pl from the Auto S/R block above — no second pivot scan.
@@ -1774,13 +1773,21 @@ f_suBase(float _maxW) =>
     [bb, bh, bl]
 
 f_suSqueeze(float _pct) =>
+    // CW10004: a ta.* call inside a ternary runs only on some bars, which
+    // corrupts its own history. Hoisted out of the conditional.
     _basis = ta.sma(close, 20)
-    _w     = _basis > 0 ? (4 * ta.stdev(close, 20)) / _basis * 100 : na
+    _sd    = ta.stdev(close, 20)
+    _w     = _basis > 0 ? (4 * _sd) / _basis * 100 : na
     _lo    = ta.lowest(_w, 100)
     not na(_w) and not na(_lo) and _lo > 0 and _w <= _lo * (1 + _pct / 100)
 
 [suBars, suHi, suLo] = f_suBase(suBaseMax)
-suSqz    = suOn and f_suSqueeze(suSqzPct)
+// CW10002, and a real fault rather than a style note: `suOn and f_suSqueeze()`
+// short-circuits, so with the input OFF the function never ran and its
+// ta.lowest history went stale — then reading true the moment it was switched
+// back on. Called unconditionally, gated afterwards.
+suSqzRaw = f_suSqueeze(suSqzPct)
+suSqz    = suOn and suSqzRaw
 suIsBase = suOn and suBars >= suBaseMin
 // Tested against the PREVIOUS bar's ceiling, for the same reason as every
 // other break here.
@@ -1992,8 +1999,8 @@ boSizePc = na(boRisk) or boEntry <= 0 or boRisk <= 0 ? na : riskPct / (boRisk / 
 //    and the console says which it is rather than pretending to know.
 emaFastLen = input.int(9,  "Fast EMA", minval = 2, maxval = 50, group = "9. Fast pair & polarity")
 emaSlowLen = input.int(21, "Slow EMA", minval = 3, maxval = 100, group = "9. Fast pair & polarity")
-emaAtrLen  = input.int(11, "ATR length for the extension reading", minval = 2, maxval = 50, tooltip = "Shorter than the 21 used by the Money Line, because this measures how stretched price is RIGHT NOW rather than how wide to set a regime stop.", group = "9. Fast pair & polarity")
-emaExtMax  = input.float(3.0, "Extended beyond this many ATR from the slow EMA", minval = 0.5, maxval = 10.0, step = 0.25, tooltip = "Past this the move is stretched and a fresh entry is paying for someone else's position. It is a warning on the LINES SAY row, never a sell signal — leaders stay extended for a long time.", group = "9. Fast pair & polarity")
+emaAtrLen  = input.int(11, "ATR length for the extension reading", minval = 2, maxval = 50, tooltip = "Shorter than the 21 used by the Money Line, because this measures how stretched price is RIGHT NOW rather...", group = "9. Fast pair & polarity")
+emaExtMax  = input.float(3.0, "Extended beyond this many ATR from the slow EMA", minval = 0.5, maxval = 10.0, step = 0.25, tooltip = "Past this the move is stretched and a fresh entry is paying for someone else's position. It is a warning...", group = "9. Fast pair & polarity")
 emaShow    = input.bool(true, "Plot the fast pair", group = "9. Fast pair & polarity")
 
 f_emaExt(int _f, int _s, int _a) =>
@@ -2071,8 +2078,8 @@ boFlipLive = boFlipOn and not boFlipFar
 // stop may well do better. The row reports the state and does not override the
 // Money Line, the gate or k1-k10.
 profOn    = input.bool(true, "Weekly 9 EMA rule (reclaim / respect / lose)", group = "10. Weekly 9 EMA rule")
-profWeeks = input.int(9, "EMA length in WEEKS (not bars)", minval = 2, maxval = 52, tooltip = "Converted to bars for whatever chart you are on, so it stays a NINE-WEEK average everywhere. On a weekly chart that is exactly a 9 EMA; on daily it becomes a 45-day EMA covering the same span.", group = "10. Weekly 9 EMA rule")
-profNear  = input.float(0.5, "'At the line' = within this many ATR of it", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "The method asks for an entry as close to the line as possible, because that is what makes the stop small. Inside this distance the console calls it an entry; beyond it, a wait.", group = "10. Weekly 9 EMA rule")
+profWeeks = input.int(9, "EMA length in WEEKS (not bars)", minval = 2, maxval = 52, tooltip = "Converted to bars for whatever chart you are on, so it stays a NINE-WEEK average everywhere. On a weekly...", group = "10. Weekly 9 EMA rule")
+profNear  = input.float(0.5, "'At the line' = within this many ATR of it", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "The method asks for an entry as close to the line as possible, because that is what makes the stop small....", group = "10. Weekly 9 EMA rule")
 profShow  = input.bool(true, "Plot the weekly 9 EMA", group = "10. Weekly 9 EMA rule")
 
 f_prof(int _wk, float _atr) =>
@@ -2196,9 +2203,6 @@ f_boKind(float _c) => _c == 7 ? "BULL FLAG" : _c == -7 ? "BEAR FLAG" : _c == 6 ?
 // printed a red "FAILED" gate and red rows describing a breakout that never
 // happened — seen on TCS weekly, "nothing broke in the last 3 bars" above
 // six red rows.
-f_boTick(bool _v) => not boAssess ? "·" : _v ? "✓" : "✗"
-f_boCol(bool _v)  => not boAssess ? color.new(color.gray, 60) : _v ? color.new(#00c853, 55) : color.new(#d50000, 55)
-f_boTxt(bool _v, string _s) => not boAssess ? "—" : _s
 
 // The method's own branches fire on price-vs-line alone, which is correct for
 // the method but incomplete as advice. On TSLA weekly it read "AT THE 9-WEEK
@@ -2253,71 +2257,6 @@ bothBuy  = atrBull and lnBull
 bothSell = not atrBull and lnBear
 agreeWord = bothBuy ? "BOTH AGREE — BUY SIDE" : bothSell ? "BOTH AGREE — SELL SIDE" : "SPLIT — they disagree, wait"
 
-// ── WHAT THE LINES SAY ───────────────────────────────────────────────
-// One sentence, read ONLY from structure — where price sits against the
-// levels, the flip, the base and the fast pair. It deliberately does not
-// consult RSI, MACD or ADX: those already have rows, and the question this
-// answers is "given the lines, what do I do", which is the question a posted
-// chart answers and this script never did.
-//
-// Ordered by RISK, not by how exciting the setup is. A retest that holds is
-// first because its stop is a few percent away; a fresh breakout is second
-// because its stop is the broken level; an extended chart is a WAIT however
-// strong it looks, since the stop there is far enough to ruin the arithmetic.
-f_linesSay() =>
-    _r = ""
-    if not boOn
-        _r := "console off"
-    else if thinHist
-        _r := "too little history to read the lines"
-    else if profOn and profLost
-        _r := "LOST THE " + str.tostring(profWeeks, "#") + "-WEEK EMA on this close (" + str.tostring(profEma, format.mintick) + "). That is the exit for this method — a wick through it was not, this close is."
-    else if profOn and profReclaim
-        _r := "RECLAIMED THE " + str.tostring(profWeeks, "#") + "-WEEK EMA at " + str.tostring(profEma, format.mintick) + ". This is the entry: buy near the line, exit on a close back under it." + f_emaCaveat()
-    else if profOn and profRespect and not emaOver
-        _r := "RESPECTED THE " + str.tostring(profWeeks, "#") + "-WEEK EMA — wicked into " + str.tostring(profEma, format.mintick) + " and closed above. Lowest-risk add there is; stop on a close below." + f_emaCaveat()
-    else if profOn and profAtLine and not emaOver
-        _r := "AT THE " + str.tostring(profWeeks, "#") + "-WEEK EMA (" + str.tostring(profDist, "#.#") + "x ATR from it). This is where the method wants you in, because the stop is small here." + f_emaCaveat()
-    else if boFlipLive and boFlipRe and not emaOver and not na(boFlipPct) and boFlipPct <= 8
-        _r := "BUY THE RETEST — " + str.tostring(boFlipLvl, format.mintick) + " was resistance, held as support, price " + str.tostring(boFlipPct, "#.#") + "% above it. Stop just under it: the tightest entry on this chart."
-    else if boDir == 1 and boGate and boScore >= 6
-        _r := "BUY THE BREAK of " + f_boKind(boKindAt) + " at " + str.tostring(boLvlAt, format.mintick) + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick)) + "."
-    // The short side was missing entirely: every breakout branch tested
-    // boDir == 1, so a live SELL fell through all of them and landed on the
-    // base branch. Seen on NIFTYBEES weekly — "STRONG SELL" in the header
-    // sitting above "IN A 50-BAR BASE, wait" at the bottom. A verdict and a
-    // reading that contradict each other are worse than either one alone.
-    else if boDir == -1 and boGate and boScore >= 6
-        _r := "SELL / STAY OUT — " + f_boKind(boKindAt) + " broke DOWN at " + str.tostring(boLvlAt, format.mintick) + ". If you are long, that was the exit. Do not buy the dip while this holds; the level to reclaim is " + str.tostring(boLvlAt, format.mintick) + "."
-    else if boDir == -1
-        _r := "BREAKING DOWN (" + f_boKind(boKindAt) + ") on only " + str.tostring(boScore, "#") + "/10. Stand aside — not a long setup, and not yet a clean short."
-    else if boDir == 1 and boPending
-        _r := "A LEVEL IS GIVING WAY but the bar has not closed. Nothing to do until it does."
-    else if emaOver
-        _r := "EXTENDED — " + str.tostring(emaX21, "#.#") + " ATR above the " + str.tostring(emaSlowLen, "#") + " EMA. Do not start here; wait for a pullback toward " + str.tostring(emaS, format.mintick) + "."
-    else if boFlipLive and not boFlipRe
-        _r := "ABOVE A BROKEN LEVEL at " + str.tostring(boFlipLvl, format.mintick) + ", not yet retested. Either buy a pullback into it or stand aside — chasing here has no close stop."
-    // MSFT weekly had nothing to say for a name in a clean uptrend that is
-    // merely away from its entry zone: not at the line, not extended enough to
-    // warn, no base, no fresh break. The ladder skipped to a wedge 33 bars from
-    // its apex. Holding something that is working is an answer, and it was
-    // missing.
-    else if profOn and profAbove and not na(profBars) and profBars >= 3 and trend == 1
-        _r := "HOLDING ABOVE THE " + str.tostring(profWeeks, "#") + "-WEEK EMA for " + str.tostring(profBars, "#") + " bars" + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim") + ". Nothing to do but hold. Add only back near " + str.tostring(profEma, format.mintick) + "; the exit is a close below it."
-    else if suIsBase and suSqz
-        _r := "COILED — " + str.tostring(suBars, "#") + "-bar base and a volatility squeeze. Nothing to do yet; set an alert at " + str.tostring(suHi, format.mintick) + "."
-    else if suIsBase
-        _r := "IN A " + str.tostring(suBars, "#") + "-BAR BASE. The decision is a close above " + str.tostring(suHi, format.mintick) + " or below " + str.tostring(suLo, format.mintick) + "."
-    else if not na(emaS) and close < emaS and trend == -1
-        _r := "BELOW THE " + str.tostring(emaSlowLen, "#") + " EMA and below the Money Line. No long setup — this is a downtrend, not a dip."
-    else if wgApexOk
-        _r := wgType + " closing in " + str.tostring(wgApexN, "#") + " bars. Wait for the resolution; do not pre-position inside a coil."
-    else if not na(boRes)
-        _r := "NO SETUP. Next decision is " + str.tostring(boRes, format.mintick) + " overhead (" + str.tostring((boRes - close) / close * 100, "#.#") + "% away)" + (na(boSup) ? "." : ", support " + str.tostring(boSup, format.mintick) + ".")
-    else
-        _r := "NO SETUP and no defended level above — price is in open air. Wait for structure to form."
-    _r
-
 // ── WHAT TO DO ───────────────────────────────────────────────────────
 // LINES SAY explains the READING. This is the INSTRUCTION, with the numbers
 // already filled in, so the row can be acted on without doing arithmetic off
@@ -2349,7 +2288,7 @@ f_whatToDo() =>
     else if boDir == 1 and boGate and boScore >= 6
         _a := "BUY " + (na(boSizePc) ? "" : str.tostring(math.min(boSizePc, 100), "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk") + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "."
     else if profOn and (profReclaim or profRespect or profAtLine) and not emaOver
-        _a := (trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + str.tostring(profEma, format.mintick) + " — the " + str.tostring(profWeeks, "#") + "-week EMA. Stop on a CLOSE below it." + (trend == -1 ? " The ATR model is bearish, so this is a scout entry against the regime." : " Size up here because the stop is close.")
+        _a := (trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + str.tostring(profEma, format.mintick) + " — the " + str.tostring(profWeeks, "#") + "-week EMA. Stop on a CLOSE below it." + (trend == -1 ? "" : " Size up here because the stop is close.") + f_emaCaveat()
     else if boFlipLive and boFlipRe and not emaOver
         _a := "BUY the retest of " + str.tostring(boFlipLvl, format.mintick) + ". Stop just under it — tightest stop available on this chart."
     else if emaOver
@@ -2384,10 +2323,10 @@ f_boSummary(table _t) =>
     table.cell(_t, 1, 1, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + str.tostring(profWeeks, "#") + "wEMA " + (lnV1 > 0 ? "▲ above" : "▼ below") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : "▼ below") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : "▼ below"), text_color = color.white, bgcolor = lCol, text_halign = text.align_left, text_size = txtSize)
 
     table.cell(_t, 0, 2, "3  VERDICT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 2, agreeWord + (bothBuy or bothSell ? "   ·   " + str.tostring(boScore, "#") + "/10 on the break" : "   ·   one says one thing, the other says the opposite"), text_color = color.white, bgcolor = vCol, text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 2, agreeWord + (boDir == 0 ? "   ·   nothing has broken recently" : "   ·   " + f_boKind(boKindAt) + " broke " + str.tostring(boBrkAge, "#") + " bar(s) ago, " + str.tostring(boScore, "#") + "/10" + (boBrkUnconf ? " ⧗ bar not closed" : boGate ? " ✓gate" : " ✗gate")), text_color = color.white, bgcolor = vCol, text_halign = text.align_left, text_size = txtSize)
 
     table.cell(_t, 0, 3, "4  ▶ DO THIS", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 3, f_whatToDo(), text_color = color.white, bgcolor = color.new(#00695c, 10), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 3, boWTD, text_color = color.white, bgcolor = color.new(#00695c, 10), text_halign = text.align_left, text_size = txtSize)
 
     table.cell(_t, 0, 4, "5  NUMBERS", text_color = color.white, bgcolor = color.new(color.navy, 15), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 4, boDir == 0 or na(boStop) ? "no live setup — nothing to size yet" : "entry " + str.tostring(boEntry, format.mintick) + "   stop " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)" + (na(boTarget) ? "" : "   target " + str.tostring(boTarget, format.mintick) + boTgtSrc) + (na(boRR) ? "" : "   R:R " + str.tostring(boRR, "#.##")) + (na(boSizePc) ? "" : "   size " + str.tostring(math.min(boSizePc, 100), "#.#") + "%"), text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_left, text_size = txtSize)
@@ -2408,94 +2347,12 @@ f_boSummary(table _t) =>
     table.cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
     0
 
+// CW10003: built every bar at global scope instead of inside the last-bar
+// table block, so nothing in it can drift between calls.
+boWTD = f_whatToDo()
+
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
 var table bot = table.new(boPosMap, 2, 26, border_width = 2)
-
-f_boConsole(table _t) =>
-    table.clear(_t, 0, 0, 1, 25)
-    vCol = boVerdict == "STRONG BUY" ? color.new(#00c853, 0) : boVerdict == "BUY" ? color.new(#00c853, 30) : boVerdict == "STRONG SELL" ? color.new(#d50000, 0) : boVerdict == "SELL" ? color.new(#d50000, 30) : boVerdict == "NO SETUP" ? color.new(color.gray, 40) : color.new(color.orange, 25)
-    table.cell(_t, 0, 0, "BREAKOUT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 0, boVerdict + (boDir == 0 ? "" : "   " + str.tostring(boScore, "#") + "/10"), text_color = color.white, bgcolor = vCol, text_halign = text.align_center, text_size = txtSize)
-    // WHAT TO DO sits at row 1, immediately under the verdict, and not at the
-    // bottom where it was. The console is 26 rows tall; on SPX weekly at Small
-    // text it ran off the bottom of the chart and the single most important
-    // row was the one you could not see. Order by importance, not by the order
-    // the features were written.
-    table.cell(_t, 0, 1, "▶ WHAT TO DO", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 1, f_whatToDo(), text_color = color.white, bgcolor = boDir == 1 and boGate ? color.new(#00c853, 15) : boDir == -1 and boGate ? color.new(#d50000, 15) : boPending or boBrkUnconf ? color.new(color.orange, 25) : color.new(#004d40, 10), text_halign = text.align_left, text_size = txtSize)
-    what = boDir == 0 ? "nothing broke in the last " + str.tostring(boFresh, "#") + " bars" : f_boKind(boKindAt) + "  ·  " + str.tostring(boBrkAge, "#") + " bar(s) ago" + (boBrkUnconf ? "   ⧗ BAR NOT CLOSED" : "")
-    table.cell(_t, 0, 2, "What broke", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 2, what, text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 3, "Level", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 3, na(boLvlAt) or boDir == 0 ? "—" : str.tostring(boLvlAt, format.mintick) + "   (now " + str.tostring(close, format.mintick) + ")", text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 4, "GATE  vol + close", text_color = color.white, bgcolor = color.new(color.teal, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 4, not boAssess ? "— nothing to assess" : boGate ? "✓ PASSED" : boPending ? "⧗ NOT SETTLED — bar still filling" : "✗ FAILED — not an entry at any score", text_color = color.white, bgcolor = not boAssess ? color.new(color.gray, 60) : boGate ? f_boCol(true) : boPending ? color.new(color.orange, 35) : f_boCol(false), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 5, f_boTick(k1) + " Volume surge", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 5, f_boTxt(k1, na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x   (need " + str.tostring(boVolSurge, "#.##") + "x)" + (boBrkUnconf and not k1 ? "  ⧗ still filling" : "")), text_color = color.white, bgcolor = k1 ? f_boCol(true) : boBrkUnconf ? color.new(color.orange, 35) : f_boCol(false), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 6, f_boTick(k2) + " Close strength", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 6, f_boTxt(k2, na(boCloAt) ? "—" : str.tostring(boCloAt * 100, "#") + "% of the bar's range"), text_color = color.white, bgcolor = f_boCol(k2), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 7, f_boTick(k3 and k4) + " RSI", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 7, na(rsiV) ? "—" : str.tostring(rsiV, "#.#") + (not boAssess ? "" : (k4 ? "" : "  ⚠ spent") + (k3 ? "" : "  ⚠ wrong side of 50")), text_color = color.white, bgcolor = f_boCol(k3 and k4), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 8, f_boTick(k5 and k6) + " MACD", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 8, na(macdH) ? "—" : (k5 ? "cross ✓" : "cross ✗") + "    " + (k6 ? "thrust expanding ✓" : "thrust flat / fading ✗"), text_color = color.white, bgcolor = f_boCol(k5 and k6), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 9, f_boTick(k7) + " ATR Money Line", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 9, (trend == 1 ? "▲ bull" : "▼ bear") + (not boAssess ? "" : k7 ? "  — agrees" : "  — DISAGREES (scout entry)"), text_color = color.white, bgcolor = f_boCol(k7), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 10, f_boTick(k8) + " 200-bar mean", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 10, na(ma200bar) ? "—" : str.tostring(ma200bar, format.mintick), text_color = color.white, bgcolor = f_boCol(k8), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 11, f_boTick(k9) + " ADX trending", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 11, na(adxV) ? "—" : str.tostring(adxV, "#.#") + "   (need " + str.tostring(adxMin, "#") + ")", text_color = color.white, bgcolor = f_boCol(k9), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 12, f_boTick(k10) + " Not over-extended", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 12, na(ext200) ? "—" : f_pc(ext200) + " from the mean   (max " + str.tostring(extMax, "#") + "%)", text_color = color.white, bgcolor = f_boCol(k10), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 13, "Entry / Stop", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 13, boDir == 0 or na(boStop) ? "—" : str.tostring(boEntry, format.mintick) + "  /  " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)", text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 14, "Target / R:R", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 14, na(boRR) ? "— (no level beyond)" : str.tostring(boTarget, format.mintick) + boTgtSrc + "    R:R " + str.tostring(boRR, "#.##") + (boRR < 1.5 ? "  ⚠ thin" : ""), text_color = color.white, bgcolor = na(boRR) or boRR < 1.5 ? color.new(color.orange, 35) : color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 15, "Size at " + str.tostring(riskPct, "#.#") + "% risk", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 15, na(boSizePc) ? "—" : str.tostring(math.min(boSizePc, 100), "#.#") + "% of account", text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
-    // the two models side by side, never merged: a breakout under a bearish
-    // Money Line is the scout entry, a bullish line with no breakout is a
-    // trend you are late to. Averaging them would mean neither.
-    table.cell(_t, 0, 16, "MODELS", text_color = color.white, bgcolor = color.new(color.gray, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 16, boDir == 0 ? "lines: quiet   ·   ATR: " + (trend == 1 ? "bull" : "bear") : (boDir == 1 ? "lines: BULL" : "lines: BEAR") + "   ·   ATR: " + (trend == 1 ? "bull" : "bear") + (k7 ? "   → ALIGNED" : "   → SPLIT"), text_color = color.white, bgcolor = k7 and boDir != 0 ? color.new(#00c853, 45) : color.new(color.gray, 45), text_halign = text.align_center, text_size = txtSize)
-    // touches AND age: a level defended twice over two years is a different
-    // object from one defended twice last month, and only the pair says which
-    rAge = na(boResBar) ? na : bar_index - boResBar
-    sAge = na(boSupBar) ? na : bar_index - boSupBar
-    table.cell(_t, 0, 17, "Next level", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 17, (na(boRes) ? "R —" : "R " + str.tostring(boRes, format.mintick) + "  " + str.tostring(boResHit, "#") + "t/" + str.tostring(rAge, "#") + "b") + "   ·   " + (na(boSup) ? "S —" : "S " + str.tostring(boSup, format.mintick) + "  " + str.tostring(boSupHit, "#") + "t/" + str.tostring(sAge, "#") + "b"), text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
-    // SETUP sits BELOW the verdict, not inside it: whether the thing that
-    // broke was worth breaking is a different question from whether the
-    // break is real.
-    suWhy = not suOn ? "off" : (suIsBase ? str.tostring(suBars, "#") + "-bar base (" + str.tostring(f_suW(suHi, suLo), "#.#") + "% wide)" : "no base — " + (suBars > 0 ? str.tostring(suBars, "#") + " bars only" : "range too wide")) + (suNewATH ? "  ·  AT ALL-TIME HIGH" : suNew52 ? "  ·  at 52w high" : "") + (suSqz ? "  ·  SQUEEZE" : "")
-    table.cell(_t, 0, 18, "SETUP  " + suGrade, text_color = color.white, bgcolor = color.new(#00bcd4, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 18, suWhy, text_color = color.white, bgcolor = suGrade == "A+" ? color.new(#00c853, 10) : suGrade == "A" ? color.new(#00c853, 40) : suGrade == "B" ? color.new(color.orange, 35) : color.new(color.gray, 45), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 19, "Measured move", text_color = color.white, bgcolor = color.new(#9c27b0, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 19, not suIsBase or na(suTgt1) ? "— (no base to measure)" : "T1 " + str.tostring(suTgt1, format.mintick) + "   T2 " + str.tostring(suTgt2, format.mintick) + "   (base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) + ")", text_color = color.white, bgcolor = color.new(#9c27b0, 45), text_halign = text.align_center, text_size = txtSize)
-    // a pattern is not a direction: a symmetrical triangle resolves either
-    // way and a falling wedge is bullish only by convention, so this names
-    // the structure and says when the decision is due — it does not vote.
-    wgWhy = not wgOn ? "off" : not wgHave ? "no pair yet — need two swing highs and two swing lows" : wgCrossed ? wgType + "  ·  stale until the next swing confirms" : wgType + (wgApexOk ? "  ·  apex in " + str.tostring(wgApexN, "#") + " bars" : "") + "  ·  gap " + str.tostring(wgPct, "#.#") + "%" + (na(wgPos) ? "" : "  ·  price " + (wgPos > 110 ? "ABOVE the upper rail" : wgPos < -10 ? "BELOW the lower rail" : str.tostring(wgPos, "#") + "% up the range"))
-    table.cell(_t, 0, 20, "STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 15), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 20, wgWhy, text_color = color.white, bgcolor = not wgHave ? color.new(color.gray, 55) : wgApexOk ? color.new(#2962ff, 30) : color.new(#2962ff, 55), text_halign = text.align_center, text_size = txtSize)
-    // extension in ATR, not percent: "1.5 ATR above the 21 EMA" means the same
-    // thing on every symbol, where "10% above" does not.
-    table.cell(_t, 0, 21, str.tostring(emaFastLen, "#") + " / " + str.tostring(emaSlowLen, "#") + " EMA", text_color = color.white, bgcolor = color.new(#ff5252, 30), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 21, na(emaF) ? "—" : str.tostring(emaF, format.mintick) + "  /  " + str.tostring(emaS, format.mintick) + "   ·   " + str.tostring(emaX9, "#.#") + "x / " + str.tostring(emaX21, "#.#") + "x ATR   (" + (emaPctS >= 0 ? str.tostring(emaPctS, "#.#") + "% above the " : str.tostring(-emaPctS, "#.#") + "% BELOW the ") + str.tostring(emaSlowLen, "#") + ")" + (emaOver ? "  ⚠ EXTENDED" : "") + (na(emaBarsAbove) ? "" : "   ·   " + str.tostring(emaBarsAbove, "#") + " bars above"), text_color = color.white, bgcolor = emaOver ? color.new(color.orange, 30) : color.new(#ff5252, 55), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 22, "POLARITY", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 22, not boFlipOn ? "— no level taken yet" : "resistance → support at " + str.tostring(boFlipLvl, format.mintick) + "   (" + str.tostring(boFlipPct, "#.#") + "% below price" + (na(boFlipATR) ? "" : ", " + str.tostring(boFlipATR, "#.#") + "x ATR") + ")" + (boFlipFar ? "   ⌛ STALE — price has run too far for this to be the live support" : boFlipRe ? "   ✓ retested and held" : "   · untested"), text_color = color.white, bgcolor = not boFlipOn ? color.new(color.gray, 55) : boFlipFar ? color.new(color.gray, 45) : boFlipRe ? color.new(#00c853, 35) : color.new(#2962ff, 45), text_halign = text.align_center, text_size = txtSize)
-    // the whole point of the section: one sentence, from the lines alone
-    table.cell(_t, 0, 23, "LINES SAY", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 23, f_linesSay(), text_color = color.white, bgcolor = color.new(#00695c, 20), text_halign = text.align_left, text_size = txtSize)
-    // syminfo.sector / .industry are built-ins — they cost nothing against the
-    // request budget, which is full at exactly 40 of the 40 allowed, where a
-    // single extra request.*() would break the whole script.
-    secTxt = (syminfo.sector == "" ? "—" : syminfo.sector) + (syminfo.industry == "" ? "" : "   ·   " + syminfo.industry) + "   ·   " + syminfo.type
-    profTxt = not profOn ? "off" : na(profEma) ? "—" : (profAbove ? "ABOVE " : "BELOW ") + str.tostring(profEma, format.mintick) + "   (" + str.tostring(profPct, "#.#") + "%, " + str.tostring(profDist, "#.#") + "x ATR)" + (profLost ? "   ⚠ LOST IT THIS BAR — this is the exit" : profReclaim ? "   ★ RECLAIMED THIS BAR" : profRespect ? "   ✓ RESPECTED — wicked in, closed above" : profAtLine ? "   ◆ AT THE LINE — entry zone" : "") + (profAbove and not na(profBars) ? "   ·  held " + str.tostring(profBars, "#") + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim")
-    table.cell(_t, 0, 25, str.tostring(profWeeks, "#") + "w EMA RULE" + (profExact ? "" : " ~"), text_color = color.white, bgcolor = color.new(#ffd600, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 25, profTxt, text_color = color.white, bgcolor = not profOn or na(profEma) ? color.new(color.gray, 55) : profLost ? color.new(#d50000, 15) : profReclaim or profRespect or profAtLine ? color.new(#00c853, 20) : profAbove ? color.new(#00c853, 50) : color.new(#d50000, 45), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 24, "SECTOR", text_color = color.white, bgcolor = color.new(color.gray, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 24, secTxt, text_color = color.white, bgcolor = color.new(color.gray, 50), text_halign = text.align_center, text_size = txtSize)
-    0
 
 // ── CHART SYNC MODE — remove only what drags the axis ────────────────
 // A delete pass, not a guard on the drawing blocks, and that is deliberate:
@@ -2530,10 +2387,7 @@ f_syncWipe() =>
     0
 
 if barstate.islast and boOn
-    if boView == "Summary (10 lines)"
-        f_boSummary(bot)
-    else
-        f_boConsole(bot)
+    f_boSummary(bot)
 if barstate.islast and syncMode
     f_syncWipe()
 
