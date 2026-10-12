@@ -1894,6 +1894,71 @@ boTgtSrc = boDir == 1 and na(boRes) and not na(suTgt1) ? " (measured move)" : ""
 boRR     = na(boTarget) or na(boRisk) or boRisk <= 0 ? na : math.abs(boTarget - boEntry) / boRisk
 boSizePc = na(boRisk) or boEntry <= 0 or boRisk <= 0 ? na : riskPct / (boRisk / boEntry * 100) * 100
 
+// ── THE FAST PAIR, THE EXTENSION, AND THE POLARITY FLIP ──────────────
+// Three things on a posted chart that nothing above could produce.
+//
+// 1. 9 / 21 EMA. This file had no EMA at all — ma50/100/200 and the 200-bar
+//    line are all SMAs, and all of them are SLOW. The pair momentum traders
+//    actually read on a leader is the 9 and 21 EMA, which is why the chart
+//    labels them by name. They are the line price rides on the way up and the
+//    first thing it loses when the run ends.
+//
+// 2. ATR EXTENSION FROM THEM. ext200 above measures distance from the mean as
+//    a PERCENT, which is not comparable across symbols — 10% is nothing on a
+//    high-ATR name and a lot on a utility. Measured in ATR it is the same
+//    statement everywhere: "1.5 ATR above the 21 EMA" means the same thing on
+//    any chart. Past about 3-4 ATR a move is extended and a new entry there is
+//    paying for someone else's position.
+//
+// 3. RESISTANCE TURNED INTO SUPPORT — the line you labelled by hand, and the
+//    one genuinely missing idea here. A level only becomes interesting TWICE:
+//    once when it caps price, and again, from underneath, after price has
+//    taken it. The script knew about defended levels and knew when one broke,
+//    but threw the level away the moment it was taken. It is kept now: the
+//    most recent level broken upward is carried forward as support for as
+//    long as price stays above it, and the console says whether price has
+//    come back to test it or has simply run.
+//
+//    A retest that HOLDS is the lowest-risk entry on any of these charts,
+//    because the stop is a few percent away instead of back at the base. A
+//    level that has never been retested is not worse — it is just unproven,
+//    and the console says which it is rather than pretending to know.
+emaFastLen = input.int(9,  "Fast EMA", minval = 2, maxval = 50, group = "9. Fast pair & polarity")
+emaSlowLen = input.int(21, "Slow EMA", minval = 3, maxval = 100, group = "9. Fast pair & polarity")
+emaAtrLen  = input.int(11, "ATR length for the extension reading", minval = 2, maxval = 50, tooltip = "Shorter than the 21 used by the Money Line, because this measures how stretched price is RIGHT NOW rather than how wide to set a regime stop.", group = "9. Fast pair & polarity")
+emaExtMax  = input.float(3.0, "Extended beyond this many ATR from the slow EMA", minval = 0.5, maxval = 10.0, step = 0.25, tooltip = "Past this the move is stretched and a fresh entry is paying for someone else's position. It is a warning on the LINES SAY row, never a sell signal — leaders stay extended for a long time.", group = "9. Fast pair & polarity")
+emaShow    = input.bool(true, "Plot the fast pair", group = "9. Fast pair & polarity")
+
+f_emaExt(int _f, int _s, int _a) =>
+    _e9  = ta.ema(close, _f)
+    _e21 = ta.ema(close, _s)
+    _at  = ta.atr(_a)
+    _x9  = _at > 0 ? (close - _e9) / _at : na
+    _x21 = _at > 0 ? (close - _e21) / _at : na
+    // how long the trend has actually held its line — persistence, not slope
+    _ba  = ta.barssince(close < _e21)
+    [_e9, _e21, _at, _x9, _x21, _ba]
+
+[emaF, emaS, emaAtr, emaX9, emaX21, emaBarsAbove] = f_emaExt(emaFastLen, emaSlowLen, emaAtrLen)
+emaAtrPct = close > 0 and not na(emaAtr) ? emaAtr / close * 100 : na
+emaOver   = not na(emaX21) and emaX21 >= emaExtMax
+
+// The most recent level taken to the upside, carried forward. valuewhen keeps
+// it without a `var` write, which matters because everything here had to move
+// into functions for CE10295 and Pine cannot assign to a global from one.
+boFlipLvl = ta.valuewhen(boBrkHorzUp or suBaseBrk or suATHBrk, nz(boLvlNow, close), 0)
+boFlipOn  = not na(boFlipLvl) and close > boFlipLvl
+// Retested = price has since traded back down into it and still closed above.
+// Tracked as a count of bars whose LOW reached the level while the close held.
+boFlipTag = boFlipOn and low <= boFlipLvl * 1.015 and close > boFlipLvl
+// Hoisted and na-guarded rather than inlined: ta.barssince returns na until
+// its condition has fired once, and `na < x` is na, not false — a na bool
+// propagating into the LINES SAY ladder would silently skip a branch.
+boFlipAgo = ta.barssince(boFlipTag)
+boBrkAgoU = ta.barssince(boBrkHorzUp or suBaseBrk or suATHBrk)
+boFlipRe  = boFlipOn and not na(boFlipAgo) and not na(boBrkAgoU) and boFlipAgo < boBrkAgoU
+boFlipPct = boFlipOn and close > 0 ? (close - boFlipLvl) / close * 100 : na
+
 // ── DRAWING — every object this section owns lives in one of three arrays ──
 // Pine cannot assign to a global inside a function, so `var line x = na` +
 // `x := line.new(...)` cannot be wrapped and would have to stay in the main
@@ -1958,6 +2023,10 @@ f_boDraw(array<line> _l, array<label> _b, array<box> _x) =>
             wgMidSl = (wgResSl + wgSupSl) / 2
             wgMidNw = (tlUpNow + tlLoNow) / 2
             array.push(_l, line.new(bar_index - 40, wgMidNw - wgMidSl * 40, bar_index + 15, wgMidNw + wgMidSl * 15, color = color.new(#2962ff, 45), style = line.style_dashed, width = 1))
+    // the line you labelled by hand
+    if boFlipOn and boShowLvl
+        array.push(_l, line.new(bar_index - 60, boFlipLvl, bar_index + 12, boFlipLvl, extend = extend.right, color = color.new(#2962ff, 10), width = 2))
+        array.push(_b, label.new(bar_index + 12, boFlipLvl, "Resistance turned into support  " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? "  ✓ retested" : "  · untested"), style = label.style_label_left, color = color.new(#2962ff, 25), textcolor = color.white, size = size.tiny))
     if boActing
         array.push(_b, label.new(bar_index, boDir == 1 ? low : high, boVerdict + "  " + str.tostring(boScore, "#") + "/10", style = boDir == 1 ? label.style_label_up : label.style_label_down, color = boDir == 1 ? color.new(#00c853, 0) : color.new(#d50000, 0), textcolor = color.white, size = size.normal))
     0
@@ -1968,6 +2037,8 @@ f_boVert(array<line> _v) =>
         line.delete(array.shift(_v))
     0
 
+plot(emaShow and not syncMode ? emaF : na, "Fast EMA", color = color.new(#ff5252, 10), linewidth = 2)
+plot(emaShow and not syncMode ? emaS : na, "Slow EMA", color = color.new(color.gray, 10), linewidth = 2)
 plotshape(boBrkHorzUp, "BO — defended level", style = shape.triangleup,   location = location.belowbar, color = color.new(#00e676, 0), size = size.small, text = "BO", textcolor = color.new(#00e676, 0))
 plotshape(boBrkHorzDn, "BD — defended level", style = shape.triangledown, location = location.abovebar, color = color.new(#ff1744, 0), size = size.small, text = "BD", textcolor = color.new(#ff1744, 0))
 
@@ -1992,11 +2063,52 @@ f_boTick(bool _v) => not boAssess ? "·" : _v ? "✓" : "✗"
 f_boCol(bool _v)  => not boAssess ? color.new(color.gray, 60) : _v ? color.new(#00c853, 55) : color.new(#d50000, 55)
 f_boTxt(bool _v, string _s) => not boAssess ? "—" : _s
 
+// ── WHAT THE LINES SAY ───────────────────────────────────────────────
+// One sentence, read ONLY from structure — where price sits against the
+// levels, the flip, the base and the fast pair. It deliberately does not
+// consult RSI, MACD or ADX: those already have rows, and the question this
+// answers is "given the lines, what do I do", which is the question a posted
+// chart answers and this script never did.
+//
+// Ordered by RISK, not by how exciting the setup is. A retest that holds is
+// first because its stop is a few percent away; a fresh breakout is second
+// because its stop is the broken level; an extended chart is a WAIT however
+// strong it looks, since the stop there is far enough to ruin the arithmetic.
+f_linesSay() =>
+    _r = ""
+    if not boOn
+        _r := "console off"
+    else if thinHist
+        _r := "too little history to read the lines"
+    else if boFlipOn and boFlipRe and not emaOver and not na(boFlipPct) and boFlipPct <= 8
+        _r := "BUY THE RETEST — " + str.tostring(boFlipLvl, format.mintick) + " was resistance, held as support, price " + str.tostring(boFlipPct, "#.#") + "% above it. Stop just under it: the tightest entry on this chart."
+    else if boDir == 1 and boGate and boScore >= 6
+        _r := "BUY THE BREAK of " + f_boKind(boKindAt) + " at " + str.tostring(boLvlAt, format.mintick) + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick)) + "."
+    else if boDir == 1 and boPending
+        _r := "A LEVEL IS GIVING WAY but the bar has not closed. Nothing to do until it does."
+    else if emaOver
+        _r := "EXTENDED — " + str.tostring(emaX21, "#.#") + " ATR above the " + str.tostring(emaSlowLen, "#") + " EMA. Do not start here; wait for a pullback toward " + str.tostring(emaS, format.mintick) + "."
+    else if boFlipOn and not boFlipRe
+        _r := "ABOVE A BROKEN LEVEL at " + str.tostring(boFlipLvl, format.mintick) + ", not yet retested. Either buy a pullback into it or stand aside — chasing here has no close stop."
+    else if suIsBase and suSqz
+        _r := "COILED — " + str.tostring(suBars, "#") + "-bar base and a volatility squeeze. Nothing to do yet; set an alert at " + str.tostring(suHi, format.mintick) + "."
+    else if suIsBase
+        _r := "IN A " + str.tostring(suBars, "#") + "-BAR BASE. The decision is a close above " + str.tostring(suHi, format.mintick) + " or below " + str.tostring(suLo, format.mintick) + "."
+    else if not na(emaS) and close < emaS and trend == -1
+        _r := "BELOW THE " + str.tostring(emaSlowLen, "#") + " EMA and below the Money Line. No long setup — this is a downtrend, not a dip."
+    else if wgApexOk
+        _r := wgType + " closing in " + str.tostring(wgApexN, "#") + " bars. Wait for the resolution; do not pre-position inside a coil."
+    else if not na(boRes)
+        _r := "NO SETUP. Next decision is " + str.tostring(boRes, format.mintick) + " overhead (" + str.tostring((boRes - close) / close * 100, "#.#") + "% away)" + (na(boSup) ? "." : ", support " + str.tostring(boSup, format.mintick) + ".")
+    else
+        _r := "NO SETUP and no defended level above — price is in open air. Wait for structure to form."
+    _r
+
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
-var table bot = table.new(boPosMap, 2, 20, border_width = 2)
+var table bot = table.new(boPosMap, 2, 23, border_width = 2)
 
 f_boConsole(table _t) =>
-    table.clear(_t, 0, 0, 1, 19)
+    table.clear(_t, 0, 0, 1, 22)
     vCol = boVerdict == "STRONG BUY" ? color.new(#00c853, 0) : boVerdict == "BUY" ? color.new(#00c853, 30) : boVerdict == "STRONG SELL" ? color.new(#d50000, 0) : boVerdict == "SELL" ? color.new(#d50000, 30) : boVerdict == "NO SETUP" ? color.new(color.gray, 40) : color.new(color.orange, 25)
     table.cell(_t, 0, 0, "BREAKOUT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 0, boVerdict + (boDir == 0 ? "" : "   " + str.tostring(boScore, "#") + "/10"), text_color = color.white, bgcolor = vCol, text_halign = text.align_center, text_size = txtSize)
@@ -2054,6 +2166,15 @@ f_boConsole(table _t) =>
     wgWhy = not wgOn ? "off" : not wgHave ? "no pair yet — need two swing highs and two swing lows" : wgType + (wgApexOk ? "  ·  apex in " + str.tostring(wgApexN, "#") + " bars" : "") + "  ·  gap " + str.tostring(wgPct, "#.#") + "%" + (na(wgPos) ? "" : "  ·  price " + str.tostring(math.max(math.min(wgPos, 999), -999), "#") + "% up the range")
     table.cell(_t, 0, 19, "STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 15), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 19, wgWhy, text_color = color.white, bgcolor = not wgHave ? color.new(color.gray, 55) : wgApexOk ? color.new(#2962ff, 30) : color.new(#2962ff, 55), text_halign = text.align_center, text_size = txtSize)
+    // extension in ATR, not percent: "1.5 ATR above the 21 EMA" means the same
+    // thing on every symbol, where "10% above" does not.
+    table.cell(_t, 0, 20, str.tostring(emaFastLen, "#") + " / " + str.tostring(emaSlowLen, "#") + " EMA", text_color = color.white, bgcolor = color.new(#ff5252, 30), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 20, na(emaF) ? "—" : str.tostring(emaF, format.mintick) + "  /  " + str.tostring(emaS, format.mintick) + "   ·   " + str.tostring(emaX9, "#.#") + "x / " + str.tostring(emaX21, "#.#") + "x ATR above" + (emaOver ? "  ⚠ EXTENDED" : "") + (na(emaBarsAbove) ? "" : "   ·   " + str.tostring(emaBarsAbove, "#") + " bars above"), text_color = color.white, bgcolor = emaOver ? color.new(color.orange, 30) : color.new(#ff5252, 55), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 21, "POLARITY", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 21, not boFlipOn ? "— no level taken yet" : "resistance → support at " + str.tostring(boFlipLvl, format.mintick) + "   (" + str.tostring(boFlipPct, "#.#") + "% below price)" + (boFlipRe ? "   ✓ retested and held" : "   · untested"), text_color = color.white, bgcolor = not boFlipOn ? color.new(color.gray, 55) : boFlipRe ? color.new(#00c853, 35) : color.new(#2962ff, 45), text_halign = text.align_center, text_size = txtSize)
+    // the whole point of the section: one sentence, from the lines alone
+    table.cell(_t, 0, 22, "LINES SAY", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 22, f_linesSay(), text_color = color.white, bgcolor = color.new(#00695c, 20), text_halign = text.align_left, text_size = txtSize)
     0
 
 // ── CHART SYNC MODE — remove only what drags the axis ────────────────
