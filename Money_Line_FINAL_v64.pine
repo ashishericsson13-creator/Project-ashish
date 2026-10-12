@@ -1911,6 +1911,22 @@ boLvlNow  = flagBrkUp ? tlUpNow : flagBrkDn ? tlLoNow : suATHBrk ? hiAll[1] : su
 boLvlAt   = ta.valuewhen(boBrkUp or boBrkDn, nz(boLvlNow, close), 0)
 boLiveBar = barstate.islast and time_close > timenow
 
+// ── THE NEAREST LEVEL THAT MATTERS ───────────────────────────────────
+// GOLD weekly printed "support 2075.792 (-50.2%)" while DO THIS, four rows
+// above, correctly told you to watch the base floor at 3942.710 — about 5%
+// away. Both rows were right about their own object and the panel
+// contradicted itself.
+//
+// boRes/boSup are the nearest DEFENDED levels, and on a symbol that has
+// trended for years the nearest price it has transacted at twice can be half
+// the chart away. A base edge is a level too, and when it is nearer it is the
+// one you will trade against. Take whichever is closer on each side and say
+// which it is, rather than printing a number nobody will ever use.
+lvlR    = na(boRes) ? (suIsBase and not na(suHi) and suHi > close ? suHi : na) : (suIsBase and not na(suHi) and suHi > close and suHi < boRes ? suHi : boRes)
+lvlS    = na(boSup) ? (suIsBase and not na(suLo) and suLo < close ? suLo : na) : (suIsBase and not na(suLo) and suLo < close and suLo > boSup ? suLo : boSup)
+lvlRsrc = na(lvlR) ? "" : (not na(boRes) and lvlR == boRes ? " defended" : " base top")
+lvlSsrc = na(lvlS) ? "" : (not na(boSup) and lvlS == boSup ? " defended" : " base floor")
+
 // ── THE FAILED BREAKOUT ──────────────────────────────────────────────
 // "All-time high breakouts are important, and more important is that the
 // back test holds." The NVDA chart labels two FAILED ATH breakouts before the
@@ -2366,10 +2382,10 @@ f_boSummary(table _t) =>
         table.cell(_t, 1, 6, "RSI " + (na(rsiV) ? "—" : str.tostring(rsiV, "#") + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : str.tostring(adxV, "#") + " " + f_adxWord(adxV)), text_color = color.white, bgcolor = color.new(color.purple, 50), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 7, "8  VOLUME", text_color = color.white, bgcolor = color.new(color.teal, 25), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 7, na(volRatio) ? "—" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light"))), text_color = color.white, bgcolor = color.new(color.teal, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 7, na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light"))), text_color = color.white, bgcolor = color.new(color.teal, 50), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 8, "9  LEVELS", text_color = color.white, bgcolor = color.new(color.olive, 20), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 8, (na(boRes) ? "resistance —" : "resistance " + str.tostring(boRes, format.mintick) + " (" + str.tostring((boRes - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(boSup) ? "support —" : "support " + str.tostring(boSup, format.mintick) + " (" + str.tostring((boSup - close) / close * 100, "#.#") + "%)") + (not boFlipLive ? "" : "   ·   flip-support " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 8, (na(lvlR) ? "resistance —" : "resistance " + str.tostring(lvlR, format.mintick) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) ? "support —" : "support " + str.tostring(lvlS, format.mintick) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive ? "" : "   ·   flip-support " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 9, "10  STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
