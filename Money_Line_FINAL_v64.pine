@@ -1912,41 +1912,6 @@ boLvlNow  = flagBrkUp ? tlUpNow : flagBrkDn ? tlLoNow : suATHBrk ? hiAll[1] : su
 boLvlAt   = ta.valuewhen(boBrkUp or boBrkDn, nz(boLvlNow, close), 0)
 boLiveBar = barstate.islast and time_close > timenow
 
-// ── THE NEAREST LEVEL THAT MATTERS ───────────────────────────────────
-// GOLD weekly printed "support 2075.792 (-50.2%)" while DO THIS, four rows
-// above, correctly told you to watch the base floor at 3942.710 — about 5%
-// away. Both rows were right about their own object and the panel
-// contradicted itself.
-//
-// boRes/boSup are the nearest DEFENDED levels, and on a symbol that has
-// trended for years the nearest price it has transacted at twice can be half
-// the chart away. A base edge is a level too, and when it is nearer it is the
-// one you will trade against. Take whichever is closer on each side and say
-// which it is, rather than printing a number nobody will ever use.
-lvlR    = na(boRes) ? (suIsBase and not na(suHi) and suHi > close ? suHi : na) : (suIsBase and not na(suHi) and suHi > close and suHi < boRes ? suHi : boRes)
-// Three candidates below price, and the nearest one wins. VOO weekly showed
-// why the flip level has to be among them: its defended support sat 38% away
-// and its base floor 19%, while a broken resistance it had retested and held
-// sat 2.2% below — the only one of the three anybody would actually place a
-// stop against, and the only one the support slot could not reach.
-lvlSa   = na(boSup) or boSup >= close ? na : boSup
-lvlSb   = suIsBase and not na(suLo) and suLo < close ? suLo : na
-lvlSc   = boFlipLive and not na(boFlipLvl) and boFlipLvl < close ? boFlipLvl : na
-lvlS    = math.max(nz(lvlSa, -1e18), math.max(nz(lvlSb, -1e18), nz(lvlSc, -1e18)))
-lvlS    := lvlS <= -1e17 ? na : lvlS
-// GOOGL weekly still printed "support 152.10 (-56.9%)" after the base
-// fallback went in, because GOOGL has NO base — so there was nothing to fall
-// back TO and the 57%-away defended level stood. The fallback fixed one case
-// and left the general one: a level you cannot reach is not a level,
-// whether or not a base happens to exist. Capped in ATR so it means the same
-// on every symbol.
-// atrV, not emaAtr: emaAtr is declared 120 lines below this point and using
-// it here was an undeclared-identifier error. atrV is v62's own chart ATR,
-// available since line 201, and is the same measure the Money Line uses.
-lvlRfar = na(lvlR) or na(atrV) or atrV <= 0 ? false : (lvlR - close) / atrV > lvlMaxATR
-lvlSfar = na(lvlS) or na(atrV) or atrV <= 0 ? false : (close - lvlS) / atrV > lvlMaxATR
-lvlRsrc = na(lvlR) ? "" : (not na(boRes) and lvlR == boRes ? " defended" : " base top")
-lvlSsrc = na(lvlS) ? "" : (not na(lvlSc) and lvlS == lvlSc ? " flip-support" + (boFlipRe ? " ✓held" : " ·untested") : not na(lvlSa) and lvlS == lvlSa ? " defended" : " base floor")
 
 // ── THE FAILED BREAKOUT ──────────────────────────────────────────────
 // "All-time high breakouts are important, and more important is that the
@@ -2100,6 +2065,42 @@ boFlipPct = boFlipOn and close > 0 ? (close - boFlipLvl) / close * 100 : na
 boFlipATR = boFlipOn and not na(emaAtr) and emaAtr > 0 ? (close - boFlipLvl) / emaAtr : na
 boFlipFar = boFlipOn and not na(boFlipATR) and boFlipATR > boFlipMaxATR
 boFlipLive = boFlipOn and not boFlipFar
+
+// ── THE NEAREST LEVEL THAT MATTERS ───────────────────────────────────
+// GOLD weekly printed "support 2075.792 (-50.2%)" while DO THIS, four rows
+// above, correctly told you to watch the base floor at 3942.710 — about 5%
+// away. Both rows were right about their own object and the panel
+// contradicted itself.
+//
+// boRes/boSup are the nearest DEFENDED levels, and on a symbol that has
+// trended for years the nearest price it has transacted at twice can be half
+// the chart away. A base edge is a level too, and when it is nearer it is the
+// one you will trade against. Take whichever is closer on each side and say
+// which it is, rather than printing a number nobody will ever use.
+lvlR    = na(boRes) ? (suIsBase and not na(suHi) and suHi > close ? suHi : na) : (suIsBase and not na(suHi) and suHi > close and suHi < boRes ? suHi : boRes)
+// Three candidates below price, and the nearest one wins. VOO weekly showed
+// why the flip level has to be among them: its defended support sat 38% away
+// and its base floor 19%, while a broken resistance it had retested and held
+// sat 2.2% below — the only one of the three anybody would actually place a
+// stop against, and the only one the support slot could not reach.
+lvlSa   = na(boSup) or boSup >= close ? na : boSup
+lvlSb   = suIsBase and not na(suLo) and suLo < close ? suLo : na
+lvlSc   = boFlipLive and not na(boFlipLvl) and boFlipLvl < close ? boFlipLvl : na
+lvlS    = math.max(nz(lvlSa, -1e18), math.max(nz(lvlSb, -1e18), nz(lvlSc, -1e18)))
+lvlS    := lvlS <= -1e17 ? na : lvlS
+// GOOGL weekly still printed "support 152.10 (-56.9%)" after the base
+// fallback went in, because GOOGL has NO base — so there was nothing to fall
+// back TO and the 57%-away defended level stood. The fallback fixed one case
+// and left the general one: a level you cannot reach is not a level,
+// whether or not a base happens to exist. Capped in ATR so it means the same
+// on every symbol.
+// atrV, not emaAtr: emaAtr is declared 120 lines below this point and using
+// it here was an undeclared-identifier error. atrV is v62's own chart ATR,
+// available since line 201, and is the same measure the Money Line uses.
+lvlRfar = na(lvlR) or na(atrV) or atrV <= 0 ? false : (lvlR - close) / atrV > lvlMaxATR
+lvlSfar = na(lvlS) or na(atrV) or atrV <= 0 ? false : (close - lvlS) / atrV > lvlMaxATR
+lvlRsrc = na(lvlR) ? "" : (not na(boRes) and lvlR == boRes ? " defended" : " base top")
+lvlSsrc = na(lvlS) ? "" : (not na(lvlSc) and lvlS == lvlSc ? " flip-support" + (boFlipRe ? " ✓held" : " ·untested") : not na(lvlSa) and lvlS == lvlSa ? " defended" : " base floor")
 
 // ── THE WEEKLY 9 EMA RULE ────────────────────────────────────────────
 // A named, testable method rather than another indicator: enter as close to
