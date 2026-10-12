@@ -2588,6 +2588,56 @@ f_bigSay() =>
     _b
 bigSay = f_bigSay()
 
+// ── ROW 13 · EXIT THE LONG-TERM HOLD ───────────────────────────────────────
+// Row 12 buys on two pillars: the business, and a long-term trend that is
+// still rising. Row 13 is the mirror - it sells when those same two pillars
+// break, and it ignores everything else.
+//
+// This is deliberately NOT the ordinary SELL label. The ATR money line flips
+// on every intermediate correction, and a long-term holder who sells each
+// flip gives up the compounding that was the whole reason to hold. On your
+// own charts the ATR model flipped bearish on TCS, ITC and RELIANCE while
+// each remains a going concern; those are trading signals, not exits from an
+// investment. A multi-year position should only be closed for a reason that
+// takes multiple years to repair:
+//
+//   the 200-bar average rolling over  — the trend that paid you is gone
+//   the business deteriorating        — the reason you held it is gone
+//
+// Both at once is the one unambiguous sell. Either alone is still serious
+// enough to act on, and the row says which it is rather than averaging them
+// into a single vague warning.
+exTrim = input.float(8.0, "Trim when this many ATR above the 200-bar MA", minval = 2.0, maxval = 30.0, step = 0.5, group = "v64 · EXIT")
+
+exRoll = not na(ma200bar) and not na(ma200bar[52]) and ma200bar < ma200bar[52]
+exStr  = na(ma200bar) or na(atrV) or atrV <= 0 ? na : (close - ma200bar) / atrV
+exBiz  = bqHave and (not bqProf or (not na(revGrowth) and revGrowth < 0) or bqN <= 1)
+exFade = not na(macdH) and macdH < macdH[1]
+exHot  = not na(exStr) and exStr >= exTrim and exFade
+exSig  = botOn and exRoll and not exRoll[1]
+
+plotshape(exSig, title = "EXIT long-term hold", style = shape.labeldown, location = location.abovebar, color = color.new(#b71c1c, 0), text = "EXIT", textcolor = color.white, size = size.normal)
+alertcondition(exSig, title = "Exit the long-term hold", message = "EXIT on {{ticker}} — the 200-bar MA has rolled over ({{interval}})")
+
+f_exitSay() =>
+    _x = ""
+    if not botOn
+        _x := "—"
+    else if exRoll and exBiz
+        _x := "⛔ SELL EVERYTHING — the 200-bar MA is FALLING and the business is deteriorating (" + str.tostring(bqN, "#") + "/4). Both reasons to own this are gone. This is not a dip to buy."
+    else if exRoll
+        _x := "EXIT THE LONG-TERM HOLD — the 200-bar MA has rolled over, so the multi-year trend is finished" + (bqHave ? " even though the business still grades " + str.tostring(bqN, "#") + "/4" : "") + ". Close the investment; trade it on rows 1-10 if you still want exposure."
+    else if exBiz
+        _x := "WARNING — the business is deteriorating (" + str.tostring(bqN, "#") + "/4)" + (na(revGrowth) or revGrowth >= 0 ? "" : ", revenue " + str.tostring(revGrowth, "#.#") + "%") + ". The trend still holds, but this is how long-term holds die. Stop adding. Exit if the 200-bar MA rolls over."
+    else if exHot
+        _x := "TRIM — " + str.tostring(exStr, "#.#") + " ATR above the 200-bar MA and momentum is fading. Take something off, keep the core, add back nearer " + str.tostring(ma200bar, format.mintick) + "."
+    else if profOn and profLost
+        _x := "HOLD, BUT WATCH — closed below the " + str.tostring(profWeeks, "#") + "-week EMA " + str.tostring(profEma, format.mintick) + ". First crack, and not yet an exit: the 200-bar MA is still rising. Stop adding until it is reclaimed."
+    else
+        _x := "HOLD — nothing is broken. 200-bar MA still rising" + (bqHave ? ", business " + str.tostring(bqN, "#") + "/4" : "") + (na(exStr) ? "" : ", " + str.tostring(exStr, "#.#") + " ATR above the long-term mean") + ". Do nothing."
+    _x
+exitSay = f_exitSay()
+
 
 f_whatToDo() =>
     _a = ""
@@ -2701,6 +2751,10 @@ f_boSummary(table _t) =>
 
         bCol = not botOn or na(botAV) ? color.new(color.gray, 40) : botConf ? color.new(#00c853, 20) : botAbove ? color.new(color.orange, 25) : color.new(#d50000, 25)
         gCol = not bqHave ? color.new(color.gray, 40) : bigBuy ? color.new(#1b5e20, 0) : botConf and bqN >= bigNeed ? color.new(#00c853, 25) : color.new(color.black, 20)
+        xCol = exRoll and exBiz ? color.new(#b71c1c, 0) : exRoll ? color.new(#d50000, 20) : exBiz or exHot ? color.new(color.orange, 20) : color.new(#1b5e20, 30)
+        table.cell(_t, 0, 12, "13  EXIT", text_color = color.white, bgcolor = color.new(#b71c1c, 15), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 12, exitSay, text_color = color.white, bgcolor = xCol, text_halign = text.align_left, text_size = txtSize)
+
         table.cell(_t, 0, 11, "12  BUY BIG", text_color = color.white, bgcolor = color.new(#1b5e20, 10), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 11, bigSay, text_color = color.white, bgcolor = gCol, text_halign = text.align_left, text_size = txtSize)
 
