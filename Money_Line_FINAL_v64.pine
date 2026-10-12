@@ -1658,6 +1658,7 @@ boVolSurge = input.float(1.50, "Volume surge required (x 20-bar avg)", minval = 
 boRsiMax   = input.float(80.0, "RSI ceiling (above = move already spent)", minval = 60, maxval = 95, step = 1, tooltip = "RSI above this means buying the end of a run. This is the check that stops a BUY into a vertical blow-off.", group = "6. Breakout Console")
 boStopATR  = input.float(0.50, "Breakout stop: ATR below the broken level", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "A broken resistance becomes support; the trade is wrong if price closes back under it. NOT the Money Line, which on weekly can be 25% away and is a REGIME stop. Both are printed — size off the one you are trading.", group = "6. Breakout Console")
 boFlipMaxATR = input.float(4.0, "Polarity: stale once price is this many ATR above it", minval = 1.0, maxval = 20.0, step = 0.5, tooltip = "A broken resistance acts as support while price is near it. Once price has run this far above, it is no longer the level that matters and waiting for a pullback to it means waiting for a crash.\n\nIn ATR so it scales: 4 ATR is a long way on any symbol. The level is still drawn and still reported — it just stops being treated as a live entry.", group = "6. Breakout Console")
+boView     = input.string("Summary (10 lines)", "Console view", options = ["Summary (10 lines)", "Full detail (26 rows)"], tooltip = "SUMMARY is the whole panel in ten lines, built so the first three answer the only question that matters: what does each model say, and do they agree.\n\nFULL DETAIL is every check, every level and every target — a reference rather than a summary. Nothing is lost by using Summary; it is the same numbers, chosen.", group = "6. Breakout Console")
 boShowLvl  = input.bool(true, "Draw the defended horizontal levels", group = "6. Breakout Console")
 boShowVert = input.bool(true, "Vertical line at each scored breakout", group = "6. Breakout Console")
 boPos      = input.string("Top Right", "Console position", options = ["Top Right", "Top Left", "Middle Right", "Bottom Left", "Bottom Right"], group = "6. Breakout Console")
@@ -2174,6 +2175,35 @@ f_emaCaveat() =>
         _c := "  ⏱ and the squeeze is on — expect the range to expand soon, in whichever direction."
     _c
 
+// ── THE TWO MODELS, SCORED SEPARATELY ────────────────────────────────
+// boDir only ever described a FRESH break inside boFresh bars, so between
+// events it read 0 and the lines had no opinion at all. That is fine for
+// scoring an event and useless for "are the lines bullish right now", which
+// is a standing question. Four plain facts, each worth one vote, each one a
+// line you can point at on the chart:
+//     price vs the weekly 9 EMA   — the method's own line
+//     price vs the 21 EMA         — the faster trend line
+//     the last structural break   — up or down, whatever broke last
+//     price vs the 200-bar mean   — the slow line
+// Net +4 to -4. Deliberately NOT weighted: a vote you cannot explain in one
+// sentence is a vote you will not trust at 9am, and the row prints all four
+// so the score can always be checked against the chart.
+lnV1 = not na(profEma) ? (close > profEma ? 1 : -1) : 0
+lnV2 = not na(emaS)    ? (close > emaS    ? 1 : -1) : 0
+lnV3 = na(boKindAt) or boKindAt == 0 ? 0 : (boKindAt > 0 ? 1 : -1)
+lnV4 = not na(ma200bar) ? (close > ma200bar ? 1 : -1) : 0
+lnNet  = lnV1 + lnV2 + lnV3 + lnV4
+lnBull = lnNet >= 2
+lnBear = lnNet <= -2
+lnWord = lnBull ? "BULLISH" : lnBear ? "BEARISH" : "MIXED"
+// The ATR model is one clean fact and needs no scoring.
+atrBull = trend == 1
+// Agreement is the whole point of running two models. Named plainly so the
+// row can be read without reference to anything else on the panel.
+bothBuy  = atrBull and lnBull
+bothSell = not atrBull and lnBear
+agreeWord = bothBuy ? "BOTH AGREE — BUY SIDE" : bothSell ? "BOTH AGREE — SELL SIDE" : "SPLIT — they disagree, wait"
+
 // ── WHAT THE LINES SAY ───────────────────────────────────────────────
 // One sentence, read ONLY from structure — where price sits against the
 // levels, the flip, the base and the fast pair. It deliberately does not
@@ -2249,6 +2279,12 @@ f_linesSay() =>
 // Ordered so EXITS come before entries, and an unfinished bar outranks both:
 // acting on a level that has not closed is the single most expensive mistake
 // this console can invite.
+// Plain words beside every number. "RSI 58" is a reading; "58 healthy" is an
+// answer, and the second one is what you want at a glance.
+f_rsiWord(float _v) => na(_v) ? "—" : _v >= 70 ? "overbought" : _v >= 55 ? "healthy" : _v >= 45 ? "neutral" : _v >= 30 ? "weak" : "oversold"
+f_adxWord(float _v) => na(_v) ? "—" : _v >= 40 ? "strong trend" : _v >= adxMin ? "trending" : "no trend (chop)"
+f_volWord(float _v) => na(_v) ? "—" : _v >= 2.0 ? "heavy" : _v >= 1.5 ? "above average" : _v >= 0.8 ? "normal" : "light"
+
 f_whatToDo() =>
     _a = ""
     if not boOn
@@ -2278,6 +2314,50 @@ f_whatToDo() =>
     else
         _a := "STAY OUT. Your only entry trigger is a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away)."
     _a
+
+// ── THE 10-LINE SUMMARY ──────────────────────────────────────────────
+// The full console is 26 rows. That is a reference, not a summary, and on a
+// weekly chart it runs off the screen. This is the whole panel in ten lines,
+// built so the first three answer the only question that matters: what does
+// each model say, and do they agree.
+f_boSummary(table _t) =>
+    // the WHOLE table, not just rows 0-9: switching back from Full detail
+    // would otherwise leave sixteen stale rows hanging under the summary
+    table.clear(_t, 0, 0, 1, 25)
+    aCol = atrBull ? color.new(#00c853, 25) : color.new(#d50000, 25)
+    lCol = lnBull ? color.new(#00c853, 25) : lnBear ? color.new(#d50000, 25) : color.new(color.orange, 30)
+    vCol = bothBuy ? color.new(#00c853, 0) : bothSell ? color.new(#d50000, 0) : color.new(color.orange, 15)
+
+    table.cell(_t, 0, 0, "1  ATR MODEL", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 0, (atrBull ? "▲ BULLISH" : "▼ BEARISH") + "   —   " + (atrBull ? "exits on a " + tfWord + " close below " : "turns bullish on a " + tfWord + " close above ") + str.tostring(moneyLine, format.mintick), text_color = color.white, bgcolor = aCol, text_halign = text.align_left, text_size = txtSize)
+
+    table.cell(_t, 0, 1, "2  LINES", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 1, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + (lnNet >= 0 ? "+" : "") + str.tostring(lnNet, "#") + "/4   —   " + str.tostring(profWeeks, "#") + "wEMA " + (lnV1 > 0 ? "▲" : "▼") + "   21EMA " + (lnV2 > 0 ? "▲" : "▼") + "   last break " + (lnV3 > 0 ? "▲" : lnV3 < 0 ? "▼" : "·") + "   200-bar " + (lnV4 > 0 ? "▲" : "▼"), text_color = color.white, bgcolor = lCol, text_halign = text.align_left, text_size = txtSize)
+
+    table.cell(_t, 0, 2, "3  VERDICT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 2, agreeWord + (bothBuy or bothSell ? "   ·   " + str.tostring(boScore, "#") + "/10 on the break" : "   ·   one says one thing, the other says the opposite"), text_color = color.white, bgcolor = vCol, text_halign = text.align_left, text_size = txtSize)
+
+    table.cell(_t, 0, 3, "4  ▶ DO THIS", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 3, f_whatToDo(), text_color = color.white, bgcolor = color.new(#00695c, 10), text_halign = text.align_left, text_size = txtSize)
+
+    table.cell(_t, 0, 4, "5  NUMBERS", text_color = color.white, bgcolor = color.new(color.navy, 15), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 4, boDir == 0 or na(boStop) ? "no live setup — nothing to size yet" : "entry " + str.tostring(boEntry, format.mintick) + "   stop " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)" + (na(boTarget) ? "" : "   target " + str.tostring(boTarget, format.mintick) + boTgtSrc) + (na(boRR) ? "" : "   R:R " + str.tostring(boRR, "#.##")) + (na(boSizePc) ? "" : "   size " + str.tostring(math.min(boSizePc, 100), "#.#") + "%"), text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_left, text_size = txtSize)
+
+    table.cell(_t, 0, 5, "6  TREND", text_color = color.white, bgcolor = color.new(#ffd600, 30), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 5, na(profEma) ? "—" : (profAbove ? "above" : "below") + " the " + str.tostring(profWeeks, "#") + "wEMA " + str.tostring(profEma, format.mintick) + (profAbove and not na(profBars) ? ", held " + str.tostring(profBars, "#") + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim") + (na(emaX21) ? "" : "   ·   " + str.tostring(emaX21, "#.#") + "x ATR from the 21" + (emaOver ? " ⚠ extended" : "")), text_color = color.white, bgcolor = profAbove ? color.new(#00c853, 45) : color.new(#d50000, 45), text_halign = text.align_left, text_size = txtSize)
+
+    table.cell(_t, 0, 6, "7  MOMENTUM", text_color = color.white, bgcolor = color.new(color.purple, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 6, "RSI " + (na(rsiV) ? "—" : str.tostring(rsiV, "#") + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : str.tostring(adxV, "#") + " " + f_adxWord(adxV)), text_color = color.white, bgcolor = color.new(color.purple, 50), text_halign = text.align_left, text_size = txtSize)
+
+    table.cell(_t, 0, 7, "8  VOLUME", text_color = color.white, bgcolor = color.new(color.teal, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 7, na(volRatio) ? "—" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light"))), text_color = color.white, bgcolor = color.new(color.teal, 50), text_halign = text.align_left, text_size = txtSize)
+
+    table.cell(_t, 0, 8, "9  LEVELS", text_color = color.white, bgcolor = color.new(color.olive, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 8, (na(boRes) ? "resistance —" : "resistance " + str.tostring(boRes, format.mintick) + " (" + str.tostring((boRes - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(boSup) ? "support —" : "support " + str.tostring(boSup, format.mintick) + " (" + str.tostring((boSup - close) / close * 100, "#.#") + "%)") + (not boFlipLive ? "" : "   ·   flip-support " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
+
+    table.cell(_t, 0, 9, "10  STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 9, (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
+    0
 
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
 var table bot = table.new(boPosMap, 2, 26, border_width = 2)
@@ -2401,7 +2481,10 @@ f_syncWipe() =>
     0
 
 if barstate.islast and boOn
-    f_boConsole(bot)
+    if boView == "Summary (10 lines)"
+        f_boSummary(bot)
+    else
+        f_boConsole(bot)
 if barstate.islast and syncMode
     f_syncWipe()
 
