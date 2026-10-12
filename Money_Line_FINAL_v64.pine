@@ -2489,6 +2489,25 @@ botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ?
 botConf = botScr >= botNeed and not botMature and botReady
 botSig  = botOn and botConf and not botConf[1]
 
+// A BOTTOM label that later gets undercut is the most dangerous mark on this
+// chart: it says BUY, and then it stays there forever while price makes new
+// lows under it. INFY printed one and row 11 said "TOO EARLY, only 3 bars
+// since the low" in the same breath - the label was real when it fired and
+// had been invalidated by the time anyone read it. The script already calls a
+// retaken breakout a FAILED BREAKOUT; a bottom deserves the same honesty.
+var float botSigLo = na
+var int botSigBar = na
+var bool botFail = false
+if botSig
+    botSigLo := botAnc
+    botSigBar := bar_index
+    botFail := false
+if not na(botSigLo) and low < botSigLo
+    botFail := true
+botFailNew = botFail and not botFail[1]
+
+plotshape(botFailNew, title = "BOTTOM failed", style = shape.xcross, location = location.belowbar, color = color.new(#d50000, 0), size = size.tiny, text = "✗ bottom failed", textcolor = color.new(#d50000, 0))
+
 plotshape(botSig, title = "BOTTOM confirmed", style = shape.labelup, location = location.belowbar, color = color.new(#00c853, 0), text = "BOTTOM", textcolor = color.white, size = size.small)
 alertcondition(botSig, title = "Bottom confirmed", message = "BOTTOM confirmed on {{ticker}} — bottom score met on the {{interval}} chart")
 
@@ -2503,6 +2522,8 @@ f_botSay() =>
         _s := "—"
     else if botMature
         _s := "MATURED — a trend now, not a bottom. " + str.tostring(botStr, "#.#") + " ATR (" + str.tostring(botDistP, "#.#") + "%) above the average cost, anchored " + str.tostring(botN, "#") + " bars back at " + str.tostring(botAnc, format.mintick) + " — far too low to be a stop. Judge this on rows 1-10."
+    else if botFail and bar_index - botSigBar <= botLook
+        _s := "⚠ THE BOTTOM LABEL ON THIS CHART FAILED — price went under " + str.tostring(botSigLo, format.mintick) + ", the low it was built on, " + str.tostring(bar_index - botSigBar, "#") + " bars after it printed. Ignore that label. Score is " + str.tostring(botScr, "#") + "/7 now and needs a fresh " + str.tostring(botNeed, "#") + "."
     else if not botReady
         _s := "TOO EARLY — only " + str.tostring(botN, "#") + " bar(s) since the low at " + str.tostring(botAnc, format.mintick) + ". Let a base build before buying."
     else
