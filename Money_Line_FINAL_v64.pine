@@ -1657,6 +1657,7 @@ boFresh    = input.int(3, "Breakout stays 'live' for N bars", minval = 1, maxval
 boVolSurge = input.float(1.50, "Volume surge required (x 20-bar avg)", minval = 0.5, maxval = 5.0, step = 0.1, tooltip = "Breakout-bar volume over the 20-bar average. A level breaking on below-average volume is the textbook failure: price moved, nobody came.", group = "6. Breakout Console")
 boRsiMax   = input.float(80.0, "RSI ceiling (above = move already spent)", minval = 60, maxval = 95, step = 1, tooltip = "RSI above this means buying the end of a run. This is the check that stops a BUY into a vertical blow-off.", group = "6. Breakout Console")
 boStopATR  = input.float(0.50, "Breakout stop: ATR below the broken level", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "A broken resistance becomes support; the trade is wrong if price closes back under it. NOT the Money Line, which on weekly can be 25% away and is a REGIME stop. Both are printed — size off the one you are trading.", group = "6. Breakout Console")
+boFlipMaxATR = input.float(4.0, "Polarity: stale once price is this many ATR above it", minval = 1.0, maxval = 20.0, step = 0.5, tooltip = "A broken resistance acts as support while price is near it. Once price has run this far above, it is no longer the level that matters and waiting for a pullback to it means waiting for a crash.\n\nIn ATR so it scales: 4 ATR is a long way on any symbol. The level is still drawn and still reported — it just stops being treated as a live entry.", group = "6. Breakout Console")
 boShowLvl  = input.bool(true, "Draw the defended horizontal levels", group = "6. Breakout Console")
 boShowVert = input.bool(true, "Vertical line at each scored breakout", group = "6. Breakout Console")
 boPos      = input.string("Top Right", "Console position", options = ["Top Right", "Top Left", "Middle Right", "Bottom Left", "Bottom Right"], group = "6. Breakout Console")
@@ -1979,6 +1980,16 @@ boFlipAgo = ta.barssince(boFlipTag)
 boBrkAgoU = ta.barssince(boBrkHorzUp or suBaseBrk or suATHBrk)
 boFlipRe  = boFlipOn and not na(boFlipAgo) and not na(boBrkAgoU) and boFlipAgo < boBrkAgoU
 boFlipPct = boFlipOn and close > 0 ? (close - boFlipLvl) / close * 100 : na
+// A broken level stops being the relevant support once price has run away
+// from it. MSFT weekly carried one 28.3% below price and LINES SAY leaned on
+// it — "buy a pullback into it or stand aside" — on a name that was 12 bars
+// above its 9-week EMA and +16% since reclaiming. Waiting for a 28% pullback
+// is not patience, it is the wrong level. Measured in ATR so it means the same
+// on every symbol; the row still SHOWS the level, it just stops being treated
+// as actionable.
+boFlipATR = boFlipOn and not na(emaAtr) and emaAtr > 0 ? (close - boFlipLvl) / emaAtr : na
+boFlipFar = boFlipOn and not na(boFlipATR) and boFlipATR > boFlipMaxATR
+boFlipLive = boFlipOn and not boFlipFar
 
 // ── THE WEEKLY 9 EMA RULE ────────────────────────────────────────────
 // A named, testable method rather than another indicator: enter as close to
@@ -2188,7 +2199,7 @@ f_linesSay() =>
         _r := "RESPECTED THE " + str.tostring(profWeeks, "#") + "-WEEK EMA — wicked into " + str.tostring(profEma, format.mintick) + " and closed above. Lowest-risk add there is; stop on a close below." + f_emaCaveat()
     else if profOn and profAtLine and not emaOver
         _r := "AT THE " + str.tostring(profWeeks, "#") + "-WEEK EMA (" + str.tostring(profDist, "#.#") + "x ATR from it). This is where the method wants you in, because the stop is small here." + f_emaCaveat()
-    else if boFlipOn and boFlipRe and not emaOver and not na(boFlipPct) and boFlipPct <= 8
+    else if boFlipLive and boFlipRe and not emaOver and not na(boFlipPct) and boFlipPct <= 8
         _r := "BUY THE RETEST — " + str.tostring(boFlipLvl, format.mintick) + " was resistance, held as support, price " + str.tostring(boFlipPct, "#.#") + "% above it. Stop just under it: the tightest entry on this chart."
     else if boDir == 1 and boGate and boScore >= 6
         _r := "BUY THE BREAK of " + f_boKind(boKindAt) + " at " + str.tostring(boLvlAt, format.mintick) + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick)) + "."
@@ -2205,8 +2216,15 @@ f_linesSay() =>
         _r := "A LEVEL IS GIVING WAY but the bar has not closed. Nothing to do until it does."
     else if emaOver
         _r := "EXTENDED — " + str.tostring(emaX21, "#.#") + " ATR above the " + str.tostring(emaSlowLen, "#") + " EMA. Do not start here; wait for a pullback toward " + str.tostring(emaS, format.mintick) + "."
-    else if boFlipOn and not boFlipRe
+    else if boFlipLive and not boFlipRe
         _r := "ABOVE A BROKEN LEVEL at " + str.tostring(boFlipLvl, format.mintick) + ", not yet retested. Either buy a pullback into it or stand aside — chasing here has no close stop."
+    // MSFT weekly had nothing to say for a name in a clean uptrend that is
+    // merely away from its entry zone: not at the line, not extended enough to
+    // warn, no base, no fresh break. The ladder skipped to a wedge 33 bars from
+    // its apex. Holding something that is working is an answer, and it was
+    // missing.
+    else if profOn and profAbove and not na(profBars) and profBars >= 3 and trend == 1
+        _r := "HOLDING ABOVE THE " + str.tostring(profWeeks, "#") + "-WEEK EMA for " + str.tostring(profBars, "#") + " bars" + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim") + ". Nothing to do but hold. Add only back near " + str.tostring(profEma, format.mintick) + "; the exit is a close below it."
     else if suIsBase and suSqz
         _r := "COILED — " + str.tostring(suBars, "#") + "-bar base and a volatility squeeze. Nothing to do yet; set an alert at " + str.tostring(suHi, format.mintick) + "."
     else if suIsBase
@@ -2247,10 +2265,12 @@ f_whatToDo() =>
         _a := "BUY " + (na(boSizePc) ? "" : str.tostring(math.min(boSizePc, 100), "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk") + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "."
     else if profOn and (profReclaim or profRespect or profAtLine) and not emaOver
         _a := (trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + str.tostring(profEma, format.mintick) + " — the " + str.tostring(profWeeks, "#") + "-week EMA. Stop on a CLOSE below it." + (trend == -1 ? " The ATR model is bearish, so this is a scout entry against the regime." : " Size up here because the stop is close.")
-    else if boFlipOn and boFlipRe and not emaOver
+    else if boFlipLive and boFlipRe and not emaOver
         _a := "BUY the retest of " + str.tostring(boFlipLvl, format.mintick) + ". Stop just under it — tightest stop available on this chart."
     else if emaOver
         _a := "DO NOT START HERE. " + str.tostring(emaX21, "#.#") + " ATR above the " + str.tostring(emaSlowLen, "#") + " EMA. Hold what you have; add only back near " + str.tostring(emaS, format.mintick) + "."
+    else if profOn and profAbove and not na(profBars) and profBars >= 3 and trend == 1
+        _a := "HOLD. Exit is a CLOSE below " + str.tostring(profEma, format.mintick) + ". Add only on a pullback back toward it — do not add " + (na(profDist) ? "" : str.tostring(profDist, "#.#") + " ATR ") + "out here."
     else if suIsBase
         _a := "DO NOTHING. Set two alerts: above " + str.tostring(suHi, format.mintick) + " and below " + str.tostring(suLo, format.mintick) + ". Act on whichever closes first."
     else if trend == 1
@@ -2333,7 +2353,7 @@ f_boConsole(table _t) =>
     table.cell(_t, 0, 21, str.tostring(emaFastLen, "#") + " / " + str.tostring(emaSlowLen, "#") + " EMA", text_color = color.white, bgcolor = color.new(#ff5252, 30), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 21, na(emaF) ? "—" : str.tostring(emaF, format.mintick) + "  /  " + str.tostring(emaS, format.mintick) + "   ·   " + str.tostring(emaX9, "#.#") + "x / " + str.tostring(emaX21, "#.#") + "x ATR   (" + (emaPctS >= 0 ? str.tostring(emaPctS, "#.#") + "% above the " : str.tostring(-emaPctS, "#.#") + "% BELOW the ") + str.tostring(emaSlowLen, "#") + ")" + (emaOver ? "  ⚠ EXTENDED" : "") + (na(emaBarsAbove) ? "" : "   ·   " + str.tostring(emaBarsAbove, "#") + " bars above"), text_color = color.white, bgcolor = emaOver ? color.new(color.orange, 30) : color.new(#ff5252, 55), text_halign = text.align_center, text_size = txtSize)
     table.cell(_t, 0, 22, "POLARITY", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 22, not boFlipOn ? "— no level taken yet" : "resistance → support at " + str.tostring(boFlipLvl, format.mintick) + "   (" + str.tostring(boFlipPct, "#.#") + "% below price)" + (boFlipRe ? "   ✓ retested and held" : "   · untested"), text_color = color.white, bgcolor = not boFlipOn ? color.new(color.gray, 55) : boFlipRe ? color.new(#00c853, 35) : color.new(#2962ff, 45), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 1, 22, not boFlipOn ? "— no level taken yet" : "resistance → support at " + str.tostring(boFlipLvl, format.mintick) + "   (" + str.tostring(boFlipPct, "#.#") + "% below price" + (na(boFlipATR) ? "" : ", " + str.tostring(boFlipATR, "#.#") + "x ATR") + ")" + (boFlipFar ? "   ⌛ STALE — price has run too far for this to be the live support" : boFlipRe ? "   ✓ retested and held" : "   · untested"), text_color = color.white, bgcolor = not boFlipOn ? color.new(color.gray, 55) : boFlipFar ? color.new(color.gray, 45) : boFlipRe ? color.new(#00c853, 35) : color.new(#2962ff, 45), text_halign = text.align_center, text_size = txtSize)
     // the whole point of the section: one sentence, from the lines alone
     table.cell(_t, 0, 23, "LINES SAY", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 23, f_linesSay(), text_color = color.white, bgcolor = color.new(#00695c, 20), text_halign = text.align_left, text_size = txtSize)
