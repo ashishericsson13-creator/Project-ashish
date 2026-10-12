@@ -1673,6 +1673,11 @@ wgOn       = input.bool(true, "Draw the converging pair / channel + apex", group
 wgMaxBar   = input.int(60, "Apex: ignore if further out than N bars", minval = 5, maxval = 400, tooltip = "Two nearly-parallel lines meet hundreds of bars away, which is not an apex anyone trades. Past this the pair is reported as a channel and the lines are not drawn to a meeting point.", group = "8. Structure")
 wgFlat     = input.float(0.02, "Flat-slope tolerance (ATR per bar)", minval = 0.001, maxval = 0.5, step = 0.005, tooltip = "A slope smaller than this per bar counts as horizontal, which is what separates an ASCENDING triangle (flat top, rising lows) from a symmetrical one. In ATR so it means the same on every symbol.", group = "8. Structure")
 wgShowMid  = input.bool(true, "Channel: draw the midline (3rd rail)", group = "8. Structure")
+flagOn     = input.bool(true, "Detect BULL / BEAR FLAGS (pole + channel)", group = "8. Structure")
+flagPoleLen = input.int(20, "Flag: bars of 'pole' to look back through", minval = 5, maxval = 100, tooltip = "How far back to look for the sharp move that the flag is resting after. The pole is what makes a flag a CONTINUATION pattern — without one, a falling channel is just a downtrend.", group = "8. Structure")
+flagLen    = input.int(12, "Flag: maximum bars the flag itself may run", minval = 3, maxval = 60, tooltip = "A flag is a pause, not a trend. Past this many bars the pullback has become its own move and should not be traded as a continuation.", group = "8. Structure")
+flagPoleMin = input.float(20.0, "Flag: minimum pole size (%)", minval = 3.0, maxval = 200.0, step = 1.0, tooltip = "How far price must have run before the pause counts as a pole. Too small and every wobble becomes a flag.", group = "8. Structure")
+flagRetMax = input.float(50.0, "Flag: maximum retrace of the pole (%)", minval = 15.0, maxval = 90.0, step = 5.0, tooltip = "A flag that gives back more than this is no longer a pause in the move — it is a reversal of it. 50% is the usual line; 38% is stricter and catches only the tightest flags.", group = "8. Structure")
 
 // ── DEFENDED HORIZONTAL LEVELS ───────────────────────────────────────
 // Reuses ph / pl from the Auto S/R block above — no second pivot scan.
@@ -1831,14 +1836,56 @@ wgIsChan = not wgCrossed and (wgType == "CHANNEL" or wgType == "BROADENING")
 wgPct    = wgHave and close > 0 and not wgCrossed ? wgGap / close * 100 : na
 wgPos    = wgHave and not na(wgGap) and wgGap > 0 ? (close - tlLoNow) / wgGap * 100 : na
 
+// ── BULL / BEAR FLAGS ────────────────────────────────────────────────
+// The shape in those AMZN and GOOGL charts: a sharp advance, then a tight
+// DOWNWARD-sloping parallel channel, then a break upward and continuation.
+// AMZN repeats it five times on one screen.
+//
+// The script could already see the channel and could already see the break.
+// What it could not see is the POLE — and the pole is the entire difference
+// between a continuation pattern and a plain downtrend. A falling channel
+// after a 40% advance is a flag; the identical channel after nothing is just
+// price going down. Both were labelled "CHANNEL".
+//
+// Three conditions, all of which a chartist checks by eye:
+//   1. a pole — price ran at least flagPoleMin% into the pause
+//   2. a shallow retrace — a flag that gives back more than half the pole is
+//      a reversal, not a pause
+//   3. the channel leans AGAINST the pole — a bull flag slopes down
+// Fixed windows throughout, because ta.highest needs a constant length.
+f_flag(int _poleLen, int _flagLen) =>
+    _top = ta.highest(high, _flagLen)
+    _lo  = ta.lowest(low,  _flagLen)
+    _pLo = ta.lowest(low,  _flagLen + _poleLen)
+    _pHi = ta.highest(high, _flagLen + _poleLen)
+    [_top, _lo, _pLo, _pHi]
+
+[flagTop, flagLow, flagPLo, flagPHi] = f_flag(flagPoleLen, flagLen)
+flagPoleUp = flagPLo > 0 ? (flagTop - flagPLo) / flagPLo * 100 : na
+flagPoleDn = flagPHi > 0 ? (flagPHi - flagLow) / flagPHi * 100 : na
+flagRetUp  = flagTop > flagPLo ? (flagTop - flagLow) / (flagTop - flagPLo) * 100 : na
+flagRetDn  = flagPHi > flagLow ? (flagTop - flagLow) / (flagPHi - flagLow) * 100 : na
+// "parallel enough": the two slopes within 60% of each other. A flag drawn by
+// hand is never exactly parallel and should not have to be.
+flagPar = wgHave and not na(wgResSl) and not na(wgSupSl) and math.abs(wgResSl - wgSupSl) <= math.max(math.abs(wgResSl), math.abs(wgSupSl)) * 0.6
+flagBull = flagOn and flagPar and wgResSl < 0 and wgSupSl < 0 and not na(flagPoleUp) and flagPoleUp >= flagPoleMin and not na(flagRetUp) and flagRetUp <= flagRetMax
+flagBear = flagOn and flagPar and wgResSl > 0 and wgSupSl > 0 and not na(flagPoleDn) and flagPoleDn >= flagPoleMin and not na(flagRetDn) and flagRetDn <= flagRetMax
+// the break of the flag's own rail, not of anything else
+flagBrkUp = flagBull[1] and not na(tlUpNow) and not na(tlUpNow[1]) and close > tlUpNow and close[1] <= tlUpNow[1]
+flagBrkDn = flagBear[1] and not na(tlLoNow) and not na(tlLoNow[1]) and close < tlLoNow and close[1] >= tlLoNow[1]
+// measured move: the pole repeated from the rail it broke
+flagTgtUp = flagBull or flagBrkUp ? nz(tlUpNow, close) + (flagTop - flagPLo) : na
+flagTgtDn = flagBear or flagBrkDn ? nz(tlLoNow, close) - (flagPHi - flagLow) : na
+flagWord  = flagBull ? "BULL FLAG" : flagBear ? "BEAR FLAG" : ""
+
 // ── THE EVENT: six sources, four of them already in this script ─────
-boBrkUp = boOn and (suBaseBrk or suATHBrk or boBrkHorzUp or proBreakUp or tlBreakUp or buySignal)
-boBrkDn = boOn and (boBrkHorzDn or proBreakDn or tlBreakDn or sellSignal)
+boBrkUp = boOn and (flagBrkUp or suBaseBrk or suATHBrk or boBrkHorzUp or proBreakUp or tlBreakUp or buySignal)
+boBrkDn = boOn and (flagBrkDn or boBrkHorzDn or proBreakDn or tlBreakDn or sellSignal)
 // An int code rather than a `var string` written inside an if: Pine cannot
 // assign to a global from inside a function, and everything here had to move
 // into functions for CE10295. A code survives ta.valuewhen and is decoded for
 // display, which needs no global write at all.
-boKindCode = suATHBrk ? 6 : suBaseBrk ? 5 : boBrkHorzUp ? 4 : proBreakUp ? 3 : tlBreakUp ? 2 : buySignal ? 1 : boBrkHorzDn ? -4 : proBreakDn ? -3 : tlBreakDn ? -2 : sellSignal ? -1 : 0
+boKindCode = flagBrkUp ? 7 : flagBrkDn ? -7 : suATHBrk ? 6 : suBaseBrk ? 5 : boBrkHorzUp ? 4 : proBreakUp ? 3 : tlBreakUp ? 2 : buySignal ? 1 : boBrkHorzDn ? -4 : proBreakDn ? -3 : tlBreakDn ? -2 : sellSignal ? -1 : 0
 boKindAt   = ta.valuewhen(boBrkUp or boBrkDn, boKindCode, 0)
 boAgeUp = ta.barssince(boBrkUp)
 boAgeDn = ta.barssince(boBrkDn)
@@ -1860,7 +1907,7 @@ boVolAt   = ta.valuewhen(boBrkUp or boBrkDn, boVolOwn, 0)
 boCloAt   = ta.valuewhen(boBrkUp or boBrkDn, (close - low) / math.max(high - low, syminfo.mintick), 0)
 // The level that broke depends on WHICH line broke. Quoting the horizontal
 // level after a trendline break would put the stop where nothing happened.
-boLvlNow  = suATHBrk ? hiAll[1] : suBaseBrk ? suHi[1] : boBrkHorzUp ? boResRef : proBreakUp ? proResNow : tlBreakUp ? tlUpNow : boBrkHorzDn ? boSupRef : proBreakDn ? proSupNow : tlBreakDn ? tlLoNow : (buySignal or sellSignal) ? moneyLine : na
+boLvlNow  = flagBrkUp ? tlUpNow : flagBrkDn ? tlLoNow : suATHBrk ? hiAll[1] : suBaseBrk ? suHi[1] : boBrkHorzUp ? boResRef : proBreakUp ? proResNow : tlBreakUp ? tlUpNow : boBrkHorzDn ? boSupRef : proBreakDn ? proSupNow : tlBreakDn ? tlLoNow : (buySignal or sellSignal) ? moneyLine : na
 boLvlAt   = ta.valuewhen(boBrkUp or boBrkDn, nz(boLvlNow, close), 0)
 boLiveBar = barstate.islast and time_close > timenow
 
@@ -1907,8 +1954,10 @@ boRisk   = na(boStop) ? na : math.abs(boEntry - boStop)
 // plainly visible above. The ATH only qualifies while price is still under it.
 boTgtATH = boDir == 1 and not na(hiAll) and hiAll > close * 1.005 ? hiAll : na
 boTgtMA  = boDir == -1 and not na(ma200bar) and ma200bar < close * 0.995 ? ma200bar : na
-boTarget = boDir == 1 ? nz(boRes, nz(suTgt1, boTgtATH)) : boDir == -1 ? nz(boSup, nz(suLo, boTgtMA)) : na
-boTgtSrc = boDir == 1 and na(boRes) and not na(suTgt1) ? " (measured move)" : boDir == 1 and na(boRes) and na(suTgt1) and not na(boTgtATH) ? " (all-time high)" : boDir == -1 and na(boSup) and na(suLo) and not na(boTgtMA) ? " (200-bar mean)" : ""
+// A flag's measured move comes FIRST: it is the only target here derived from
+// the move that is actually under way, rather than from where price has been.
+boTarget = boDir == 1 ? nz(flagTgtUp, nz(boRes, nz(suTgt1, boTgtATH))) : boDir == -1 ? nz(flagTgtDn, nz(boSup, nz(suLo, boTgtMA))) : na
+boTgtSrc = boDir == 1 and not na(flagTgtUp) ? " (flag measured move)" : boDir == -1 and not na(flagTgtDn) ? " (flag measured move)" : boDir == 1 and na(boRes) and not na(suTgt1) ? " (measured move)" : boDir == 1 and na(boRes) and na(suTgt1) and not na(boTgtATH) ? " (all-time high)" : boDir == -1 and na(boSup) and na(suLo) and not na(boTgtMA) ? " (200-bar mean)" : ""
 boRR     = na(boTarget) or na(boRisk) or boRisk <= 0 ? na : math.abs(boTarget - boEntry) / boRisk
 boSizePc = na(boRisk) or boEntry <= 0 or boRisk <= 0 ? na : riskPct / (boRisk / boEntry * 100) * 100
 
@@ -2141,7 +2190,7 @@ if barstate.islast and boOn and not syncMode
 // Reading a global inside a function is allowed; only ASSIGNING to one is
 // not. table.cell() on a global table is a call, so the whole console fits
 // in a function and costs the main body a single statement.
-f_boKind(float _c) => _c == 6 ? "ALL-TIME HIGH" : _c == 5 ? "BASE BREAKOUT" : _c == 4 ? "DEFENDED LEVEL" : _c == 3 ? "PRO TRENDLINE" : _c == 2 ? "SWING TRENDLINE" : _c == 1 ? "ATR MONEY LINE" : _c == -4 ? "DEFENDED LEVEL" : _c == -3 ? "PRO TRENDLINE" : _c == -2 ? "SWING TRENDLINE" : _c == -1 ? "ATR MONEY LINE" : "—"
+f_boKind(float _c) => _c == 7 ? "BULL FLAG" : _c == -7 ? "BEAR FLAG" : _c == 6 ? "ALL-TIME HIGH" : _c == 5 ? "BASE BREAKOUT" : _c == 4 ? "DEFENDED LEVEL" : _c == 3 ? "PRO TRENDLINE" : _c == 2 ? "SWING TRENDLINE" : _c == 1 ? "ATR MONEY LINE" : _c == -4 ? "DEFENDED LEVEL" : _c == -3 ? "PRO TRENDLINE" : _c == -2 ? "SWING TRENDLINE" : _c == -1 ? "ATR MONEY LINE" : "—"
 // NO SETUP is not the same as FAILED. With boDir == 0 the k-checks still
 // evaluate (boDir >= 0 takes the long arm), so without this the console
 // printed a red "FAILED" gate and red rows describing a breakout that never
@@ -2329,10 +2378,10 @@ f_boSummary(table _t) =>
     vCol = bothBuy ? color.new(#00c853, 0) : bothSell ? color.new(#d50000, 0) : color.new(color.orange, 15)
 
     table.cell(_t, 0, 0, "1  ATR MODEL", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 0, (atrBull ? "▲ BULLISH" : "▼ BEARISH") + "   —   " + (atrBull ? "exits on a " + tfWord + " close below " : "turns bullish on a " + tfWord + " close above ") + str.tostring(moneyLine, format.mintick), text_color = color.white, bgcolor = aCol, text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 0, (atrBull ? "▲ BULLISH   —   STAY LONG above " + str.tostring(moneyLine, format.mintick) + "   ·   SELL on a " + tfWord + " close BELOW it" : "▼ BEARISH   —   STAY OUT below " + str.tostring(moneyLine, format.mintick) + "   ·   BUY on a " + tfWord + " close ABOVE it") + "   (" + (close >= moneyLine ? "+" : "") + str.tostring((close - moneyLine) / moneyLine * 100, "#.#") + "% away)", text_color = color.white, bgcolor = aCol, text_halign = text.align_left, text_size = txtSize)
 
     table.cell(_t, 0, 1, "2  LINES", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 1, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + (lnNet >= 0 ? "+" : "") + str.tostring(lnNet, "#") + "/4   —   " + str.tostring(profWeeks, "#") + "wEMA " + (lnV1 > 0 ? "▲" : "▼") + "   21EMA " + (lnV2 > 0 ? "▲" : "▼") + "   last break " + (lnV3 > 0 ? "▲" : lnV3 < 0 ? "▼" : "·") + "   200-bar " + (lnV4 > 0 ? "▲" : "▼"), text_color = color.white, bgcolor = lCol, text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 1, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + str.tostring(profWeeks, "#") + "wEMA " + (lnV1 > 0 ? "▲ above" : "▼ below") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : "▼ below") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : "▼ below"), text_color = color.white, bgcolor = lCol, text_halign = text.align_left, text_size = txtSize)
 
     table.cell(_t, 0, 2, "3  VERDICT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 2, agreeWord + (bothBuy or bothSell ? "   ·   " + str.tostring(boScore, "#") + "/10 on the break" : "   ·   one says one thing, the other says the opposite"), text_color = color.white, bgcolor = vCol, text_halign = text.align_left, text_size = txtSize)
@@ -2356,7 +2405,7 @@ f_boSummary(table _t) =>
     table.cell(_t, 1, 8, (na(boRes) ? "resistance —" : "resistance " + str.tostring(boRes, format.mintick) + " (" + str.tostring((boRes - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(boSup) ? "support —" : "support " + str.tostring(boSup, format.mintick) + " (" + str.tostring((boSup - close) / close * 100, "#.#") + "%)") + (not boFlipLive ? "" : "   ·   flip-support " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
 
     table.cell(_t, 0, 9, "10  STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 9, (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
     0
 
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
@@ -2495,3 +2544,5 @@ alertcondition(suATHBrk,  title = "v64 NEW ALL-TIME HIGH", message = "{{ticker}}
 alertcondition(profReclaim, title = "v64 RECLAIMED the weekly 9 EMA", message = "{{ticker}} {{interval}}: closed back above the 9-week EMA at {{close}} — the method's entry")
 alertcondition(profLost,    title = "v64 LOST the weekly 9 EMA", message = "{{ticker}} {{interval}}: closed below the 9-week EMA at {{close}} — the method's exit")
 alertcondition(profRespect, title = "v64 RESPECTED the weekly 9 EMA (pullback held)", message = "{{ticker}} {{interval}}: wicked into the 9-week EMA and closed above at {{close}}")
+alertcondition(flagBrkUp, title = "v64 BULL FLAG breakout", message = "{{ticker}} {{interval}}: broke out of a bull flag at {{close}} — pole measured move projected")
+alertcondition(flagBrkDn, title = "v64 BEAR FLAG breakdown", message = "{{ticker}} {{interval}}: broke down from a bear flag at {{close}}")
