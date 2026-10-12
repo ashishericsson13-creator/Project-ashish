@@ -1815,9 +1815,18 @@ wgRFlat  = wgHave and not na(wgTol) and math.abs(wgResSl) <= wgTol
 wgSFlat  = wgHave and not na(wgTol) and math.abs(wgSupSl) <= wgTol
 // Named the way a chartist names them — by what the two slopes do, not by
 // any forecast attached to the name.
-wgType   = not wgOn or not wgHave ? "—" : wgApexOk ? (wgRFlat and wgSupSl > 0 ? "ASCENDING TRIANGLE" : wgSFlat and wgResSl < 0 ? "DESCENDING TRIANGLE" : wgResSl < 0 and wgSupSl > 0 ? "SYMMETRICAL TRIANGLE" : wgResSl < 0 and wgSupSl < 0 ? "FALLING WEDGE" : wgResSl > 0 and wgSupSl > 0 ? "RISING WEDGE" : "CONVERGING") : (not na(wgConv) and wgConv < 0 ? "BROADENING" : "CHANNEL")
-wgIsChan = wgType == "CHANNEL" or wgType == "BROADENING"
-wgPct    = wgHave and close > 0 ? wgGap / close * 100 : na
+wgType   = not wgOn or not wgHave ? "—" : wgApexOk ? (wgRFlat and wgSupSl > 0 ? "ASCENDING TRIANGLE" : wgSFlat and wgResSl < 0 ? "DESCENDING TRIANGLE" : wgResSl < 0 and wgSupSl > 0 ? "SYMMETRICAL TRIANGLE" : wgResSl < 0 and wgSupSl < 0 ? "FALLING WEDGE" : wgResSl > 0 and wgSupSl > 0 ? "RISING WEDGE" : "CONVERGING") : (not na(wgGap) and wgGap < 0 ? "APEX PASSED — lines crossed" : not na(wgConv) and wgConv < 0 ? "BROADENING" : "CHANNEL")
+// wgGap is tlUpNow - tlLoNow, and it goes NEGATIVE once the two lines have
+// crossed — the apex is behind us and the "resistance" now sits under the
+// "support". Nothing downstream caught that: wgApexN is guarded by wgGap > 0
+// so it went na, wgApexOk went false, and the classifier fell through to the
+// channel branch. BTCUSD weekly printed "CHANNEL · gap -7.6%", which is wrong
+// twice over — it is not a channel, and a gap cannot be negative. A crossed
+// pair is a STALE structure waiting to re-anchor on the next swing, and it is
+// now reported as exactly that.
+wgCrossed = wgHave and not na(wgGap) and wgGap < 0
+wgIsChan = not wgCrossed and (wgType == "CHANNEL" or wgType == "BROADENING")
+wgPct    = wgHave and close > 0 and not wgCrossed ? wgGap / close * 100 : na
 wgPos    = wgHave and not na(wgGap) and wgGap > 0 ? (close - tlLoNow) / wgGap * 100 : na
 
 // ── THE EVENT: six sources, four of them already in this script ─────
@@ -1889,8 +1898,15 @@ boStop   = boDir == 1 ? nz(boLvlAt, close) - boStopATR * atrV : boDir == -1 ? nz
 boRisk   = na(boStop) ? na : math.abs(boEntry - boStop)
 // On a chart making new highs there is no old level above to aim at, and that
 // is exactly when a target is most needed. Fall back to the measured move.
-boTarget = boDir == 1 ? nz(boRes, suTgt1) : boDir == -1 ? boSup : na
-boTgtSrc = boDir == 1 and na(boRes) and not na(suTgt1) ? " (measured move)" : ""
+// Three real references, in order of how directly price has transacted there,
+// never an invented number. BTCUSD weekly sat in a confirmed long with no
+// defended level overhead and no base, so Target read "— (no level beyond)"
+// and R:R could not be computed at all — on a chart whose all-time high was
+// plainly visible above. The ATH only qualifies while price is still under it.
+boTgtATH = boDir == 1 and not na(hiAll) and hiAll > close * 1.005 ? hiAll : na
+boTgtMA  = boDir == -1 and not na(ma200bar) and ma200bar < close * 0.995 ? ma200bar : na
+boTarget = boDir == 1 ? nz(boRes, nz(suTgt1, boTgtATH)) : boDir == -1 ? nz(boSup, nz(suLo, boTgtMA)) : na
+boTgtSrc = boDir == 1 and na(boRes) and not na(suTgt1) ? " (measured move)" : boDir == 1 and na(boRes) and na(suTgt1) and not na(boTgtATH) ? " (all-time high)" : boDir == -1 and na(boSup) and na(suLo) and not na(boTgtMA) ? " (200-bar mean)" : ""
 boRR     = na(boTarget) or na(boRisk) or boRisk <= 0 ? na : math.abs(boTarget - boEntry) / boRisk
 boSizePc = na(boRisk) or boEntry <= 0 or boRisk <= 0 ? na : riskPct / (boRisk / boEntry * 100) * 100
 
@@ -2123,6 +2139,20 @@ f_boTick(bool _v) => not boAssess ? "·" : _v ? "✓" : "✗"
 f_boCol(bool _v)  => not boAssess ? color.new(color.gray, 60) : _v ? color.new(#00c853, 55) : color.new(#d50000, 55)
 f_boTxt(bool _v, string _s) => not boAssess ? "—" : _s
 
+// The method's own branches fire on price-vs-line alone, which is correct for
+// the method but incomplete as advice. On TSLA weekly it read "AT THE 9-WEEK
+// EMA — this is where the method wants you in" while the ATR model was BEAR,
+// MODELS said SPLIT, ADX was 11 and the gate had failed on volume. Its author
+// uses that line to HOLD winners and re-enter reclaims, not to buy into a dead
+// tape. The branches still fire — this just refuses to let them read clean.
+f_emaCaveat() =>
+    _c = ""
+    if trend == -1
+        _c := "  ⚠ but the ATR model is BEARISH — this is a scout entry against the regime, half size at most."
+    else if not na(adxV) and adxV < adxMin
+        _c := "  ⚠ but ADX is " + str.tostring(adxV, "#.#") + " — no trend to ride yet, so expect chop."
+    _c
+
 // ── WHAT THE LINES SAY ───────────────────────────────────────────────
 // One sentence, read ONLY from structure — where price sits against the
 // levels, the flip, the base and the fast pair. It deliberately does not
@@ -2143,11 +2173,11 @@ f_linesSay() =>
     else if profOn and profLost
         _r := "LOST THE " + str.tostring(profWeeks, "#") + "-WEEK EMA on this close (" + str.tostring(profEma, format.mintick) + "). That is the exit for this method — a wick through it was not, this close is."
     else if profOn and profReclaim
-        _r := "RECLAIMED THE " + str.tostring(profWeeks, "#") + "-WEEK EMA at " + str.tostring(profEma, format.mintick) + ". This is the entry: buy near the line, exit on a close back under it."
+        _r := "RECLAIMED THE " + str.tostring(profWeeks, "#") + "-WEEK EMA at " + str.tostring(profEma, format.mintick) + ". This is the entry: buy near the line, exit on a close back under it." + f_emaCaveat()
     else if profOn and profRespect and not emaOver
-        _r := "RESPECTED THE " + str.tostring(profWeeks, "#") + "-WEEK EMA — wicked into " + str.tostring(profEma, format.mintick) + " and closed above. Lowest-risk add there is; stop on a close below."
+        _r := "RESPECTED THE " + str.tostring(profWeeks, "#") + "-WEEK EMA — wicked into " + str.tostring(profEma, format.mintick) + " and closed above. Lowest-risk add there is; stop on a close below." + f_emaCaveat()
     else if profOn and profAtLine and not emaOver
-        _r := "AT THE " + str.tostring(profWeeks, "#") + "-WEEK EMA (" + str.tostring(profDist, "#.#") + "x ATR from it). This is where the method wants you in, because the stop is small here."
+        _r := "AT THE " + str.tostring(profWeeks, "#") + "-WEEK EMA (" + str.tostring(profDist, "#.#") + "x ATR from it). This is where the method wants you in, because the stop is small here." + f_emaCaveat()
     else if boFlipOn and boFlipRe and not emaOver and not na(boFlipPct) and boFlipPct <= 8
         _r := "BUY THE RETEST — " + str.tostring(boFlipLvl, format.mintick) + " was resistance, held as support, price " + str.tostring(boFlipPct, "#.#") + "% above it. Stop just under it: the tightest entry on this chart."
     else if boDir == 1 and boGate and boScore >= 6
@@ -2206,7 +2236,7 @@ f_whatToDo() =>
     else if boDir == 1 and boGate and boScore >= 6
         _a := "BUY " + (na(boSizePc) ? "" : str.tostring(math.min(boSizePc, 100), "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk") + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "."
     else if profOn and (profReclaim or profRespect or profAtLine) and not emaOver
-        _a := "BUY near " + str.tostring(profEma, format.mintick) + " — the " + str.tostring(profWeeks, "#") + "-week EMA. Stop on a CLOSE below it. Size up here because the stop is close."
+        _a := (trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + str.tostring(profEma, format.mintick) + " — the " + str.tostring(profWeeks, "#") + "-week EMA. Stop on a CLOSE below it." + (trend == -1 ? " The ATR model is bearish, so this is a scout entry against the regime." : " Size up here because the stop is close.")
     else if boFlipOn and boFlipRe and not emaOver
         _a := "BUY the retest of " + str.tostring(boFlipLvl, format.mintick) + ". Stop just under it — tightest stop available on this chart."
     else if emaOver
@@ -2227,80 +2257,85 @@ f_boConsole(table _t) =>
     vCol = boVerdict == "STRONG BUY" ? color.new(#00c853, 0) : boVerdict == "BUY" ? color.new(#00c853, 30) : boVerdict == "STRONG SELL" ? color.new(#d50000, 0) : boVerdict == "SELL" ? color.new(#d50000, 30) : boVerdict == "NO SETUP" ? color.new(color.gray, 40) : color.new(color.orange, 25)
     table.cell(_t, 0, 0, "BREAKOUT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 0, boVerdict + (boDir == 0 ? "" : "   " + str.tostring(boScore, "#") + "/10"), text_color = color.white, bgcolor = vCol, text_halign = text.align_center, text_size = txtSize)
+    // WHAT TO DO sits at row 1, immediately under the verdict, and not at the
+    // bottom where it was. The console is 26 rows tall; on SPX weekly at Small
+    // text it ran off the bottom of the chart and the single most important
+    // row was the one you could not see. Order by importance, not by the order
+    // the features were written.
+    table.cell(_t, 0, 1, "▶ WHAT TO DO", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 1, f_whatToDo(), text_color = color.white, bgcolor = boDir == 1 and boGate ? color.new(#00c853, 15) : boDir == -1 and boGate ? color.new(#d50000, 15) : boPending or boBrkUnconf ? color.new(color.orange, 25) : color.new(#004d40, 10), text_halign = text.align_left, text_size = txtSize)
     what = boDir == 0 ? "nothing broke in the last " + str.tostring(boFresh, "#") + " bars" : f_boKind(boKindAt) + "  ·  " + str.tostring(boBrkAge, "#") + " bar(s) ago" + (boBrkUnconf ? "   ⧗ BAR NOT CLOSED" : "")
-    table.cell(_t, 0, 1, "What broke", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 1, what, text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 2, "Level", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 2, na(boLvlAt) or boDir == 0 ? "—" : str.tostring(boLvlAt, format.mintick) + "   (now " + str.tostring(close, format.mintick) + ")", text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 3, "GATE  vol + close", text_color = color.white, bgcolor = color.new(color.teal, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 3, not boAssess ? "— nothing to assess" : boGate ? "✓ PASSED" : boPending ? "⧗ NOT SETTLED — bar still filling" : "✗ FAILED — not an entry at any score", text_color = color.white, bgcolor = not boAssess ? color.new(color.gray, 60) : boGate ? f_boCol(true) : boPending ? color.new(color.orange, 35) : f_boCol(false), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 4, f_boTick(k1) + " Volume surge", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 4, f_boTxt(k1, na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x   (need " + str.tostring(boVolSurge, "#.##") + "x)" + (boBrkUnconf and not k1 ? "  ⧗ still filling" : "")), text_color = color.white, bgcolor = k1 ? f_boCol(true) : boBrkUnconf ? color.new(color.orange, 35) : f_boCol(false), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 5, f_boTick(k2) + " Close strength", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 5, f_boTxt(k2, na(boCloAt) ? "—" : str.tostring(boCloAt * 100, "#") + "% of the bar's range"), text_color = color.white, bgcolor = f_boCol(k2), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 6, f_boTick(k3 and k4) + " RSI", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 6, na(rsiV) ? "—" : str.tostring(rsiV, "#.#") + (not boAssess ? "" : (k4 ? "" : "  ⚠ spent") + (k3 ? "" : "  ⚠ wrong side of 50")), text_color = color.white, bgcolor = f_boCol(k3 and k4), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 7, f_boTick(k5 and k6) + " MACD", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 7, na(macdH) ? "—" : (k5 ? "cross ✓" : "cross ✗") + "    " + (k6 ? "thrust expanding ✓" : "thrust flat / fading ✗"), text_color = color.white, bgcolor = f_boCol(k5 and k6), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 8, f_boTick(k7) + " ATR Money Line", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 8, (trend == 1 ? "▲ bull" : "▼ bear") + (not boAssess ? "" : k7 ? "  — agrees" : "  — DISAGREES (scout entry)"), text_color = color.white, bgcolor = f_boCol(k7), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 9, f_boTick(k8) + " 200-bar mean", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 9, na(ma200bar) ? "—" : str.tostring(ma200bar, format.mintick), text_color = color.white, bgcolor = f_boCol(k8), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 10, f_boTick(k9) + " ADX trending", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 10, na(adxV) ? "—" : str.tostring(adxV, "#.#") + "   (need " + str.tostring(adxMin, "#") + ")", text_color = color.white, bgcolor = f_boCol(k9), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 11, f_boTick(k10) + " Not over-extended", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 11, na(ext200) ? "—" : f_pc(ext200) + " from the mean   (max " + str.tostring(extMax, "#") + "%)", text_color = color.white, bgcolor = f_boCol(k10), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 12, "Entry / Stop", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 12, boDir == 0 or na(boStop) ? "—" : str.tostring(boEntry, format.mintick) + "  /  " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)", text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 13, "Target / R:R", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 13, na(boRR) ? "— (no level beyond)" : str.tostring(boTarget, format.mintick) + boTgtSrc + "    R:R " + str.tostring(boRR, "#.##") + (boRR < 1.5 ? "  ⚠ thin" : ""), text_color = color.white, bgcolor = na(boRR) or boRR < 1.5 ? color.new(color.orange, 35) : color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 14, "Size at " + str.tostring(riskPct, "#.#") + "% risk", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 14, na(boSizePc) ? "—" : str.tostring(math.min(boSizePc, 100), "#.#") + "% of account", text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 2, "What broke", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 2, what, text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 3, "Level", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 3, na(boLvlAt) or boDir == 0 ? "—" : str.tostring(boLvlAt, format.mintick) + "   (now " + str.tostring(close, format.mintick) + ")", text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 4, "GATE  vol + close", text_color = color.white, bgcolor = color.new(color.teal, 10), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 4, not boAssess ? "— nothing to assess" : boGate ? "✓ PASSED" : boPending ? "⧗ NOT SETTLED — bar still filling" : "✗ FAILED — not an entry at any score", text_color = color.white, bgcolor = not boAssess ? color.new(color.gray, 60) : boGate ? f_boCol(true) : boPending ? color.new(color.orange, 35) : f_boCol(false), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 5, f_boTick(k1) + " Volume surge", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 5, f_boTxt(k1, na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x   (need " + str.tostring(boVolSurge, "#.##") + "x)" + (boBrkUnconf and not k1 ? "  ⧗ still filling" : "")), text_color = color.white, bgcolor = k1 ? f_boCol(true) : boBrkUnconf ? color.new(color.orange, 35) : f_boCol(false), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 6, f_boTick(k2) + " Close strength", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 6, f_boTxt(k2, na(boCloAt) ? "—" : str.tostring(boCloAt * 100, "#") + "% of the bar's range"), text_color = color.white, bgcolor = f_boCol(k2), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 7, f_boTick(k3 and k4) + " RSI", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 7, na(rsiV) ? "—" : str.tostring(rsiV, "#.#") + (not boAssess ? "" : (k4 ? "" : "  ⚠ spent") + (k3 ? "" : "  ⚠ wrong side of 50")), text_color = color.white, bgcolor = f_boCol(k3 and k4), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 8, f_boTick(k5 and k6) + " MACD", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 8, na(macdH) ? "—" : (k5 ? "cross ✓" : "cross ✗") + "    " + (k6 ? "thrust expanding ✓" : "thrust flat / fading ✗"), text_color = color.white, bgcolor = f_boCol(k5 and k6), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 9, f_boTick(k7) + " ATR Money Line", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 9, (trend == 1 ? "▲ bull" : "▼ bear") + (not boAssess ? "" : k7 ? "  — agrees" : "  — DISAGREES (scout entry)"), text_color = color.white, bgcolor = f_boCol(k7), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 10, f_boTick(k8) + " 200-bar mean", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 10, na(ma200bar) ? "—" : str.tostring(ma200bar, format.mintick), text_color = color.white, bgcolor = f_boCol(k8), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 11, f_boTick(k9) + " ADX trending", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 11, na(adxV) ? "—" : str.tostring(adxV, "#.#") + "   (need " + str.tostring(adxMin, "#") + ")", text_color = color.white, bgcolor = f_boCol(k9), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 12, f_boTick(k10) + " Not over-extended", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 12, na(ext200) ? "—" : f_pc(ext200) + " from the mean   (max " + str.tostring(extMax, "#") + "%)", text_color = color.white, bgcolor = f_boCol(k10), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 13, "Entry / Stop", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 13, boDir == 0 or na(boStop) ? "—" : str.tostring(boEntry, format.mintick) + "  /  " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)", text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 14, "Target / R:R", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 14, na(boRR) ? "— (no level beyond)" : str.tostring(boTarget, format.mintick) + boTgtSrc + "    R:R " + str.tostring(boRR, "#.##") + (boRR < 1.5 ? "  ⚠ thin" : ""), text_color = color.white, bgcolor = na(boRR) or boRR < 1.5 ? color.new(color.orange, 35) : color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 15, "Size at " + str.tostring(riskPct, "#.#") + "% risk", text_color = color.white, bgcolor = color.new(color.navy, 10), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 15, na(boSizePc) ? "—" : str.tostring(math.min(boSizePc, 100), "#.#") + "% of account", text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_center, text_size = txtSize)
     // the two models side by side, never merged: a breakout under a bearish
     // Money Line is the scout entry, a bullish line with no breakout is a
     // trend you are late to. Averaging them would mean neither.
-    table.cell(_t, 0, 15, "MODELS", text_color = color.white, bgcolor = color.new(color.gray, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 15, boDir == 0 ? "lines: quiet   ·   ATR: " + (trend == 1 ? "bull" : "bear") : (boDir == 1 ? "lines: BULL" : "lines: BEAR") + "   ·   ATR: " + (trend == 1 ? "bull" : "bear") + (k7 ? "   → ALIGNED" : "   → SPLIT"), text_color = color.white, bgcolor = k7 and boDir != 0 ? color.new(#00c853, 45) : color.new(color.gray, 45), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 16, "MODELS", text_color = color.white, bgcolor = color.new(color.gray, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 16, boDir == 0 ? "lines: quiet   ·   ATR: " + (trend == 1 ? "bull" : "bear") : (boDir == 1 ? "lines: BULL" : "lines: BEAR") + "   ·   ATR: " + (trend == 1 ? "bull" : "bear") + (k7 ? "   → ALIGNED" : "   → SPLIT"), text_color = color.white, bgcolor = k7 and boDir != 0 ? color.new(#00c853, 45) : color.new(color.gray, 45), text_halign = text.align_center, text_size = txtSize)
     // touches AND age: a level defended twice over two years is a different
     // object from one defended twice last month, and only the pair says which
     rAge = na(boResBar) ? na : bar_index - boResBar
     sAge = na(boSupBar) ? na : bar_index - boSupBar
-    table.cell(_t, 0, 16, "Next level", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 16, (na(boRes) ? "R —" : "R " + str.tostring(boRes, format.mintick) + "  " + str.tostring(boResHit, "#") + "t/" + str.tostring(rAge, "#") + "b") + "   ·   " + (na(boSup) ? "S —" : "S " + str.tostring(boSup, format.mintick) + "  " + str.tostring(boSupHit, "#") + "t/" + str.tostring(sAge, "#") + "b"), text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 17, "Next level", text_color = color.white, bgcolor = color.new(color.black, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 17, (na(boRes) ? "R —" : "R " + str.tostring(boRes, format.mintick) + "  " + str.tostring(boResHit, "#") + "t/" + str.tostring(rAge, "#") + "b") + "   ·   " + (na(boSup) ? "S —" : "S " + str.tostring(boSup, format.mintick) + "  " + str.tostring(boSupHit, "#") + "t/" + str.tostring(sAge, "#") + "b"), text_color = color.white, bgcolor = color.new(color.black, 40), text_halign = text.align_center, text_size = txtSize)
     // SETUP sits BELOW the verdict, not inside it: whether the thing that
     // broke was worth breaking is a different question from whether the
     // break is real.
     suWhy = not suOn ? "off" : (suIsBase ? str.tostring(suBars, "#") + "-bar base (" + str.tostring(f_suW(suHi, suLo), "#.#") + "% wide)" : "no base — " + (suBars > 0 ? str.tostring(suBars, "#") + " bars only" : "range too wide")) + (suNewATH ? "  ·  AT ALL-TIME HIGH" : suNew52 ? "  ·  at 52w high" : "") + (suSqz ? "  ·  SQUEEZE" : "")
-    table.cell(_t, 0, 17, "SETUP  " + suGrade, text_color = color.white, bgcolor = color.new(#00bcd4, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 17, suWhy, text_color = color.white, bgcolor = suGrade == "A+" ? color.new(#00c853, 10) : suGrade == "A" ? color.new(#00c853, 40) : suGrade == "B" ? color.new(color.orange, 35) : color.new(color.gray, 45), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 18, "Measured move", text_color = color.white, bgcolor = color.new(#9c27b0, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 18, not suIsBase or na(suTgt1) ? "— (no base to measure)" : "T1 " + str.tostring(suTgt1, format.mintick) + "   T2 " + str.tostring(suTgt2, format.mintick) + "   (base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) + ")", text_color = color.white, bgcolor = color.new(#9c27b0, 45), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 18, "SETUP  " + suGrade, text_color = color.white, bgcolor = color.new(#00bcd4, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 18, suWhy, text_color = color.white, bgcolor = suGrade == "A+" ? color.new(#00c853, 10) : suGrade == "A" ? color.new(#00c853, 40) : suGrade == "B" ? color.new(color.orange, 35) : color.new(color.gray, 45), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 19, "Measured move", text_color = color.white, bgcolor = color.new(#9c27b0, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 19, not suIsBase or na(suTgt1) ? "— (no base to measure)" : "T1 " + str.tostring(suTgt1, format.mintick) + "   T2 " + str.tostring(suTgt2, format.mintick) + "   (base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) + ")", text_color = color.white, bgcolor = color.new(#9c27b0, 45), text_halign = text.align_center, text_size = txtSize)
     // a pattern is not a direction: a symmetrical triangle resolves either
     // way and a falling wedge is bullish only by convention, so this names
     // the structure and says when the decision is due — it does not vote.
-    wgWhy = not wgOn ? "off" : not wgHave ? "no pair yet — need two swing highs and two swing lows" : wgType + (wgApexOk ? "  ·  apex in " + str.tostring(wgApexN, "#") + " bars" : "") + "  ·  gap " + str.tostring(wgPct, "#.#") + "%" + (na(wgPos) ? "" : "  ·  price " + (wgPos > 110 ? "ABOVE the upper rail" : wgPos < -10 ? "BELOW the lower rail" : str.tostring(wgPos, "#") + "% up the range"))
-    table.cell(_t, 0, 19, "STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 15), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 19, wgWhy, text_color = color.white, bgcolor = not wgHave ? color.new(color.gray, 55) : wgApexOk ? color.new(#2962ff, 30) : color.new(#2962ff, 55), text_halign = text.align_center, text_size = txtSize)
+    wgWhy = not wgOn ? "off" : not wgHave ? "no pair yet — need two swing highs and two swing lows" : wgCrossed ? wgType + "  ·  stale until the next swing confirms" : wgType + (wgApexOk ? "  ·  apex in " + str.tostring(wgApexN, "#") + " bars" : "") + "  ·  gap " + str.tostring(wgPct, "#.#") + "%" + (na(wgPos) ? "" : "  ·  price " + (wgPos > 110 ? "ABOVE the upper rail" : wgPos < -10 ? "BELOW the lower rail" : str.tostring(wgPos, "#") + "% up the range"))
+    table.cell(_t, 0, 20, "STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 15), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 20, wgWhy, text_color = color.white, bgcolor = not wgHave ? color.new(color.gray, 55) : wgApexOk ? color.new(#2962ff, 30) : color.new(#2962ff, 55), text_halign = text.align_center, text_size = txtSize)
     // extension in ATR, not percent: "1.5 ATR above the 21 EMA" means the same
     // thing on every symbol, where "10% above" does not.
-    table.cell(_t, 0, 20, str.tostring(emaFastLen, "#") + " / " + str.tostring(emaSlowLen, "#") + " EMA", text_color = color.white, bgcolor = color.new(#ff5252, 30), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 20, na(emaF) ? "—" : str.tostring(emaF, format.mintick) + "  /  " + str.tostring(emaS, format.mintick) + "   ·   " + str.tostring(emaX9, "#.#") + "x / " + str.tostring(emaX21, "#.#") + "x ATR   (" + (emaPctS >= 0 ? str.tostring(emaPctS, "#.#") + "% above the " : str.tostring(-emaPctS, "#.#") + "% BELOW the ") + str.tostring(emaSlowLen, "#") + ")" + (emaOver ? "  ⚠ EXTENDED" : "") + (na(emaBarsAbove) ? "" : "   ·   " + str.tostring(emaBarsAbove, "#") + " bars above"), text_color = color.white, bgcolor = emaOver ? color.new(color.orange, 30) : color.new(#ff5252, 55), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 21, "POLARITY", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 21, not boFlipOn ? "— no level taken yet" : "resistance → support at " + str.tostring(boFlipLvl, format.mintick) + "   (" + str.tostring(boFlipPct, "#.#") + "% below price)" + (boFlipRe ? "   ✓ retested and held" : "   · untested"), text_color = color.white, bgcolor = not boFlipOn ? color.new(color.gray, 55) : boFlipRe ? color.new(#00c853, 35) : color.new(#2962ff, 45), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 21, str.tostring(emaFastLen, "#") + " / " + str.tostring(emaSlowLen, "#") + " EMA", text_color = color.white, bgcolor = color.new(#ff5252, 30), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 21, na(emaF) ? "—" : str.tostring(emaF, format.mintick) + "  /  " + str.tostring(emaS, format.mintick) + "   ·   " + str.tostring(emaX9, "#.#") + "x / " + str.tostring(emaX21, "#.#") + "x ATR   (" + (emaPctS >= 0 ? str.tostring(emaPctS, "#.#") + "% above the " : str.tostring(-emaPctS, "#.#") + "% BELOW the ") + str.tostring(emaSlowLen, "#") + ")" + (emaOver ? "  ⚠ EXTENDED" : "") + (na(emaBarsAbove) ? "" : "   ·   " + str.tostring(emaBarsAbove, "#") + " bars above"), text_color = color.white, bgcolor = emaOver ? color.new(color.orange, 30) : color.new(#ff5252, 55), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 22, "POLARITY", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 22, not boFlipOn ? "— no level taken yet" : "resistance → support at " + str.tostring(boFlipLvl, format.mintick) + "   (" + str.tostring(boFlipPct, "#.#") + "% below price)" + (boFlipRe ? "   ✓ retested and held" : "   · untested"), text_color = color.white, bgcolor = not boFlipOn ? color.new(color.gray, 55) : boFlipRe ? color.new(#00c853, 35) : color.new(#2962ff, 45), text_halign = text.align_center, text_size = txtSize)
     // the whole point of the section: one sentence, from the lines alone
-    table.cell(_t, 0, 22, "LINES SAY", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 22, f_linesSay(), text_color = color.white, bgcolor = color.new(#00695c, 20), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 0, 23, "LINES SAY", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 23, f_linesSay(), text_color = color.white, bgcolor = color.new(#00695c, 20), text_halign = text.align_left, text_size = txtSize)
     // syminfo.sector / .industry are built-ins — they cost nothing against the
     // request budget, which is full at exactly 40 of the 40 allowed, where a
     // single extra request.*() would break the whole script.
     secTxt = (syminfo.sector == "" ? "—" : syminfo.sector) + (syminfo.industry == "" ? "" : "   ·   " + syminfo.industry) + "   ·   " + syminfo.type
     profTxt = not profOn ? "off" : na(profEma) ? "—" : (profAbove ? "ABOVE " : "BELOW ") + str.tostring(profEma, format.mintick) + "   (" + str.tostring(profPct, "#.#") + "%, " + str.tostring(profDist, "#.#") + "x ATR)" + (profLost ? "   ⚠ LOST IT THIS BAR — this is the exit" : profReclaim ? "   ★ RECLAIMED THIS BAR" : profRespect ? "   ✓ RESPECTED — wicked in, closed above" : profAtLine ? "   ◆ AT THE LINE — entry zone" : "") + (profAbove and not na(profBars) ? "   ·  held " + str.tostring(profBars, "#") + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim")
-    table.cell(_t, 0, 24, str.tostring(profWeeks, "#") + "w EMA RULE" + (profExact ? "" : " ~"), text_color = color.white, bgcolor = color.new(#ffd600, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 24, profTxt, text_color = color.white, bgcolor = not profOn or na(profEma) ? color.new(color.gray, 55) : profLost ? color.new(#d50000, 15) : profReclaim or profRespect or profAtLine ? color.new(#00c853, 20) : profAbove ? color.new(#00c853, 50) : color.new(#d50000, 45), text_halign = text.align_center, text_size = txtSize)
-    table.cell(_t, 0, 25, "▶ WHAT TO DO", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 25, f_whatToDo(), text_color = color.white, bgcolor = boDir == 1 and boGate ? color.new(#00c853, 15) : boDir == -1 and boGate ? color.new(#d50000, 15) : boPending or boBrkUnconf ? color.new(color.orange, 25) : color.new(#004d40, 10), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 0, 23, "SECTOR", text_color = color.white, bgcolor = color.new(color.gray, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 23, secTxt, text_color = color.white, bgcolor = color.new(color.gray, 50), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 25, str.tostring(profWeeks, "#") + "w EMA RULE" + (profExact ? "" : " ~"), text_color = color.white, bgcolor = color.new(#ffd600, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 25, profTxt, text_color = color.white, bgcolor = not profOn or na(profEma) ? color.new(color.gray, 55) : profLost ? color.new(#d50000, 15) : profReclaim or profRespect or profAtLine ? color.new(#00c853, 20) : profAbove ? color.new(#00c853, 50) : color.new(#d50000, 45), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 24, "SECTOR", text_color = color.white, bgcolor = color.new(color.gray, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 24, secTxt, text_color = color.white, bgcolor = color.new(color.gray, 50), text_halign = text.align_center, text_size = txtSize)
     0
 
 // ── CHART SYNC MODE — remove only what drags the axis ────────────────
