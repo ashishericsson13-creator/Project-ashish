@@ -2510,6 +2510,63 @@ f_botSay() =>
     _s
 botSay = f_botSay()
 
+// ── ROW 12 · BUY BIG AND HOLD ──────────────────────────────────────────────
+// Row 11 answers "has the selling stopped". That is a chart question, and a
+// chart question alone is not enough to hold something for years: a confirmed
+// bottom in a shrinking business is a bounce you must sell, and most of the
+// deepest, most tempting drawdowns on any screen are exactly that.
+//
+// So this row grades the BUSINESS on the financials the script already pulls,
+// and only calls BUY BIG when four separate things are true at once:
+//   1 the bottom is confirmed on the chart   (row 11, 5 of 7)
+//   2 the business qualifies                 (profit, ROE, debt, growth)
+//   3 you are getting a real discount        (% off the high)
+//   4 the long-term trend is still intact    (200-bar MA above where it was
+//     a year ago) — this is the falling-knife filter. A business in genuine
+//     decline also prints washouts, oversold RSI and capitulation volume; it
+//     prints them the whole way down. A rising 200-bar MA under a big
+//     drawdown is what separates a sale from a value trap.
+//
+// Indices, commodities and crypto return no financials, so this row says so
+// plainly rather than grading them on nothing.
+bigRoe  = input.float(12.0, "Quality: minimum ROE %", minval = 0.0, maxval = 60.0, step = 1.0, group = "v64 · BUY BIG")
+bigDE   = input.float(1.5, "Quality: maximum debt / equity", minval = 0.1, maxval = 10.0, step = 0.1, group = "v64 · BUY BIG")
+bigDD   = input.float(25.0, "Discount: minimum % off the high", minval = 5.0, maxval = 80.0, step = 1.0, group = "v64 · BUY BIG")
+bigNeed = input.int(3, "Quality checks required (of 4)", minval = 1, maxval = 4, group = "v64 · BUY BIG")
+
+bqProf  = not na(niTTM) and niTTM > 0
+bqGrow  = not na(revGrowth) and revGrowth > 0
+bqRoe   = not na(roeFY) and roeFY >= bigRoe
+bqDebt  = not na(deFY) and deFY <= bigDE
+bqHave  = not na(niTTM) or not na(roeFY) or not na(revGrowth)
+bqN     = (bqProf ? 1 : 0) + (bqGrow ? 1 : 0) + (bqRoe ? 1 : 0) + (bqDebt ? 1 : 0)
+bqTrend = not na(ma200bar) and not na(ma200bar[52]) and ma200bar > ma200bar[52]
+bqDisc  = not na(botDD) and botDD >= bigDD
+bigBuy  = botOn and botConf and bqHave and bqN >= bigNeed and bqTrend and bqDisc
+bigSig  = bigBuy and not bigBuy[1]
+
+plotshape(bigSig, title = "BUY BIG", style = shape.labelup, location = location.belowbar, color = color.new(#1b5e20, 0), text = "BUY BIG", textcolor = color.white, size = size.normal)
+alertcondition(bigSig, title = "Buy big and hold", message = "BUY BIG on {{ticker}} — confirmed bottom in a quality business at a discount ({{interval}})")
+
+f_bigSay() =>
+    _b = ""
+    if not botOn
+        _b := "—"
+    else if not bqHave
+        _b := "NO FINANCIALS for this symbol — this row only grades individual stocks. Judge indices, metals and crypto on rows 1-11."
+    else if bigBuy
+        _b := "★ BUY BIG AND HOLD — bottom confirmed, business qualifies " + str.tostring(bqN, "#") + "/4, " + str.tostring(botDD, "#.#") + "% off the high, 200-bar MA still rising. Size up and hold; this is the compounding entry."
+    else if not botConf
+        _b := "NOT YET — the bottom is not confirmed on the chart (row 11). Business grade " + str.tostring(bqN, "#") + "/4" + (bqN >= bigNeed ? ", which is fine — it is the chart that is not ready." : ", so it would not qualify anyway.")
+    else if not bqTrend
+        _b := "NO — the 200-bar MA is LOWER than a year ago. This is a broken business, not a discount. A declining company prints washouts and oversold RSI the whole way down. Do not hold this one."
+    else if bqN < bigNeed
+        _b := "NO — the chart bottomed but the business does not qualify (" + str.tostring(bqN, "#") + "/4): " + (bqProf ? "" : "not profitable · ") + (bqGrow ? "" : "revenue not growing · ") + (bqRoe ? "" : "ROE below " + str.tostring(bigRoe, "#") + "% · ") + (bqDebt ? "" : "debt too high") + ". Trade it, do not hold it."
+    else
+        _b := "GOOD, NOT GENERATIONAL — bottom confirmed and business qualifies " + str.tostring(bqN, "#") + "/4, but only " + str.tostring(botDD, "#.#") + "% off the high. Normal size. BUY BIG wants " + str.tostring(bigDD, "#") + "% or more."
+    _b
+bigSay = f_bigSay()
+
 
 f_whatToDo() =>
     _a = ""
@@ -2622,6 +2679,10 @@ f_boSummary(table _t) =>
         table.cell(_t, 1, 8, (na(lvlR) or lvlRfar ? "resistance — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "resistance " + str.tostring(lvlR, format.mintick) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "support " + str.tostring(lvlS, format.mintick) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
 
         bCol = not botOn or na(botAV) ? color.new(color.gray, 40) : botBuy ? color.new(#00c853, 20) : botAbove ? color.new(color.orange, 25) : color.new(#d50000, 25)
+        gCol = not bqHave ? color.new(color.gray, 40) : bigBuy ? color.new(#1b5e20, 0) : botConf and bqN >= bigNeed ? color.new(#00c853, 25) : color.new(color.black, 20)
+        table.cell(_t, 0, 11, "12  BUY BIG", text_color = color.white, bgcolor = color.new(#1b5e20, 10), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 11, bigSay, text_color = color.white, bgcolor = gCol, text_halign = text.align_left, text_size = txtSize)
+
         table.cell(_t, 0, 10, "11  BOTTOM", text_color = color.white, bgcolor = color.new(#00bfa5, 15), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 10, botSay, text_color = color.white, bgcolor = bCol, text_halign = text.align_left, text_size = txtSize)
 
