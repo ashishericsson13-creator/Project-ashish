@@ -2481,8 +2481,11 @@ f_whatToDo() =>
     // is routinely 20-30% off the low. The average-cost line turns first.
     else if botOn and botBuy and trend == -1
         _a := "SCALE IN SLOWLY — a bottom is forming. The ATR model is still bearish, but price holds above the average cost of every buyer since the low (" + str.tostring(botAV, format.mintick) + ") and that line is RISING. Quarter size here, add on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + ". Out on a close under " + str.tostring(botAV, format.mintick) + "."
+    // "DO NOTHING" is true but unhelpful on its own: mid-base is exactly when
+    // you want the buy levels spelled out, not withheld. Name the whole ladder
+    // so the trigger is a number on the chart rather than a judgement call.
     else if suIsBase
-        _a := "DO NOTHING. Set two alerts: above " + str.tostring(suHi, format.mintick) + " and below " + str.tostring(suLo, format.mintick) + ". Act on whichever closes first."
+        _a := "DO NOTHING YET — price is mid-base, so there is nothing to buy at this price. Your buy ladder: " + (profOn and not na(profEma) ? "a " + tfWord + " close above " + str.tostring(profEma, format.mintick) + " (" + str.tostring(profWeeks, "#") + "wEMA) says the pullback is over; " : "") + "a close above " + str.tostring(moneyLine, format.mintick) + " turns the ATR model bullish; a close above " + str.tostring(suHi, format.mintick) + " breaks the base and is the full-size entry. It all fails on a close below " + str.tostring(suLo, format.mintick) + "."
     // Both fallbacks used to speak as if only the ATR model existed. TCS weekly
     // read "HOLD. Only act if a weekly candle CLOSES below 2061.9" while row 2
     // said 0 OF 4 LINES BULLISH and row 3 said SPLIT — the panel disagreeing
