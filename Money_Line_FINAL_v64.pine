@@ -2151,6 +2151,16 @@ f_emaCaveat() =>
         _c := "  ⚠ but the ATR model is BEARISH — this is a scout entry against the regime, half size at most."
     else if not na(adxV) and adxV < adxMin
         _c := "  ⚠ but ADX is " + str.tostring(adxV, "#.#") + " — no trend to ride yet, so expect chop."
+    // GOOGL weekly sat at the line with a SYMMETRICAL TRIANGLE three bars from
+    // its apex and a squeeze on. "Buy near the line" was true and badly
+    // incomplete: a decision was three bars away and the row never said so,
+    // because the structure branch sits ten rungs below the method branch and
+    // never gets reached. Timing is not a caveat about size, so it is added
+    // even when the regime is clean.
+    else if wgApexOk and not na(wgApexN) and wgApexN <= 5
+        _c := "  ⏱ and a " + wgType + " resolves in " + str.tostring(wgApexN, "#") + " bars — size for either outcome, not just this one."
+    else if suOn and suSqz
+        _c := "  ⏱ and the squeeze is on — expect the range to expand soon, in whichever direction."
     _c
 
 // ── WHAT THE LINES SAY ───────────────────────────────────────────────
