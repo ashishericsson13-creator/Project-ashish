@@ -1650,6 +1650,7 @@ boVolSurge = input.float(1.50, "Volume surge required (x 20-bar avg)", minval = 
 boRsiMax   = input.float(80.0, "RSI ceiling (above = move already spent)", minval = 60, maxval = 95, step = 1, tooltip = "RSI above this means buying the end of a run. This is the check that stops a BUY into a vertical blow-off.", group = "6. Breakout Console")
 boStopATR  = input.float(0.50, "Breakout stop: ATR below the broken level", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "A broken resistance becomes support; the trade is wrong if price closes back under it. NOT the Money Line,...", group = "6. Breakout Console")
 boFlipMaxATR = input.float(4.0, "Polarity: stale once price is this many ATR above it", minval = 1.0, maxval = 20.0, step = 0.5, tooltip = "A broken resistance acts as support while price is near it. Once price has run this far above, it is no...", group = "6. Breakout Console")
+lvlMaxATR  = input.float(8.0, "LEVELS: ignore anything further than this many ATR", minval = 2.0, maxval = 40.0, step = 1.0, tooltip = "A level you cannot reach is not a level. Past this distance the row says none is in range rather than printing a number nobody will trade against.", group = "6. Breakout Console")
 boFailBars = input.int(4, "Failed breakout: closes back under within N bars", minval = 1, maxval = 20, tooltip = "A break that price closes back under inside this window is a trap, not a breakout.", group = "6. Breakout Console")
 boShowLvl  = input.bool(true, "Draw the defended horizontal levels", group = "6. Breakout Console")
 boShowVert = input.bool(true, "Vertical line at each scored breakout", group = "6. Breakout Console")
@@ -1924,6 +1925,14 @@ boLiveBar = barstate.islast and time_close > timenow
 // which it is, rather than printing a number nobody will ever use.
 lvlR    = na(boRes) ? (suIsBase and not na(suHi) and suHi > close ? suHi : na) : (suIsBase and not na(suHi) and suHi > close and suHi < boRes ? suHi : boRes)
 lvlS    = na(boSup) ? (suIsBase and not na(suLo) and suLo < close ? suLo : na) : (suIsBase and not na(suLo) and suLo < close and suLo > boSup ? suLo : boSup)
+// GOOGL weekly still printed "support 152.10 (-56.9%)" after the base
+// fallback went in, because GOOGL has NO base — so there was nothing to fall
+// back TO and the 57%-away defended level stood. The fallback fixed one case
+// and left the general one: a level you cannot reach is not a level,
+// whether or not a base happens to exist. Capped in ATR so it means the same
+// on every symbol.
+lvlRfar = na(lvlR) or na(emaAtr) or emaAtr <= 0 ? false : (lvlR - close) / emaAtr > lvlMaxATR
+lvlSfar = na(lvlS) or na(emaAtr) or emaAtr <= 0 ? false : (close - lvlS) / emaAtr > lvlMaxATR
 lvlRsrc = na(lvlR) ? "" : (not na(boRes) and lvlR == boRes ? " defended" : " base top")
 lvlSsrc = na(lvlS) ? "" : (not na(boSup) and lvlS == boSup ? " defended" : " base floor")
 
@@ -2243,22 +2252,31 @@ f_boKind(float _c) => _c == 7 ? "BULL FLAG" : _c == -7 ? "BEAR FLAG" : _c == 6 ?
 // uses that line to HOLD winners and re-enter reclaims, not to buy into a dead
 // tape. The branches still fire — this just refuses to let them read clean.
 f_emaCaveat() =>
-    _c = ""
+    // Two INDEPENDENT notes, not a chain. As an else-if the timing note was
+    // suppressed whenever the regime note fired — GOOGL weekly sat 3 bars from
+    // a symmetrical triangle's apex and the row never said so, because the ATR
+    // model being bearish had already claimed the slot. A decision three bars
+    // away is not less important than a sizing note; it is usually more.
+    //
+    // The sizing words also left with it: the branch that calls this already
+    // opens with "HALF SIZE AT MOST", so repeating it here printed it twice.
+    _sz = ""
+    _tm = ""
     if trend == -1
-        _c := "  ⚠ but the ATR model is BEARISH — this is a scout entry against the regime, half size at most."
+        _sz := "  ⚠ the ATR model is BEARISH — a scout entry against the regime."
     else if not na(adxV) and adxV < adxMin
-        _c := "  ⚠ but ADX is " + str.tostring(adxV, "#.#") + " — no trend to ride yet, so expect chop."
+        _sz := "  ⚠ ADX is " + str.tostring(adxV, "#.#") + " — no trend to ride yet, so expect chop."
     // GOOGL weekly sat at the line with a SYMMETRICAL TRIANGLE three bars from
     // its apex and a squeeze on. "Buy near the line" was true and badly
     // incomplete: a decision was three bars away and the row never said so,
     // because the structure branch sits ten rungs below the method branch and
     // never gets reached. Timing is not a caveat about size, so it is added
     // even when the regime is clean.
-    else if wgApexOk and not na(wgApexN) and wgApexN <= 5
-        _c := "  ⏱ and a " + wgType + " resolves in " + str.tostring(wgApexN, "#") + " bars — size for either outcome, not just this one."
+    if wgApexOk and not na(wgApexN) and wgApexN <= 5
+        _tm := "  ⏱ a " + wgType + " resolves in " + str.tostring(wgApexN, "#") + " bars — size for either outcome, not just this one."
     else if suOn and suSqz
-        _c := "  ⏱ and the squeeze is on — expect the range to expand soon, in whichever direction."
-    _c
+        _tm := "  ⏱ the squeeze is on — expect the range to expand soon, in whichever direction."
+    _sz + _tm
 
 // ── THE TWO MODELS, SCORED SEPARATELY ────────────────────────────────
 // boDir only ever described a FRESH break inside boFresh bars, so between
@@ -2385,7 +2403,7 @@ f_boSummary(table _t) =>
         table.cell(_t, 1, 7, na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light"))), text_color = color.white, bgcolor = color.new(color.teal, 50), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 8, "9  LEVELS", text_color = color.white, bgcolor = color.new(color.olive, 20), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 8, (na(lvlR) ? "resistance —" : "resistance " + str.tostring(lvlR, format.mintick) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) ? "support —" : "support " + str.tostring(lvlS, format.mintick) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive ? "" : "   ·   flip-support " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 8, (na(lvlR) or lvlRfar ? "resistance — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "resistance " + str.tostring(lvlR, format.mintick) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "support " + str.tostring(lvlS, format.mintick) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive ? "" : "   ·   flip-support " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 9, "10  STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
