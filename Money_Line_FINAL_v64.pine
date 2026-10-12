@@ -1924,7 +1924,16 @@ boLiveBar = barstate.islast and time_close > timenow
 // one you will trade against. Take whichever is closer on each side and say
 // which it is, rather than printing a number nobody will ever use.
 lvlR    = na(boRes) ? (suIsBase and not na(suHi) and suHi > close ? suHi : na) : (suIsBase and not na(suHi) and suHi > close and suHi < boRes ? suHi : boRes)
-lvlS    = na(boSup) ? (suIsBase and not na(suLo) and suLo < close ? suLo : na) : (suIsBase and not na(suLo) and suLo < close and suLo > boSup ? suLo : boSup)
+// Three candidates below price, and the nearest one wins. VOO weekly showed
+// why the flip level has to be among them: its defended support sat 38% away
+// and its base floor 19%, while a broken resistance it had retested and held
+// sat 2.2% below — the only one of the three anybody would actually place a
+// stop against, and the only one the support slot could not reach.
+lvlSa   = na(boSup) or boSup >= close ? na : boSup
+lvlSb   = suIsBase and not na(suLo) and suLo < close ? suLo : na
+lvlSc   = boFlipLive and not na(boFlipLvl) and boFlipLvl < close ? boFlipLvl : na
+lvlS    = math.max(nz(lvlSa, -1e18), math.max(nz(lvlSb, -1e18), nz(lvlSc, -1e18)))
+lvlS    := lvlS <= -1e17 ? na : lvlS
 // GOOGL weekly still printed "support 152.10 (-56.9%)" after the base
 // fallback went in, because GOOGL has NO base — so there was nothing to fall
 // back TO and the 57%-away defended level stood. The fallback fixed one case
@@ -1937,7 +1946,7 @@ lvlS    = na(boSup) ? (suIsBase and not na(suLo) and suLo < close ? suLo : na) :
 lvlRfar = na(lvlR) or na(atrV) or atrV <= 0 ? false : (lvlR - close) / atrV > lvlMaxATR
 lvlSfar = na(lvlS) or na(atrV) or atrV <= 0 ? false : (close - lvlS) / atrV > lvlMaxATR
 lvlRsrc = na(lvlR) ? "" : (not na(boRes) and lvlR == boRes ? " defended" : " base top")
-lvlSsrc = na(lvlS) ? "" : (not na(boSup) and lvlS == boSup ? " defended" : " base floor")
+lvlSsrc = na(lvlS) ? "" : (not na(lvlSc) and lvlS == lvlSc ? " flip-support" + (boFlipRe ? " ✓held" : " ·untested") : not na(lvlSa) and lvlS == lvlSa ? " defended" : " base floor")
 
 // ── THE FAILED BREAKOUT ──────────────────────────────────────────────
 // "All-time high breakouts are important, and more important is that the
@@ -2406,7 +2415,7 @@ f_boSummary(table _t) =>
         table.cell(_t, 1, 7, na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light"))), text_color = color.white, bgcolor = color.new(color.teal, 50), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 8, "9  LEVELS", text_color = color.white, bgcolor = color.new(color.olive, 20), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 8, (na(lvlR) or lvlRfar ? "resistance — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "resistance " + str.tostring(lvlR, format.mintick) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "support " + str.tostring(lvlS, format.mintick) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip-support " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 8, (na(lvlR) or lvlRfar ? "resistance — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "resistance " + str.tostring(lvlR, format.mintick) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "support " + str.tostring(lvlS, format.mintick) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 9, "10  STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
