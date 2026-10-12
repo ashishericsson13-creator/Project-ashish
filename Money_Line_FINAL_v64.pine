@@ -2391,7 +2391,14 @@ f_volWord(float _v) => na(_v) ? "—" : _v >= 2.0 ? "heavy" : _v >= 1.5 ? "above
 // average cost would reset on a quiet drift that nobody actually bought.
 botOn   = input.bool(true, "Bottom line — average cost of every buyer since the low", group = "v64 · BOTTOM LINE")
 botLook = input.int(250, "How far back to hunt for the cycle low (bars)", minval = 50, maxval = 1000, group = "v64 · BOTTOM LINE")
-botMinB = input.int(10, "Bars of base required before it is tradable", minval = 3, maxval = 100, group = "v64 · BOTTOM LINE")
+botMinB  = input.int(10, "Bars of base required before it is tradable", minval = 3, maxval = 100, group = "v64 · BOTTOM LINE")
+// GOLD weekly anchored to the 2022 low and reported "BASE WORKING — 55.4%
+// above average cost 1858.851 ... out on a weekly close under it" while price
+// was 4168 and making new highs. The arithmetic was right and the advice was
+// worthless: a 55% stop is not a stop, and nothing about a five-year-old low
+// tells you anything about today. Past this many ATR the setup has matured
+// into a trend and the line stops being a bottom reference.
+botMaxATR = input.float(6.0, "Stop calling it a bottom past this many ATR above average cost", minval = 1.0, maxval = 30.0, step = 0.5, group = "v64 · BOTTOM LINE")
 
 botLo = ta.lowest(low, botLook)
 var float botPV = 0.0
@@ -2413,7 +2420,9 @@ botAV    = botVV > 0 ? botPV / botVV : botN > 0 ? botPX / botN : na
 botRise  = not na(botAV) and not na(botAV[1]) and botAV > botAV[1]
 botAbove = not na(botAV) and close > botAV
 botReady = botN >= botMinB
-botBuy   = botAbove and botRise and botReady
+botStr   = na(botAV) or na(atrV) or atrV <= 0 ? na : (close - botAV) / atrV
+botMature = not na(botStr) and botStr > botMaxATR
+botBuy   = botAbove and botRise and botReady and not botMature
 botDistP = na(botAV) ? na : (close - botAV) / close * 100
 
 plot(botOn and not syncMode ? botAV : na, "Bottom line — cycle-low VWAP", color = color.new(#00bfa5, 0), linewidth = 3)
@@ -2424,6 +2433,8 @@ f_botSay() =>
         _s := "—"
     else if not botReady
         _s := "TOO EARLY — only " + str.tostring(botN, "#") + " bar(s) since the low at " + str.tostring(botLo, format.mintick) + ". Let a base build before buying."
+    else if botMature
+        _s := "MATURED — this is a trend now, not a bottom. Price is " + str.tostring(botStr, "#.#") + " ATR (" + str.tostring(botDistP, "#.#") + "%) above the average cost since the low at " + str.tostring(botLo, format.mintick) + ", so that line is far too low to use as a stop. Judge this chart on rows 1-10."
     else if botAbove and botRise
         _s := "✓ BASE WORKING — above the average cost since the low, " + str.tostring(botAV, format.mintick) + " (" + str.tostring(botDistP, "#.#") + "% above), and it is RISING. Buyers off the low are in profit. Hold while it holds; out on a " + tfWord + " close under it."
     else if botAbove
