@@ -2152,6 +2152,15 @@ f_linesSay() =>
         _r := "BUY THE RETEST — " + str.tostring(boFlipLvl, format.mintick) + " was resistance, held as support, price " + str.tostring(boFlipPct, "#.#") + "% above it. Stop just under it: the tightest entry on this chart."
     else if boDir == 1 and boGate and boScore >= 6
         _r := "BUY THE BREAK of " + f_boKind(boKindAt) + " at " + str.tostring(boLvlAt, format.mintick) + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick)) + "."
+    // The short side was missing entirely: every breakout branch tested
+    // boDir == 1, so a live SELL fell through all of them and landed on the
+    // base branch. Seen on NIFTYBEES weekly — "STRONG SELL" in the header
+    // sitting above "IN A 50-BAR BASE, wait" at the bottom. A verdict and a
+    // reading that contradict each other are worse than either one alone.
+    else if boDir == -1 and boGate and boScore >= 6
+        _r := "SELL / STAY OUT — " + f_boKind(boKindAt) + " broke DOWN at " + str.tostring(boLvlAt, format.mintick) + ". If you are long, that was the exit. Do not buy the dip while this holds; the level to reclaim is " + str.tostring(boLvlAt, format.mintick) + "."
+    else if boDir == -1
+        _r := "BREAKING DOWN (" + f_boKind(boKindAt) + ") on only " + str.tostring(boScore, "#") + "/10. Stand aside — not a long setup, and not yet a clean short."
     else if boDir == 1 and boPending
         _r := "A LEVEL IS GIVING WAY but the bar has not closed. Nothing to do until it does."
     else if emaOver
@@ -2172,11 +2181,49 @@ f_linesSay() =>
         _r := "NO SETUP and no defended level above — price is in open air. Wait for structure to form."
     _r
 
+// ── WHAT TO DO ───────────────────────────────────────────────────────
+// LINES SAY explains the READING. This is the INSTRUCTION, with the numbers
+// already filled in, so the row can be acted on without doing arithmetic off
+// the other rows. Kept separate deliberately: a sentence that both explains
+// and instructs ends up doing neither well, and the instruction is the part
+// you want at a glance.
+//
+// Ordered so EXITS come before entries, and an unfinished bar outranks both:
+// acting on a level that has not closed is the single most expensive mistake
+// this console can invite.
+f_whatToDo() =>
+    _a = ""
+    if not boOn
+        _a := "—"
+    else if thinHist
+        _a := "DO NOTHING — only " + str.tostring(histDays, "#") + " days of history. Nothing here is trustworthy yet."
+    else if boPending or boBrkUnconf
+        _a := "WAIT for this bar to close. A level is giving way intrabar and it can still un-happen."
+    else if profOn and profLost
+        _a := "EXIT. Close is below the " + str.tostring(profWeeks, "#") + "-week EMA (" + str.tostring(profEma, format.mintick) + "). Re-entry only on a close back above it."
+    else if boDir == -1 and boGate and boScore >= 6
+        _a := "EXIT / STAY OUT. Stop for a short " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", target " + str.tostring(boTarget, format.mintick)) + ". Do not buy until a close back above " + str.tostring(boLvlAt, format.mintick) + "."
+    else if boDir == 1 and boGate and boScore >= 6
+        _a := "BUY " + (na(boSizePc) ? "" : str.tostring(math.min(boSizePc, 100), "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk") + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "."
+    else if profOn and (profReclaim or profRespect or profAtLine) and not emaOver
+        _a := "BUY near " + str.tostring(profEma, format.mintick) + " — the " + str.tostring(profWeeks, "#") + "-week EMA. Stop on a CLOSE below it. Size up here because the stop is close."
+    else if boFlipOn and boFlipRe and not emaOver
+        _a := "BUY the retest of " + str.tostring(boFlipLvl, format.mintick) + ". Stop just under it — tightest stop available on this chart."
+    else if emaOver
+        _a := "DO NOT START HERE. " + str.tostring(emaX21, "#.#") + " ATR above the " + str.tostring(emaSlowLen, "#") + " EMA. Hold what you have; add only back near " + str.tostring(emaS, format.mintick) + "."
+    else if suIsBase
+        _a := "DO NOTHING. Set two alerts: above " + str.tostring(suHi, format.mintick) + " and below " + str.tostring(suLo, format.mintick) + ". Act on whichever closes first."
+    else if trend == 1
+        _a := "HOLD. Only act if a " + tfWord + " candle CLOSES below " + str.tostring(moneyLine, format.mintick) + "."
+    else
+        _a := "STAY OUT. Your only entry trigger is a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away)."
+    _a
+
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
-var table bot = table.new(boPosMap, 2, 25, border_width = 2)
+var table bot = table.new(boPosMap, 2, 26, border_width = 2)
 
 f_boConsole(table _t) =>
-    table.clear(_t, 0, 0, 1, 24)
+    table.clear(_t, 0, 0, 1, 25)
     vCol = boVerdict == "STRONG BUY" ? color.new(#00c853, 0) : boVerdict == "BUY" ? color.new(#00c853, 30) : boVerdict == "STRONG SELL" ? color.new(#d50000, 0) : boVerdict == "SELL" ? color.new(#d50000, 30) : boVerdict == "NO SETUP" ? color.new(color.gray, 40) : color.new(color.orange, 25)
     table.cell(_t, 0, 0, "BREAKOUT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 0, boVerdict + (boDir == 0 ? "" : "   " + str.tostring(boScore, "#") + "/10"), text_color = color.white, bgcolor = vCol, text_halign = text.align_center, text_size = txtSize)
@@ -2231,13 +2278,13 @@ f_boConsole(table _t) =>
     // a pattern is not a direction: a symmetrical triangle resolves either
     // way and a falling wedge is bullish only by convention, so this names
     // the structure and says when the decision is due — it does not vote.
-    wgWhy = not wgOn ? "off" : not wgHave ? "no pair yet — need two swing highs and two swing lows" : wgType + (wgApexOk ? "  ·  apex in " + str.tostring(wgApexN, "#") + " bars" : "") + "  ·  gap " + str.tostring(wgPct, "#.#") + "%" + (na(wgPos) ? "" : "  ·  price " + str.tostring(math.max(math.min(wgPos, 999), -999), "#") + "% up the range")
+    wgWhy = not wgOn ? "off" : not wgHave ? "no pair yet — need two swing highs and two swing lows" : wgType + (wgApexOk ? "  ·  apex in " + str.tostring(wgApexN, "#") + " bars" : "") + "  ·  gap " + str.tostring(wgPct, "#.#") + "%" + (na(wgPos) ? "" : "  ·  price " + (wgPos > 110 ? "ABOVE the upper rail" : wgPos < -10 ? "BELOW the lower rail" : str.tostring(wgPos, "#") + "% up the range"))
     table.cell(_t, 0, 19, "STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 15), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 19, wgWhy, text_color = color.white, bgcolor = not wgHave ? color.new(color.gray, 55) : wgApexOk ? color.new(#2962ff, 30) : color.new(#2962ff, 55), text_halign = text.align_center, text_size = txtSize)
     // extension in ATR, not percent: "1.5 ATR above the 21 EMA" means the same
     // thing on every symbol, where "10% above" does not.
     table.cell(_t, 0, 20, str.tostring(emaFastLen, "#") + " / " + str.tostring(emaSlowLen, "#") + " EMA", text_color = color.white, bgcolor = color.new(#ff5252, 30), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 20, na(emaF) ? "—" : str.tostring(emaF, format.mintick) + "  /  " + str.tostring(emaS, format.mintick) + "   ·   " + str.tostring(emaX9, "#.#") + "x / " + str.tostring(emaX21, "#.#") + "x ATR   (" + str.tostring(emaPctS, "#.#") + "% above the " + str.tostring(emaSlowLen, "#") + ")" + (emaOver ? "  ⚠ EXTENDED" : "") + (na(emaBarsAbove) ? "" : "   ·   " + str.tostring(emaBarsAbove, "#") + " bars above"), text_color = color.white, bgcolor = emaOver ? color.new(color.orange, 30) : color.new(#ff5252, 55), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 1, 20, na(emaF) ? "—" : str.tostring(emaF, format.mintick) + "  /  " + str.tostring(emaS, format.mintick) + "   ·   " + str.tostring(emaX9, "#.#") + "x / " + str.tostring(emaX21, "#.#") + "x ATR   (" + (emaPctS >= 0 ? str.tostring(emaPctS, "#.#") + "% above the " : str.tostring(-emaPctS, "#.#") + "% BELOW the ") + str.tostring(emaSlowLen, "#") + ")" + (emaOver ? "  ⚠ EXTENDED" : "") + (na(emaBarsAbove) ? "" : "   ·   " + str.tostring(emaBarsAbove, "#") + " bars above"), text_color = color.white, bgcolor = emaOver ? color.new(color.orange, 30) : color.new(#ff5252, 55), text_halign = text.align_center, text_size = txtSize)
     table.cell(_t, 0, 21, "POLARITY", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 21, not boFlipOn ? "— no level taken yet" : "resistance → support at " + str.tostring(boFlipLvl, format.mintick) + "   (" + str.tostring(boFlipPct, "#.#") + "% below price)" + (boFlipRe ? "   ✓ retested and held" : "   · untested"), text_color = color.white, bgcolor = not boFlipOn ? color.new(color.gray, 55) : boFlipRe ? color.new(#00c853, 35) : color.new(#2962ff, 45), text_halign = text.align_center, text_size = txtSize)
     // the whole point of the section: one sentence, from the lines alone
@@ -2250,6 +2297,8 @@ f_boConsole(table _t) =>
     profTxt = not profOn ? "off" : na(profEma) ? "—" : (profAbove ? "ABOVE " : "BELOW ") + str.tostring(profEma, format.mintick) + "   (" + str.tostring(profPct, "#.#") + "%, " + str.tostring(profDist, "#.#") + "x ATR)" + (profLost ? "   ⚠ LOST IT THIS BAR — this is the exit" : profReclaim ? "   ★ RECLAIMED THIS BAR" : profRespect ? "   ✓ RESPECTED — wicked in, closed above" : profAtLine ? "   ◆ AT THE LINE — entry zone" : "") + (profAbove and not na(profBars) ? "   ·  held " + str.tostring(profBars, "#") + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim")
     table.cell(_t, 0, 24, str.tostring(profWeeks, "#") + "w EMA RULE" + (profExact ? "" : " ~"), text_color = color.white, bgcolor = color.new(#ffd600, 25), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 24, profTxt, text_color = color.white, bgcolor = not profOn or na(profEma) ? color.new(color.gray, 55) : profLost ? color.new(#d50000, 15) : profReclaim or profRespect or profAtLine ? color.new(#00c853, 20) : profAbove ? color.new(#00c853, 50) : color.new(#d50000, 45), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 0, 25, "▶ WHAT TO DO", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 25, f_whatToDo(), text_color = color.white, bgcolor = boDir == 1 and boGate ? color.new(#00c853, 15) : boDir == -1 and boGate ? color.new(#d50000, 15) : boPending or boBrkUnconf ? color.new(color.orange, 25) : color.new(#004d40, 10), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 0, 23, "SECTOR", text_color = color.white, bgcolor = color.new(color.gray, 25), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 23, secTxt, text_color = color.white, bgcolor = color.new(color.gray, 50), text_halign = text.align_center, text_size = txtSize)
     0
