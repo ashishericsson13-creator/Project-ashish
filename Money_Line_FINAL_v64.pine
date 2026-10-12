@@ -1982,10 +1982,11 @@ boFlipPct = boFlipOn and close > 0 ? (close - boFlipLvl) / close * 100 : na
 //   weekly 9 EMA — f_daysToBars(45) returns 9. On a DAILY chart it returns 45,
 //   a span-matched 45-day EMA: very close, but not identical, because an EMA
 //   of daily closes samples differently from an EMA of weekly closes. The true
-//   series would need a request.security call, and this file is at 46 against
-//   a documented cap of 40 — one more breaks the whole script, not just this
-//   row. The console says which of the two you are looking at rather than
-//   letting you assume.
+//   series would need a request.security call, and this file already uses
+//   exactly 40 of the 40 allowed (32 focus list + daily + weekly + 6
+//   financials) — one more breaks the whole script, not just this row. The
+//   console says which of the two you are looking at rather than letting you
+//   assume.
 //
 // AND IT IS AN ADAPTATION, NOT A LAW. Its author put it forward as what works
 // when a market is hitting stops left and right; it is a way to stop being
@@ -2243,8 +2244,8 @@ f_boConsole(table _t) =>
     table.cell(_t, 0, 22, "LINES SAY", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 22, f_linesSay(), text_color = color.white, bgcolor = color.new(#00695c, 20), text_halign = text.align_left, text_size = txtSize)
     // syminfo.sector / .industry are built-ins — they cost nothing against the
-    // request budget, which matters because this file is at 46 of a documented
-    // 40 and a single extra request.*() would break the whole script.
+    // request budget, which is full at exactly 40 of the 40 allowed, where a
+    // single extra request.*() would break the whole script.
     secTxt = (syminfo.sector == "" ? "—" : syminfo.sector) + (syminfo.industry == "" ? "" : "   ·   " + syminfo.industry) + "   ·   " + syminfo.type
     profTxt = not profOn ? "off" : na(profEma) ? "—" : (profAbove ? "ABOVE " : "BELOW ") + str.tostring(profEma, format.mintick) + "   (" + str.tostring(profPct, "#.#") + "%, " + str.tostring(profDist, "#.#") + "x ATR)" + (profLost ? "   ⚠ LOST IT THIS BAR — this is the exit" : profReclaim ? "   ★ RECLAIMED THIS BAR" : profRespect ? "   ✓ RESPECTED — wicked in, closed above" : profAtLine ? "   ◆ AT THE LINE — entry zone" : "") + (profAbove and not na(profBars) ? "   ·  held " + str.tostring(profBars, "#") + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim")
     table.cell(_t, 0, 24, str.tostring(profWeeks, "#") + "w EMA RULE" + (profExact ? "" : " ~"), text_color = color.white, bgcolor = color.new(#ffd600, 25), text_halign = text.align_left, text_size = txtSize)
