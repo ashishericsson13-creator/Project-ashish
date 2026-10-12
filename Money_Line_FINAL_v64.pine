@@ -2381,11 +2381,16 @@ f_whatToDo() =>
     else if boDir == -1 and boGate and boScore >= 6
         _a := "EXIT / STAY OUT. Stop for a short " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", target " + str.tostring(boTarget, format.mintick)) + ". Do not buy until a close back above " + str.tostring(boLvlAt, format.mintick) + "."
     else if boDir == 1 and boGate and boScore >= 6
-        _a := "BUY " + (na(boSizePc) ? "" : str.tostring(boSizePc, "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk") + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "."
+        _a := (bothSell ? "BUY SMALL — against the trend. " : "BUY ") + (na(boSizePc) ? "" : str.tostring(boSizePc, "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk") + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "." + (bothSell ? " Row 3 reads sell side: a confirmed break up here is an early turn, not a trend trade." : "")
     else if profOn and (profReclaim or profRespect or profAtLine) and not emaOver
         _a := (trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + str.tostring(profEma, format.mintick) + " — the " + str.tostring(profWeeks, "#") + "-week EMA. Stop on a CLOSE below it." + (trend == -1 ? "" : " Size up here because the stop is close.") + f_emaCaveat()
+    // ORCL weekly read "BOTH AGREE — SELL SIDE" on row 3 and "BUY the retest of
+    // 131.19" on row 4. This branch had no regime guard at all, so a flip level
+    // holding was reported as a buy even with the ATR model bearish and 1 of 4
+    // lines up. A retest that holds inside a downtrend is a bounce, not an entry,
+    // and the instruction has to say which one it is.
     else if boFlipLive and boFlipRe and not emaOver
-        _a := "BUY the retest of " + str.tostring(boFlipLvl, format.mintick) + ". Stop just under it — tightest stop available on this chart."
+        _a := (bothSell ? "COUNTER-TREND BOUNCE ONLY at " : trend == -1 ? "HALF SIZE AT MOST at " : "BUY the retest of ") + str.tostring(boFlipLvl, format.mintick) + ". Stop just under it — tightest stop available on this chart." + (bothSell ? " Both models read sell side, so this is a trade against the trend, not an entry." : "")
     else if emaOver
         _a := "DO NOT START HERE. " + str.tostring(emaX21, "#.#") + " ATR above the " + str.tostring(emaSlowLen, "#") + " EMA. Hold what you have; add only back near " + str.tostring(emaS, format.mintick) + "."
     else if profOn and profAbove and not na(profBars) and profBars >= 3 and trend == 1
@@ -2430,10 +2435,12 @@ f_boSummary(table _t) =>
         vCol = boTrapUp or boTrapDn ? color.new(#d50000, 0) : bothBuy ? color.new(#00c853, 0) : bothSell ? color.new(#d50000, 0) : color.new(color.orange, 15)
 
         table.cell(_t, 0, 0, "1  ATR MODEL", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 0, (atrBull ? "▲ BULLISH   —   STAY LONG above " + str.tostring(moneyLine, format.mintick) + "   ·   SELL on a " + tfWord + " close BELOW it" : "▼ BEARISH   —   STAY OUT below " + str.tostring(moneyLine, format.mintick) + "   ·   BUY on a " + tfWord + " close ABOVE it") // measured from PRICE, like every other distance on the panel. Row 1 used to
-// divide by the money line while row 4 divided by close, so TATAELXSI showed
-// "-13% away" and "14.9% away" for the same gap three rows apart.
-+ "   (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away)", text_color = color.white, bgcolor = aCol, text_halign = text.align_left, text_size = txtSize)
+        // Distance is measured FROM PRICE and named, because a bare signed
+        // percentage read differently on every chart: ORCL showed "-24.5% away"
+        // on row 1 and CRCL "38% away" on row 4 for the same kind of gap, one
+        // divided by the money line and the other by close. Now both divide by
+        // close and row 1 says which side the trigger sits on.
+        table.cell(_t, 1, 0, (atrBull ? "▲ BULLISH   —   STAY LONG above " + str.tostring(moneyLine, format.mintick) + "   ·   SELL on a " + tfWord + " close BELOW it" : "▼ BEARISH   —   STAY OUT below " + str.tostring(moneyLine, format.mintick) + "   ·   BUY on a " + tfWord + " close ABOVE it") + "   (" + str.tostring(math.abs(moneyLine - close) / close * 100, "#.#") + "% " + (moneyLine > close ? "above" : "below") + " price)", text_color = color.white, bgcolor = aCol, text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 1, "2  LINES", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 1, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + str.tostring(profWeeks, "#") + "wEMA " + (lnV1 > 0 ? "▲ above" : "▼ below") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : "▼ below") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : "▼ below"), text_color = color.white, bgcolor = lCol, text_halign = text.align_left, text_size = txtSize)
