@@ -2407,11 +2407,20 @@ var float botPX = 0.0
 var int   botN  = 0
 // nz(volume) because indices and some FX feeds report no volume at all; the
 // bar-count average below is the fallback so the line still draws there.
+// RELIANCE weekly reported "39.9% above the average cost since the low at
+// 989.6" while the line itself sat near 700 - an average that is BELOW the
+// low it names, which is impossible. botLo is the lowest low of the CURRENT
+// window, but the accumulator was anchored at the 2020 low, which had long
+// since rolled out of that window. Two different bars, reported as one. The
+// anchor's own low is stored now, and an anchor older than the lookback is
+// treated as matured, because it is no longer a cycle low in any useful sense.
+var float botAnc = na
 if low <= botLo or botN == 0
     botPV := 0.0
     botVV := 0.0
     botPX := 0.0
     botN  := 0
+    botAnc := low
 botPV += hlc3 * nz(volume)
 botVV += nz(volume)
 botPX += hlc3
@@ -2421,9 +2430,70 @@ botRise  = not na(botAV) and not na(botAV[1]) and botAV > botAV[1]
 botAbove = not na(botAV) and close > botAV
 botReady = botN >= botMinB
 botStr   = na(botAV) or na(atrV) or atrV <= 0 ? na : (close - botAV) / atrV
-botMature = not na(botStr) and botStr > botMaxATR
+botMature = not na(botStr) and (botStr > botMaxATR or botN > botLook)
 botBuy   = botAbove and botRise and botReady and not botMature
 botDistP = na(botAV) ? na : (close - botAV) / close * 100
+
+// ── BOTTOM SCORE ───────────────────────────────────────────────────────────
+// Seven independent pieces of evidence. No single one calls a bottom - RSI
+// under 30 keeps going down, a volume spike can be the start of the slide,
+// and a reclaim of the 21 EMA inside a downtrend is the most common trap on
+// the chart. What identifies a real low is several of them landing together,
+// which is what this counts.
+//
+// Be clear about what this cannot do: it cannot mark the exact low in real
+// time. Three of the seven checks need bars AFTER the low to exist at all -
+// a pivot has to confirm, the EMA has to be reclaimed, the average-cost line
+// has to turn up. So it fires a few bars late, by construction. Anything
+// that claims to print on the exact low is reading bars it did not have.
+botDeep  = input.float(20.0, "Washout: % off the high to qualify", minval = 5.0, maxval = 80.0, step = 1.0, group = "v64 · BOTTOM SCORE")
+botRsiOS = input.float(32.0, "Oversold: RSI must have reached this", minval = 10.0, maxval = 50.0, step = 1.0, group = "v64 · BOTTOM SCORE")
+botRec   = input.int(30, "How recently those must have happened (bars)", minval = 5, maxval = 200, group = "v64 · BOTTOM SCORE")
+botVolX  = input.float(2.0, "Capitulation: down-bar volume vs average", minval = 1.2, maxval = 10.0, step = 0.1, group = "v64 · BOTTOM SCORE")
+botPivL  = input.int(5, "Pivot left bars", minval = 2, maxval = 20, group = "v64 · BOTTOM SCORE")
+botPivR  = input.int(3, "Pivot right bars (this is the confirmation lag)", minval = 1, maxval = 20, group = "v64 · BOTTOM SCORE")
+botNeed  = input.int(5, "Checks required to call it a bottom (of 7)", minval = 3, maxval = 7, group = "v64 · BOTTOM SCORE")
+
+botHi   = ta.highest(high, botLook)
+botDD   = botHi > 0 ? (botHi - close) / botHi * 100 : na
+botRsLo = ta.lowest(rsiV, botRec)
+botCapV = close < open and volAvg > 0 ? volume / volAvg : 0.0
+botCap  = ta.highest(botCapV, botRec)
+botPv   = ta.pivotlow(low, botPivL, botPivR)
+var float pvP1 = na
+var float pvP2 = na
+var float pvR1 = na
+var float pvR2 = na
+if not na(botPv)
+    pvP2 := pvP1
+    pvR2 := pvR1
+    pvP1 := botPv
+    pvR1 := rsiV[botPivR]
+
+// 1 WASHOUT - a real decline, not a dip. 2 OVERSOLD - sellers got forced out.
+// 3 STRUCTURE - either price made a lower low while RSI made a higher one
+//   (the sellers are weaker than the price suggests), or price simply made a
+//   higher low. Either is the market refusing to go lower.
+// 4 CAPITULATION - a down bar on heavy volume is the last holders giving up.
+//   Symbols with no volume feed pass this, matching how the breakout gate
+//   already handles them, rather than being penalised for their data.
+// 5 RECLAIM, 6 MOMENTUM, 7 COST - the three that need bars after the low.
+bv1 = not na(botDD) and botDD >= botDeep
+bv2 = not na(botRsLo) and botRsLo <= botRsiOS
+bv3 = not na(pvP1) and not na(pvP2) and (pvP1 < pvP2 and pvR1 > pvR2 or pvP1 > pvP2)
+bv4 = na(volRatio) ? true : botCap >= botVolX
+bv5 = not na(emaS) and close > emaS
+bv6 = not na(macdH) and macdH > macdH[1]
+bv7 = botAbove and botRise
+botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ? 1 : 0) + (bv6 ? 1 : 0) + (bv7 ? 1 : 0)
+botConf = botScr >= botNeed and not botMature and botReady
+botSig  = botOn and botConf and not botConf[1]
+
+plotshape(botSig, title = "BOTTOM confirmed", style = shape.labelup, location = location.belowbar, color = color.new(#00c853, 0), text = "BOTTOM", textcolor = color.white, size = size.small)
+alertcondition(botSig, title = "Bottom confirmed", message = "BOTTOM confirmed on {{ticker}} — bottom score met on the {{interval}} chart")
+
+f_botTicks() =>
+    (bv1 ? "✓" : "✗") + "washout " + (bv2 ? "✓" : "✗") + "oversold " + (bv3 ? "✓" : "✗") + "structure " + (bv4 ? "✓" : "✗") + "volume " + (bv5 ? "✓" : "✗") + "21EMA " + (bv6 ? "✓" : "✗") + "MACD " + (bv7 ? "✓" : "✗") + "cost"
 
 plot(botOn and not syncMode ? botAV : na, "Bottom line — cycle-low VWAP", color = color.new(#00bfa5, 0), linewidth = 3)
 
@@ -2431,16 +2501,12 @@ f_botSay() =>
     _s = ""
     if not botOn or na(botAV)
         _s := "—"
-    else if not botReady
-        _s := "TOO EARLY — only " + str.tostring(botN, "#") + " bar(s) since the low at " + str.tostring(botLo, format.mintick) + ". Let a base build before buying."
     else if botMature
-        _s := "MATURED — a trend now, not a bottom. " + str.tostring(botStr, "#.#") + " ATR (" + str.tostring(botDistP, "#.#") + "%) above the average cost since the low at " + str.tostring(botLo, format.mintick) + " — far too low to use as a stop. Judge this on rows 1-10."
-    else if botAbove and botRise
-        _s := "✓ BASE WORKING — above the average cost since the low, " + str.tostring(botAV, format.mintick) + " (" + str.tostring(botDistP, "#.#") + "% above), and it is RISING. Buyers off the low are in profit. Hold while it holds; out on a " + tfWord + " close under it."
-    else if botAbove
-        _s := "HOLDING, NOT YET RISING — above average cost " + str.tostring(botAV, format.mintick) + " (" + str.tostring(botDistP, "#.#") + "% above) but the line is still flat or falling. Starter size only until it turns up."
+        _s := "MATURED — a trend now, not a bottom. " + str.tostring(botStr, "#.#") + " ATR (" + str.tostring(botDistP, "#.#") + "%) above the average cost, anchored " + str.tostring(botN, "#") + " bars back at " + str.tostring(botAnc, format.mintick) + " — far too low to be a stop. Judge this on rows 1-10."
+    else if not botReady
+        _s := "TOO EARLY — only " + str.tostring(botN, "#") + " bar(s) since the low at " + str.tostring(botAnc, format.mintick) + ". Let a base build before buying."
     else
-        _s := "✗ NOT A BOTTOM YET — " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER the average cost " + str.tostring(botAV, format.mintick) + ". Everyone who bought since the low at " + str.tostring(botLo, format.mintick) + " is underwater, so rallies get sold into break-even. Wait for a " + tfWord + " close above it."
+        _s := "BOTTOM " + str.tostring(botScr, "#") + "/7 " + (botConf ? "✓ CONFIRMED — buy zone" : botScr >= botNeed - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + ".  " + f_botTicks() + (botAbove ? "  ·  " + str.tostring(botDistP, "#.#") + "% above avg cost " + str.tostring(botAV, format.mintick) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + str.tostring(botAV, format.mintick) + ", buyers off the low are offside")
     _s
 botSay = f_botSay()
 
@@ -2479,8 +2545,8 @@ f_whatToDo() =>
     // The buy-and-hold case the ATR model structurally cannot make: it only
     // turns bullish after the money line is reclaimed, which at a true bottom
     // is routinely 20-30% off the low. The average-cost line turns first.
-    else if botOn and botBuy and trend == -1
-        _a := "SCALE IN SLOWLY — a bottom is forming. ATR model still bearish, but price holds above the average cost since the low (" + str.tostring(botAV, format.mintick) + ") and that line is RISING. Quarter size · add above " + str.tostring(moneyLine, format.mintick) + " · out below " + str.tostring(botAV, format.mintick) + "."
+    else if botOn and botConf and trend == -1
+        _a := "SCALE IN SLOWLY — bottom score " + str.tostring(botScr, "#") + "/7. ATR model still bearish, but price holds above the average cost since the low (" + str.tostring(botAV, format.mintick) + ") and that line is RISING. Quarter size · add above " + str.tostring(moneyLine, format.mintick) + " · out below " + str.tostring(botAV, format.mintick) + "."
     // "DO NOTHING" is true but unhelpful on its own: mid-base is exactly when
     // you want the buy levels spelled out, not withheld. Name the whole ladder
     // so the trigger is a number on the chart rather than a judgement call.
