@@ -1941,6 +1941,11 @@ f_emaExt(int _f, int _s, int _a) =>
 
 [emaF, emaS, emaAtr, emaX9, emaX21, emaBarsAbove] = f_emaExt(emaFastLen, emaSlowLen, emaAtrLen)
 emaAtrPct = close > 0 and not na(emaAtr) ? emaAtr / close * 100 : na
+// Your reference panel quotes BOTH ("21 EMA 884.31  24.77%" next to
+// "1.46x above"), and both earn their place: the percent is what you feel in
+// the P&L, the ATR multiple is what lets you compare this chart with the next.
+emaPctF = not na(emaF) and emaF > 0 ? (close - emaF) / emaF * 100 : na
+emaPctS = not na(emaS) and emaS > 0 ? (close - emaS) / emaS * 100 : na
 emaOver   = not na(emaX21) and emaX21 >= emaExtMax
 
 // The most recent level taken to the upside, carried forward. valuewhen keeps
@@ -2105,10 +2110,10 @@ f_linesSay() =>
     _r
 
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
-var table bot = table.new(boPosMap, 2, 23, border_width = 2)
+var table bot = table.new(boPosMap, 2, 24, border_width = 2)
 
 f_boConsole(table _t) =>
-    table.clear(_t, 0, 0, 1, 22)
+    table.clear(_t, 0, 0, 1, 23)
     vCol = boVerdict == "STRONG BUY" ? color.new(#00c853, 0) : boVerdict == "BUY" ? color.new(#00c853, 30) : boVerdict == "STRONG SELL" ? color.new(#d50000, 0) : boVerdict == "SELL" ? color.new(#d50000, 30) : boVerdict == "NO SETUP" ? color.new(color.gray, 40) : color.new(color.orange, 25)
     table.cell(_t, 0, 0, "BREAKOUT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 0, boVerdict + (boDir == 0 ? "" : "   " + str.tostring(boScore, "#") + "/10"), text_color = color.white, bgcolor = vCol, text_halign = text.align_center, text_size = txtSize)
@@ -2169,12 +2174,18 @@ f_boConsole(table _t) =>
     // extension in ATR, not percent: "1.5 ATR above the 21 EMA" means the same
     // thing on every symbol, where "10% above" does not.
     table.cell(_t, 0, 20, str.tostring(emaFastLen, "#") + " / " + str.tostring(emaSlowLen, "#") + " EMA", text_color = color.white, bgcolor = color.new(#ff5252, 30), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 20, na(emaF) ? "—" : str.tostring(emaF, format.mintick) + "  /  " + str.tostring(emaS, format.mintick) + "   ·   " + str.tostring(emaX9, "#.#") + "x / " + str.tostring(emaX21, "#.#") + "x ATR above" + (emaOver ? "  ⚠ EXTENDED" : "") + (na(emaBarsAbove) ? "" : "   ·   " + str.tostring(emaBarsAbove, "#") + " bars above"), text_color = color.white, bgcolor = emaOver ? color.new(color.orange, 30) : color.new(#ff5252, 55), text_halign = text.align_center, text_size = txtSize)
+    table.cell(_t, 1, 20, na(emaF) ? "—" : str.tostring(emaF, format.mintick) + "  /  " + str.tostring(emaS, format.mintick) + "   ·   " + str.tostring(emaX9, "#.#") + "x / " + str.tostring(emaX21, "#.#") + "x ATR   (" + str.tostring(emaPctS, "#.#") + "% above the " + str.tostring(emaSlowLen, "#") + ")" + (emaOver ? "  ⚠ EXTENDED" : "") + (na(emaBarsAbove) ? "" : "   ·   " + str.tostring(emaBarsAbove, "#") + " bars above"), text_color = color.white, bgcolor = emaOver ? color.new(color.orange, 30) : color.new(#ff5252, 55), text_halign = text.align_center, text_size = txtSize)
     table.cell(_t, 0, 21, "POLARITY", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 21, not boFlipOn ? "— no level taken yet" : "resistance → support at " + str.tostring(boFlipLvl, format.mintick) + "   (" + str.tostring(boFlipPct, "#.#") + "% below price)" + (boFlipRe ? "   ✓ retested and held" : "   · untested"), text_color = color.white, bgcolor = not boFlipOn ? color.new(color.gray, 55) : boFlipRe ? color.new(#00c853, 35) : color.new(#2962ff, 45), text_halign = text.align_center, text_size = txtSize)
     // the whole point of the section: one sentence, from the lines alone
     table.cell(_t, 0, 22, "LINES SAY", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
     table.cell(_t, 1, 22, f_linesSay(), text_color = color.white, bgcolor = color.new(#00695c, 20), text_halign = text.align_left, text_size = txtSize)
+    // syminfo.sector / .industry are built-ins — they cost nothing against the
+    // request budget, which matters because this file is at 46 of a documented
+    // 40 and a single extra request.*() would break the whole script.
+    secTxt = (syminfo.sector == "" ? "—" : syminfo.sector) + (syminfo.industry == "" ? "" : "   ·   " + syminfo.industry) + "   ·   " + syminfo.type
+    table.cell(_t, 0, 23, "SECTOR", text_color = color.white, bgcolor = color.new(color.gray, 25), text_halign = text.align_left, text_size = txtSize)
+    table.cell(_t, 1, 23, secTxt, text_color = color.white, bgcolor = color.new(color.gray, 50), text_halign = text.align_center, text_size = txtSize)
     0
 
 // ── CHART SYNC MODE — remove only what drags the axis ────────────────
