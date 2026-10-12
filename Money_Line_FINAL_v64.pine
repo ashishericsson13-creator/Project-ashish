@@ -2364,6 +2364,76 @@ f_rsiWord(float _v) => na(_v) ? "—" : _v >= 70 ? "overbought" : _v >= 55 ? "he
 f_adxWord(float _v) => na(_v) ? "—" : _v >= 40 ? "strong trend" : _v >= adxMin ? "trending" : "no trend (chop)"
 f_volWord(float _v) => na(_v) ? "—" : _v >= 2.0 ? "heavy" : _v >= 1.5 ? "above average" : _v >= 0.8 ? "normal" : "light"
 
+// ═══════════════════════════════════════════════════════════════════════════
+// v64 — THE BOTTOM LINE   (anchored VWAP from the cycle low)
+// ═══════════════════════════════════════════════════════════════════════════
+// Every other line on this chart answers "is the trend up". None of them
+// answers the question you actually ask at a bottom: has the selling
+// finished, and will anyone else hold what I buy here.
+//
+// This is the volume-weighted average price of EVERY bar since the lowest
+// low of the lookback — the real average cost of everyone who has bought
+// since the bottom printed. It is not a moving average, so it does not lag
+// the turn the way the 21/50/200 do:
+//
+//   price ABOVE it → the average buyer off the low is in PROFIT. Dips get
+//                    bought, supply is absorbed, the base is working.
+//   price BELOW it → the average buyer off the low is UNDERWATER. Every
+//                    bounce runs into people getting out at break-even.
+//                    That is what a failing bottom looks like, and it is why
+//                    most "it is cheap here" buys bleed for months.
+//
+// A base that holds this line WHILE IT RISES is the buy-and-hold entry. The
+// line is also the stop: a close back under it says the base failed.
+//
+// The anchor re-arms whenever a NEW cycle low prints (low <= the lookback
+// low), not when the old low merely rolls out of the window — otherwise the
+// average cost would reset on a quiet drift that nobody actually bought.
+botOn   = input.bool(true, "Bottom line — average cost of every buyer since the low", group = "v64 · BOTTOM LINE")
+botLook = input.int(250, "How far back to hunt for the cycle low (bars)", minval = 50, maxval = 1000, group = "v64 · BOTTOM LINE")
+botMinB = input.int(10, "Bars of base required before it is tradable", minval = 3, maxval = 100, group = "v64 · BOTTOM LINE")
+
+botLo = ta.lowest(low, botLook)
+var float botPV = 0.0
+var float botVV = 0.0
+var float botPX = 0.0
+var int   botN  = 0
+// nz(volume) because indices and some FX feeds report no volume at all; the
+// bar-count average below is the fallback so the line still draws there.
+if low <= botLo or botN == 0
+    botPV := 0.0
+    botVV := 0.0
+    botPX := 0.0
+    botN  := 0
+botPV += hlc3 * nz(volume)
+botVV += nz(volume)
+botPX += hlc3
+botN  += 1
+botAV    = botVV > 0 ? botPV / botVV : botN > 0 ? botPX / botN : na
+botRise  = not na(botAV) and not na(botAV[1]) and botAV > botAV[1]
+botAbove = not na(botAV) and close > botAV
+botReady = botN >= botMinB
+botBuy   = botAbove and botRise and botReady
+botDistP = na(botAV) ? na : (close - botAV) / close * 100
+
+plot(botOn and not syncMode ? botAV : na, "Bottom line — cycle-low VWAP", color = color.new(#00bfa5, 0), linewidth = 3)
+
+f_botSay() =>
+    _s = ""
+    if not botOn or na(botAV)
+        _s := "—"
+    else if not botReady
+        _s := "TOO EARLY — only " + str.tostring(botN, "#") + " bar(s) since the low at " + str.tostring(botLo, format.mintick) + ". Let a base build before buying."
+    else if botAbove and botRise
+        _s := "✓ BASE WORKING — above the average cost since the low, " + str.tostring(botAV, format.mintick) + " (" + str.tostring(botDistP, "#.#") + "% above), and it is RISING. Buyers off the low are in profit. Hold while it holds; out on a " + tfWord + " close under it."
+    else if botAbove
+        _s := "HOLDING, NOT YET RISING — above average cost " + str.tostring(botAV, format.mintick) + " (" + str.tostring(botDistP, "#.#") + "% above) but the line is still flat or falling. Starter size only until it turns up."
+    else
+        _s := "✗ NOT A BOTTOM YET — " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER the average cost " + str.tostring(botAV, format.mintick) + ". Everyone who bought since the low at " + str.tostring(botLo, format.mintick) + " is underwater, so rallies get sold into break-even. Wait for a " + tfWord + " close above it."
+    _s
+botSay = f_botSay()
+
+
 f_whatToDo() =>
     _a = ""
     if not boOn
@@ -2395,6 +2465,11 @@ f_whatToDo() =>
         _a := "DO NOT START HERE. " + str.tostring(emaX21, "#.#") + " ATR above the " + str.tostring(emaSlowLen, "#") + " EMA. Hold what you have; add only back near " + str.tostring(emaS, format.mintick) + "."
     else if profOn and profAbove and not na(profBars) and profBars >= 3 and trend == 1
         _a := "HOLD. Exit is a CLOSE below " + str.tostring(profEma, format.mintick) + ". Add only on a pullback back toward it — do not add " + (na(profDist) ? "out here." : str.tostring(profDist, "#.#") + " ATR above it.")
+    // The buy-and-hold case the ATR model structurally cannot make: it only
+    // turns bullish after the money line is reclaimed, which at a true bottom
+    // is routinely 20-30% off the low. The average-cost line turns first.
+    else if botOn and botBuy and trend == -1
+        _a := "SCALE IN SLOWLY — a bottom is forming. The ATR model is still bearish, but price holds above the average cost of every buyer since the low (" + str.tostring(botAV, format.mintick) + ") and that line is RISING. Quarter size here, add on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + ". Out on a close under " + str.tostring(botAV, format.mintick) + "."
     else if suIsBase
         _a := "DO NOTHING. Set two alerts: above " + str.tostring(suHi, format.mintick) + " and below " + str.tostring(suLo, format.mintick) + ". Act on whichever closes first."
     // Both fallbacks used to speak as if only the ATR model existed. TCS weekly
@@ -2465,6 +2540,10 @@ f_boSummary(table _t) =>
 
         table.cell(_t, 0, 8, "9  LEVELS", text_color = color.white, bgcolor = color.new(color.olive, 20), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 8, (na(lvlR) or lvlRfar ? "resistance — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "resistance " + str.tostring(lvlR, format.mintick) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "support " + str.tostring(lvlS, format.mintick) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
+
+        bCol = not botOn or na(botAV) ? color.new(color.gray, 40) : botBuy ? color.new(#00c853, 20) : botAbove ? color.new(color.orange, 25) : color.new(#d50000, 25)
+        table.cell(_t, 0, 10, "11  BOTTOM", text_color = color.white, bgcolor = color.new(#00bfa5, 15), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 10, botSay, text_color = color.white, bgcolor = bCol, text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 9, "10  STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
