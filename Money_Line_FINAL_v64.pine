@@ -2434,7 +2434,7 @@ f_botSay() =>
     else if not botReady
         _s := "TOO EARLY — only " + str.tostring(botN, "#") + " bar(s) since the low at " + str.tostring(botLo, format.mintick) + ". Let a base build before buying."
     else if botMature
-        _s := "MATURED — this is a trend now, not a bottom. Price is " + str.tostring(botStr, "#.#") + " ATR (" + str.tostring(botDistP, "#.#") + "%) above the average cost since the low at " + str.tostring(botLo, format.mintick) + ", so that line is far too low to use as a stop. Judge this chart on rows 1-10."
+        _s := "MATURED — a trend now, not a bottom. " + str.tostring(botStr, "#.#") + " ATR (" + str.tostring(botDistP, "#.#") + "%) above the average cost since the low at " + str.tostring(botLo, format.mintick) + " — far too low to use as a stop. Judge this on rows 1-10."
     else if botAbove and botRise
         _s := "✓ BASE WORKING — above the average cost since the low, " + str.tostring(botAV, format.mintick) + " (" + str.tostring(botDistP, "#.#") + "% above), and it is RISING. Buyers off the low are in profit. Hold while it holds; out on a " + tfWord + " close under it."
     else if botAbove
@@ -2480,12 +2480,12 @@ f_whatToDo() =>
     // turns bullish after the money line is reclaimed, which at a true bottom
     // is routinely 20-30% off the low. The average-cost line turns first.
     else if botOn and botBuy and trend == -1
-        _a := "SCALE IN SLOWLY — a bottom is forming. The ATR model is still bearish, but price holds above the average cost of every buyer since the low (" + str.tostring(botAV, format.mintick) + ") and that line is RISING. Quarter size here, add on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + ". Out on a close under " + str.tostring(botAV, format.mintick) + "."
+        _a := "SCALE IN SLOWLY — a bottom is forming. ATR model still bearish, but price holds above the average cost since the low (" + str.tostring(botAV, format.mintick) + ") and that line is RISING. Quarter size · add above " + str.tostring(moneyLine, format.mintick) + " · out below " + str.tostring(botAV, format.mintick) + "."
     // "DO NOTHING" is true but unhelpful on its own: mid-base is exactly when
     // you want the buy levels spelled out, not withheld. Name the whole ladder
     // so the trigger is a number on the chart rather than a judgement call.
     else if suIsBase
-        _a := "DO NOTHING YET — price is mid-base, so there is nothing to buy at this price. Your buy ladder: " + (profOn and not na(profEma) ? "a " + tfWord + " close above " + str.tostring(profEma, format.mintick) + " (" + str.tostring(profWeeks, "#") + "wEMA) says the pullback is over; " : "") + "a close above " + str.tostring(moneyLine, format.mintick) + " turns the ATR model bullish; a close above " + str.tostring(suHi, format.mintick) + " breaks the base and is the full-size entry. It all fails on a close below " + str.tostring(suLo, format.mintick) + "."
+        _a := "DO NOTHING YET — mid-base, nothing to buy here. LADDER (" + tfWord + " closes): " + (profOn and not na(profEma) ? "above " + str.tostring(profEma, format.mintick) + " " + str.tostring(profWeeks, "#") + "wEMA = pullback over · " : "") + "above " + str.tostring(moneyLine, format.mintick) + " = ATR turns bullish · above " + str.tostring(suHi, format.mintick) + " = base breaks, full size · below " + str.tostring(suLo, format.mintick) + " = all off."
     // Both fallbacks used to speak as if only the ATR model existed. TCS weekly
     // read "HOLD. Only act if a weekly candle CLOSES below 2061.9" while row 2
     // said 0 OF 4 LINES BULLISH and row 3 said SPLIT — the panel disagreeing
