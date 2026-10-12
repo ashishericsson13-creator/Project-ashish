@@ -1650,6 +1650,7 @@ boVolSurge = input.float(1.50, "Volume surge required (x 20-bar avg)", minval = 
 boRsiMax   = input.float(80.0, "RSI ceiling (above = move already spent)", minval = 60, maxval = 95, step = 1, tooltip = "RSI above this means buying the end of a run. This is the check that stops a BUY into a vertical blow-off.", group = "6. Breakout Console")
 boStopATR  = input.float(0.50, "Breakout stop: ATR below the broken level", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "A broken resistance becomes support; the trade is wrong if price closes back under it. NOT the Money Line,...", group = "6. Breakout Console")
 boFlipMaxATR = input.float(4.0, "Polarity: stale once price is this many ATR above it", minval = 1.0, maxval = 20.0, step = 0.5, tooltip = "A broken resistance acts as support while price is near it. Once price has run this far above, it is no...", group = "6. Breakout Console")
+boFailBars = input.int(4, "Failed breakout: closes back under within N bars", minval = 1, maxval = 20, tooltip = "A break that price closes back under inside this window is a trap, not a breakout.", group = "6. Breakout Console")
 boShowLvl  = input.bool(true, "Draw the defended horizontal levels", group = "6. Breakout Console")
 boShowVert = input.bool(true, "Vertical line at each scored breakout", group = "6. Breakout Console")
 boPos      = input.string("Top Right", "Console position", options = ["Top Right", "Top Left", "Middle Right", "Bottom Left", "Bottom Right"], group = "6. Breakout Console")
@@ -1909,6 +1910,29 @@ boCloAt   = ta.valuewhen(boBrkUp or boBrkDn, (close - low) / math.max(high - low
 boLvlNow  = flagBrkUp ? tlUpNow : flagBrkDn ? tlLoNow : suATHBrk ? hiAll[1] : suBaseBrk ? suHi[1] : boBrkHorzUp ? boResRef : proBreakUp ? proResNow : tlBreakUp ? tlUpNow : boBrkHorzDn ? boSupRef : proBreakDn ? proSupNow : tlBreakDn ? tlLoNow : (buySignal or sellSignal) ? moneyLine : na
 boLvlAt   = ta.valuewhen(boBrkUp or boBrkDn, nz(boLvlNow, close), 0)
 boLiveBar = barstate.islast and time_close > timenow
+
+// ── THE FAILED BREAKOUT ──────────────────────────────────────────────
+// "All-time high breakouts are important, and more important is that the
+// back test holds." The NVDA chart labels two FAILED ATH breakouts before the
+// one that worked, and the point made under it is the right one: the damage
+// came after price LOST the level, not while it was still holding.
+//
+// Everything above scores a break at the moment it happens. Nothing watched
+// what happened NEXT. A break that price closes back under is not a weak
+// breakout — it is a trap, and it is the most dangerous state on the chart,
+// because the people who bought the break are now all offside and become the
+// supply that drives the next leg down.
+//
+// Deliberately judged on the CLOSE and only inside boFailBars. A wick back
+// under is noise; a close back under is the trade being wrong. After the
+// window the level is simply old news, not a live trap.
+boTrapUp = not na(boLvlAt) and not na(boAgeUp) and boAgeUp <= boFailBars and boAgeUp > 0 and close < boLvlAt
+boTrapDn = not na(boLvlAt) and not na(boAgeDn) and boAgeDn <= boFailBars and boAgeDn > 0 and close > boLvlAt
+boFailUp = boTrapUp and not boTrapUp[1]
+boFailDn = boTrapDn and not boTrapDn[1]
+// the ATH case is the one worth naming, because there is no overhead supply
+// to blame — only the buyers who just got trapped
+boFailATH = boTrapUp and boKindAt == 6
 
 // ── k1-k10: IS THIS BREAKOUT REAL ────────────────────────────────────
 // Direction-aware, same discipline as c1-c9: in a breakdown the bearish
@@ -2271,6 +2295,10 @@ f_whatToDo() =>
         _a := "—"
     else if thinHist
         _a := "DO NOTHING — only " + str.tostring(histDays, "#") + " days of history. Nothing here is trustworthy yet."
+    else if boTrapUp
+        _a := "FAILED BREAKOUT" + (boFailATH ? " AT ALL-TIME HIGHS" : "") + " — price broke " + str.tostring(boLvlAt, format.mintick) + " and has closed back UNDER it. If you bought that break you are offside: get out. Do not re-buy until a close back above " + str.tostring(boLvlAt, format.mintick) + "."
+    else if boTrapDn
+        _a := "FAILED BREAKDOWN — price broke " + str.tostring(boLvlAt, format.mintick) + " and has closed back ABOVE it. Shorts are trapped; cover. The level has to fail again to mean anything."
     else if boPending or boBrkUnconf
         _a := "WAIT for this bar to close. A level is giving way intrabar and it can still un-happen."
     else if profOn and profLost
@@ -2295,53 +2323,57 @@ f_whatToDo() =>
         _a := "STAY OUT. Your only entry trigger is a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away)."
     _a
 
+// CE10272 + CW10003: declared HERE, above f_boSummary, because that is
+// where it is read. Built every bar at global scope rather than inside the
+// last-bar table block, so nothing in it can drift between calls.
+// built every bar at global scope instead of inside the last-bar
+boWTD = f_whatToDo()
+
 // ── THE 10-LINE SUMMARY ──────────────────────────────────────────────
 // The full console is 26 rows. That is a reference, not a summary, and on a
 // weekly chart it runs off the screen. This is the whole panel in ten lines,
 // built so the first three answer the only question that matters: what does
 // each model say, and do they agree.
+// The barstate guard lives INSIDE so the call itself is unconditional, which
+// is what CW10003 asks for: a function reached on only some bars cannot keep
+// its own history straight, and Pine cannot tell which functions are pure.
 f_boSummary(table _t) =>
-    // the WHOLE table, not just rows 0-9: switching back from Full detail
-    // would otherwise leave sixteen stale rows hanging under the summary
-    table.clear(_t, 0, 0, 1, 25)
-    aCol = atrBull ? color.new(#00c853, 25) : color.new(#d50000, 25)
-    lCol = lnBull ? color.new(#00c853, 25) : lnBear ? color.new(#d50000, 25) : color.new(color.orange, 30)
-    vCol = bothBuy ? color.new(#00c853, 0) : bothSell ? color.new(#d50000, 0) : color.new(color.orange, 15)
+    if barstate.islast and boOn
+        table.clear(_t, 0, 0, 1, 25)
+        aCol = atrBull ? color.new(#00c853, 25) : color.new(#d50000, 25)
+        lCol = lnBull ? color.new(#00c853, 25) : lnBear ? color.new(#d50000, 25) : color.new(color.orange, 30)
+        vCol = boTrapUp or boTrapDn ? color.new(#d50000, 0) : bothBuy ? color.new(#00c853, 0) : bothSell ? color.new(#d50000, 0) : color.new(color.orange, 15)
 
-    table.cell(_t, 0, 0, "1  ATR MODEL", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 0, (atrBull ? "▲ BULLISH   —   STAY LONG above " + str.tostring(moneyLine, format.mintick) + "   ·   SELL on a " + tfWord + " close BELOW it" : "▼ BEARISH   —   STAY OUT below " + str.tostring(moneyLine, format.mintick) + "   ·   BUY on a " + tfWord + " close ABOVE it") + "   (" + (close >= moneyLine ? "+" : "") + str.tostring((close - moneyLine) / moneyLine * 100, "#.#") + "% away)", text_color = color.white, bgcolor = aCol, text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 0, 0, "1  ATR MODEL", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 0, (atrBull ? "▲ BULLISH   —   STAY LONG above " + str.tostring(moneyLine, format.mintick) + "   ·   SELL on a " + tfWord + " close BELOW it" : "▼ BEARISH   —   STAY OUT below " + str.tostring(moneyLine, format.mintick) + "   ·   BUY on a " + tfWord + " close ABOVE it") + "   (" + (close >= moneyLine ? "+" : "") + str.tostring((close - moneyLine) / moneyLine * 100, "#.#") + "% away)", text_color = color.white, bgcolor = aCol, text_halign = text.align_left, text_size = txtSize)
 
-    table.cell(_t, 0, 1, "2  LINES", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 1, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + str.tostring(profWeeks, "#") + "wEMA " + (lnV1 > 0 ? "▲ above" : "▼ below") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : "▼ below") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : "▼ below"), text_color = color.white, bgcolor = lCol, text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 0, 1, "2  LINES", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 1, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + str.tostring(profWeeks, "#") + "wEMA " + (lnV1 > 0 ? "▲ above" : "▼ below") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : "▼ below") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : "▼ below"), text_color = color.white, bgcolor = lCol, text_halign = text.align_left, text_size = txtSize)
 
-    table.cell(_t, 0, 2, "3  VERDICT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 2, agreeWord + (boDir == 0 ? "   ·   nothing has broken recently" : "   ·   " + f_boKind(boKindAt) + " broke " + str.tostring(boBrkAge, "#") + " bar(s) ago, " + str.tostring(boScore, "#") + "/10" + (boBrkUnconf ? " ⧗ bar not closed" : boGate ? " ✓gate" : " ✗gate")), text_color = color.white, bgcolor = vCol, text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 0, 2, "3  VERDICT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 2, (boTrapUp ? "⚠ FAILED BREAKOUT — the break was retaken" : boTrapDn ? "⚠ FAILED BREAKDOWN — shorts trapped" : agreeWord) + (boDir == 0 ? "   ·   nothing has broken recently" : "   ·   " + f_boKind(boKindAt) + " broke " + str.tostring(boBrkAge, "#") + " bar(s) ago, " + str.tostring(boScore, "#") + "/10" + (boBrkUnconf ? " ⧗ bar not closed" : boGate ? " ✓gate" : " ✗gate")), text_color = color.white, bgcolor = vCol, text_halign = text.align_left, text_size = txtSize)
 
-    table.cell(_t, 0, 3, "4  ▶ DO THIS", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 3, boWTD, text_color = color.white, bgcolor = color.new(#00695c, 10), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 0, 3, "4  ▶ DO THIS", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 3, boWTD, text_color = color.white, bgcolor = color.new(#00695c, 10), text_halign = text.align_left, text_size = txtSize)
 
-    table.cell(_t, 0, 4, "5  NUMBERS", text_color = color.white, bgcolor = color.new(color.navy, 15), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 4, boDir == 0 or na(boStop) ? "no live setup — nothing to size yet" : "entry " + str.tostring(boEntry, format.mintick) + "   stop " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)" + (na(boTarget) ? "" : "   target " + str.tostring(boTarget, format.mintick) + boTgtSrc) + (na(boRR) ? "" : "   R:R " + str.tostring(boRR, "#.##")) + (na(boSizePc) ? "" : "   size " + str.tostring(math.min(boSizePc, 100), "#.#") + "%"), text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 0, 4, "5  NUMBERS", text_color = color.white, bgcolor = color.new(color.navy, 15), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 4, boDir == 0 or na(boStop) ? "no live setup — nothing to size yet" : "entry " + str.tostring(boEntry, format.mintick) + "   stop " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)" + (na(boTarget) ? "" : "   target " + str.tostring(boTarget, format.mintick) + boTgtSrc) + (na(boRR) ? "" : "   R:R " + str.tostring(boRR, "#.##")) + (na(boSizePc) ? "" : "   size " + str.tostring(math.min(boSizePc, 100), "#.#") + "%"), text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_left, text_size = txtSize)
 
-    table.cell(_t, 0, 5, "6  TREND", text_color = color.white, bgcolor = color.new(#ffd600, 30), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 5, na(profEma) ? "—" : (profAbove ? "above" : "below") + " the " + str.tostring(profWeeks, "#") + "wEMA " + str.tostring(profEma, format.mintick) + (profAbove and not na(profBars) ? ", held " + str.tostring(profBars, "#") + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim") + (na(emaX21) ? "" : "   ·   " + str.tostring(emaX21, "#.#") + "x ATR from the 21" + (emaOver ? " ⚠ extended" : "")), text_color = color.white, bgcolor = profAbove ? color.new(#00c853, 45) : color.new(#d50000, 45), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 0, 5, "6  TREND", text_color = color.white, bgcolor = color.new(#ffd600, 30), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 5, na(profEma) ? "—" : (profAbove ? "above" : "below") + " the " + str.tostring(profWeeks, "#") + "wEMA " + str.tostring(profEma, format.mintick) + (profAbove and not na(profBars) ? ", held " + str.tostring(profBars, "#") + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim") + (na(emaX21) ? "" : "   ·   " + str.tostring(emaX21, "#.#") + "x ATR from the 21" + (emaOver ? " ⚠ extended" : "")), text_color = color.white, bgcolor = profAbove ? color.new(#00c853, 45) : color.new(#d50000, 45), text_halign = text.align_left, text_size = txtSize)
 
-    table.cell(_t, 0, 6, "7  MOMENTUM", text_color = color.white, bgcolor = color.new(color.purple, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 6, "RSI " + (na(rsiV) ? "—" : str.tostring(rsiV, "#") + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : str.tostring(adxV, "#") + " " + f_adxWord(adxV)), text_color = color.white, bgcolor = color.new(color.purple, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 0, 6, "7  MOMENTUM", text_color = color.white, bgcolor = color.new(color.purple, 25), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 6, "RSI " + (na(rsiV) ? "—" : str.tostring(rsiV, "#") + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : str.tostring(adxV, "#") + " " + f_adxWord(adxV)), text_color = color.white, bgcolor = color.new(color.purple, 50), text_halign = text.align_left, text_size = txtSize)
 
-    table.cell(_t, 0, 7, "8  VOLUME", text_color = color.white, bgcolor = color.new(color.teal, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 7, na(volRatio) ? "—" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light"))), text_color = color.white, bgcolor = color.new(color.teal, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 0, 7, "8  VOLUME", text_color = color.white, bgcolor = color.new(color.teal, 25), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 7, na(volRatio) ? "—" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light"))), text_color = color.white, bgcolor = color.new(color.teal, 50), text_halign = text.align_left, text_size = txtSize)
 
-    table.cell(_t, 0, 8, "9  LEVELS", text_color = color.white, bgcolor = color.new(color.olive, 20), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 8, (na(boRes) ? "resistance —" : "resistance " + str.tostring(boRes, format.mintick) + " (" + str.tostring((boRes - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(boSup) ? "support —" : "support " + str.tostring(boSup, format.mintick) + " (" + str.tostring((boSup - close) / close * 100, "#.#") + "%)") + (not boFlipLive ? "" : "   ·   flip-support " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 0, 8, "9  LEVELS", text_color = color.white, bgcolor = color.new(color.olive, 20), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 8, (na(boRes) ? "resistance —" : "resistance " + str.tostring(boRes, format.mintick) + " (" + str.tostring((boRes - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(boSup) ? "support —" : "support " + str.tostring(boSup, format.mintick) + " (" + str.tostring((boSup - close) / close * 100, "#.#") + "%)") + (not boFlipLive ? "" : "   ·   flip-support " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
 
-    table.cell(_t, 0, 9, "10  STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
-    table.cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 0, 9, "10  STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
     0
-
-// CW10003: built every bar at global scope instead of inside the last-bar
-// table block, so nothing in it can drift between calls.
-boWTD = f_whatToDo()
 
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
 var table bot = table.new(boPosMap, 2, 26, border_width = 2)
@@ -2355,7 +2387,8 @@ var table bot = table.new(boPosMap, 2, 26, border_width = 2)
 // signal. Deleting another block's line is a call, not a global assignment,
 // so this is legal inside a function.
 f_syncWipe() =>
-    line.delete(proResLn)
+    if barstate.islast and syncMode
+        line.delete(proResLn)
     line.delete(proSupLn)
     line.delete(proChLn)
     line.delete(proKRLn)
@@ -2378,10 +2411,9 @@ f_syncWipe() =>
     line.delete(tlLoLn)
     0
 
-if barstate.islast and boOn
-    f_boSummary(bot)
-if barstate.islast and syncMode
-    f_syncWipe()
+// Both calls are unconditional; each function guards itself inside.
+f_boSummary(bot)
+f_syncWipe()
 
 alertcondition(boBrkHorzUp, title = "v64 BREAKOUT — defended level", message = "{{ticker}} {{interval}}: closed above a defended level at {{close}}")
 alertcondition(boBrkHorzDn, title = "v64 BREAKDOWN — defended level", message = "{{ticker}} {{interval}}: closed below a defended level at {{close}}")
@@ -2392,3 +2424,5 @@ alertcondition(profLost,    title = "v64 LOST the weekly 9 EMA", message = "{{ti
 alertcondition(profRespect, title = "v64 RESPECTED the weekly 9 EMA (pullback held)", message = "{{ticker}} {{interval}}: wicked into the 9-week EMA and closed above at {{close}}")
 alertcondition(flagBrkUp, title = "v64 BULL FLAG breakout", message = "{{ticker}} {{interval}}: broke out of a bull flag at {{close}} — pole measured move projected")
 alertcondition(flagBrkDn, title = "v64 BEAR FLAG breakdown", message = "{{ticker}} {{interval}}: broke down from a bear flag at {{close}}")
+alertcondition(boFailUp, title = "v64 FAILED BREAKOUT (closed back under the level)", message = "{{ticker}} {{interval}}: closed back UNDER a level it had broken — failed breakout at {{close}}")
+alertcondition(boFailDn, title = "v64 FAILED BREAKDOWN (closed back above the level)", message = "{{ticker}} {{interval}}: closed back ABOVE a level it had broken down through at {{close}}")
