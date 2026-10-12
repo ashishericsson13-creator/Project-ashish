@@ -1651,6 +1651,7 @@ boRsiMax   = input.float(80.0, "RSI ceiling (above = move already spent)", minva
 boStopATR  = input.float(0.50, "Breakout stop: ATR below the broken level", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "A broken resistance becomes support; the trade is wrong if price closes back under it. NOT the Money Line,...", group = "6. Breakout Console")
 boFlipMaxATR = input.float(4.0, "Polarity: stale once price is this many ATR above it", minval = 1.0, maxval = 20.0, step = 0.5, tooltip = "A broken resistance acts as support while price is near it. Once price has run this far above, it is no...", group = "6. Breakout Console")
 lvlMaxATR  = input.float(5.0, "LEVELS: ignore anything further than this many ATR", minval = 2.0, maxval = 40.0, step = 1.0, tooltip = "A level you cannot reach is not a level. 5 ATR, because past that it is neither a stop nor a target for the setup in front of you. Past this distance the row says none is in range rather than printing a number nobody will trade against.", group = "6. Breakout Console")
+boMaxSize  = input.float(25.0, "Maximum position size (% of account)", minval = 1.0, maxval = 100.0, step = 1.0, tooltip = "A hard ceiling on what the risk arithmetic may suggest. NIFTY weekly produced 58.8% of account from a 1.7% stop at 1% risk - correct arithmetic and a dangerous number, because a stop that tight is also the one most likely to be gapped straight through, and a 58.8% position that gaps loses far more than the 1% it was sized for.", group = "6. Breakout Console")
 boFailBars = input.int(4, "Failed breakout: closes back under within N bars", minval = 1, maxval = 20, tooltip = "A break that price closes back under inside this window is a trap, not a breakout.", group = "6. Breakout Console")
 boShowLvl  = input.bool(true, "Draw the defended horizontal levels", group = "6. Breakout Console")
 boShowVert = input.bool(true, "Vertical line at each scored breakout", group = "6. Breakout Console")
@@ -1984,7 +1985,15 @@ boTgtMA  = boDir == -1 and not na(ma200bar) and ma200bar < close * 0.995 ? ma200
 boTarget = boDir == 1 ? nz(flagTgtUp, nz(boRes, nz(suTgt1, boTgtATH))) : boDir == -1 ? nz(flagTgtDn, nz(boSup, nz(suLo, boTgtMA))) : na
 boTgtSrc = boDir == 1 and not na(flagTgtUp) ? " (flag measured move)" : boDir == -1 and not na(flagTgtDn) ? " (flag measured move)" : boDir == 1 and na(boRes) and not na(suTgt1) ? " (measured move)" : boDir == 1 and na(boRes) and na(suTgt1) and not na(boTgtATH) ? " (all-time high)" : boDir == -1 and na(boSup) and na(suLo) and not na(boTgtMA) ? " (200-bar mean)" : ""
 boRR     = na(boTarget) or na(boRisk) or boRisk <= 0 ? na : math.abs(boTarget - boEntry) / boRisk
-boSizePc = na(boRisk) or boEntry <= 0 or boRisk <= 0 ? na : riskPct / (boRisk / boEntry * 100) * 100
+// The raw arithmetic, and then a ceiling on it. Fixed-fractional sizing says a
+// tighter stop earns a bigger position, which is true right up to the point
+// where the position is most of the account — and the tightest stops are
+// exactly the ones a gap goes straight through, so the 1% being risked is only
+// 1% if the market trades through every price on the way. NIFTY weekly asked
+// for 58.8% off a 1.7% stop. The ceiling is the input; the raw number is kept
+// so the row can show both and you can see what was trimmed.
+boSizeRaw = na(boRisk) or boEntry <= 0 or boRisk <= 0 ? na : riskPct / (boRisk / boEntry * 100) * 100
+boSizePc  = na(boSizeRaw) ? na : math.min(boSizeRaw, boMaxSize)
 
 // ── THE FAST PAIR, THE EXTENSION, AND THE POLARITY FLIP ──────────────
 // Three things on a posted chart that nothing above could produce.
@@ -2353,7 +2362,7 @@ f_whatToDo() =>
     else if boDir == -1 and boGate and boScore >= 6
         _a := "EXIT / STAY OUT. Stop for a short " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", target " + str.tostring(boTarget, format.mintick)) + ". Do not buy until a close back above " + str.tostring(boLvlAt, format.mintick) + "."
     else if boDir == 1 and boGate and boScore >= 6
-        _a := "BUY " + (na(boSizePc) ? "" : str.tostring(math.min(boSizePc, 100), "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk") + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "."
+        _a := "BUY " + (na(boSizePc) ? "" : str.tostring(boSizePc, "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk") + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "."
     else if profOn and (profReclaim or profRespect or profAtLine) and not emaOver
         _a := (trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + str.tostring(profEma, format.mintick) + " — the " + str.tostring(profWeeks, "#") + "-week EMA. Stop on a CLOSE below it." + (trend == -1 ? "" : " Size up here because the stop is close.") + f_emaCaveat()
     else if boFlipLive and boFlipRe and not emaOver
@@ -2364,8 +2373,18 @@ f_whatToDo() =>
         _a := "HOLD. Exit is a CLOSE below " + str.tostring(profEma, format.mintick) + ". Add only on a pullback back toward it — do not add " + (na(profDist) ? "out here." : str.tostring(profDist, "#.#") + " ATR above it.")
     else if suIsBase
         _a := "DO NOTHING. Set two alerts: above " + str.tostring(suHi, format.mintick) + " and below " + str.tostring(suLo, format.mintick) + ". Act on whichever closes first."
+    // Both fallbacks used to speak as if only the ATR model existed. TCS weekly
+    // read "HOLD. Only act if a weekly candle CLOSES below 2061.9" while row 2
+    // said 0 OF 4 LINES BULLISH and row 3 said SPLIT — the panel disagreeing
+    // with itself three rows apart, and "HOLD" is the one word you must not
+    // use loosely when every line on the chart is pointing the other way.
+    // The split is the information; the instruction has to carry it.
+    else if trend == 1 and lnBear
+        _a := "HOLD ONLY IF ALREADY LONG — and do not add. The ATR line is still bullish but " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines are. That gap usually closes by the ATR line giving way. Exit on a close below " + str.tostring(moneyLine, format.mintick) + "."
     else if trend == 1
         _a := "HOLD. Only act if a " + tfWord + " candle CLOSES below " + str.tostring(moneyLine, format.mintick) + "."
+    else if lnBull
+        _a := "STAY OUT, but watch closely — the lines have turned up while the ATR model has not. It confirms on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away). Anything bought before that is a scout entry against the regime."
     else
         _a := "STAY OUT. Your only entry trigger is a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away)."
     _a
@@ -2404,7 +2423,7 @@ f_boSummary(table _t) =>
         table.cell(_t, 1, 3, boWTD, text_color = color.white, bgcolor = color.new(#00695c, 10), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 4, "5  NUMBERS", text_color = color.white, bgcolor = color.new(color.navy, 15), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 4, boDir == 0 or na(boStop) ? "no live setup — nothing to size yet" : (boGate ? "" : boPending ? "⧗ NOT SETTLED, bar still filling — reference only:  " : "⚠ GATE FAILED — reference only, do NOT size off this:  ") + "entry " + str.tostring(boEntry, format.mintick) + "   stop " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)" + (na(boTarget) ? "" : "   target " + str.tostring(boTarget, format.mintick) + boTgtSrc) + (na(boRR) ? "" : "   R:R " + str.tostring(boRR, "#.##")) + (na(boSizePc) ? "" : "   size " + str.tostring(math.min(boSizePc, 100), "#.#") + "%"), text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 4, boDir == 0 or na(boStop) ? "no live setup — nothing to size yet" : (boGate ? "" : boPending ? "⧗ NOT SETTLED, bar still filling — reference only:  " : "⚠ GATE FAILED — reference only, do NOT size off this:  ") + "entry " + str.tostring(boEntry, format.mintick) + "   stop " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)" + (na(boTarget) ? "" : "   target " + str.tostring(boTarget, format.mintick) + boTgtSrc) + (na(boRR) ? "" : "   R:R " + str.tostring(boRR, "#.##")) + (na(boSizePc) ? "" : "   size " + str.tostring(boSizePc, "#.#") + "%" + (not na(boSizeRaw) and boSizeRaw > boMaxSize + 0.05 ? " (capped, risk maths said " + str.tostring(boSizeRaw, "#.#") + "%)" : "")), text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 5, "6  TREND", text_color = color.white, bgcolor = color.new(#ffd600, 30), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 5, na(profEma) ? "—" : (profAbove ? "above" : "below") + " the " + str.tostring(profWeeks, "#") + "wEMA " + str.tostring(profEma, format.mintick) + (profAbove and not na(profBars) ? ", held " + str.tostring(profBars, "#") + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim") + (na(emaX21) ? "" : "   ·   " + str.tostring(emaX21, "#.#") + "x ATR from the 21" + (emaOver ? " ⚠ extended" : "")), text_color = color.white, bgcolor = profAbove ? color.new(#00c853, 45) : color.new(#d50000, 45), text_halign = text.align_left, text_size = txtSize)
