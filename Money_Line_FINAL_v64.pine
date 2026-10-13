@@ -1607,40 +1607,7 @@ alertcondition(proBreakDn, title = "PRO LINE breakdown (closed below long suppor
 
 // ═══════════════════════════════════════════════════════════════════════════
 // v64 — BREAKOUT CONSOLE + SETUP QUALITY + STRUCTURE
-//
-// NOTHING ABOVE THIS LINE IS CHANGED. This section only reads.
-//
-// WHY ALMOST ALL OF IT LIVES IN FUNCTIONS (CE10295)
-//   TradingView rejected an earlier draft with "The main body of the script
-//   is too long. Try wrapping code in functions". That is a limit on
-//   GLOBAL-SCOPE statements, and v62 alone already sits close to it; ~300
-//   more at global scope went over. A function body is compiled as its own
-//   scope and does not count, so the work is in functions and the main body
-//   holds only inputs, a handful of assignments, and the plot/alert calls
-//   that Pine refuses to allow anywhere else.
-//
-//   That forced one real design change. Pine CANNOT assign to a global from
-//   inside a function, so the usual `var line x = na` + `x := line.new(...)`
-//   pattern cannot be wrapped. Arrays are reference types and CAN be mutated
-//   inside a function, so every drawable this section owns lives in one of
-//   three arrays, wiped and repopulated on the last bar. That is also why
-//   the sync-mode cleanup works: deleting another block's line is a call,
-//   not an assignment, so it is allowed.
-//
-// WHAT WAS ALREADY HERE AND IS REUSED RATHER THAN REBUILT
-//   proBreakUp/Dn   long best-fit trendlines, already touch-counted
-//   tlBreakUp/Dn    short swing trendlines
-//   buySignal/Dn    the ATR Money Line flip
-//   hi52 / hiAll    already computed, previously feeding one panel row
-//   hiA/hiB,loA/loB the short swing anchors the structure read is built on
-//
-// THREE SCORES, DELIBERATELY NOT ADDED TOGETHER
-//   c1-c9   (above)  how well confirmed is the REGIME I am already in
-//   k1-k10  (here)   is THIS BREAKOUT real
-//   SETUP   (here)   was the thing that broke worth breaking
-//   Different questions. Merging them would destroy the only information
-//   that matters when they disagree.
-// ═══════════════════════════════════════════════════════════════════════════
+// ───
 boOn       = input.bool(true, "Enable BREAKOUT console", group = "6. Breakout Console")
 boMinTouch = input.int(2, "Horizontal level: minimum touches", minval = 1, maxval = 6, tooltip = "How many times price must have reacted at a price before it counts as a level.", group = "6. Breakout Console")
 boTolATR   = input.float(0.50, "Horizontal level: cluster width (ATR)", minval = 0.05, maxval = 3.0, step = 0.05, tooltip = "Two pivots within this distance are the SAME level and their touch counts merge. In ATR so it scales with...", group = "6. Breakout Console")
@@ -1674,17 +1641,11 @@ flagLen    = input.int(12, "Flag: maximum bars the flag itself may run", minval 
 flagPoleMin = input.float(20.0, "Flag: minimum pole size (%)", minval = 3.0, maxval = 200.0, step = 1.0, tooltip = "How far price must have run before the pause counts as a pole. Too small and every wobble becomes a flag.", group = "8. Structure")
 flagRetMax = input.float(50.0, "Flag: maximum retrace of the pole (%)", minval = 15.0, maxval = 90.0, step = 5.0, tooltip = "A flag that gives back more than this is no longer a pause in the move — it is a reversal of it. 50% is...", group = "8. Structure")
 
-// ── DEFENDED HORIZONTAL LEVELS ───────────────────────────────────────
-// Reuses ph / pl from the Auto S/R block above — no second pivot scan.
+// ── DEFENDED HORIZONTAL LEVELS ───
 var array<float> boLvlPx  = array.new_float()
 var array<int>   boLvlHit = array.new_int()
 var array<int>   boLvlBar = array.new_int()
 
-// CE10235, and why the shape matters: every if/else in Pine is an EXPRESSION
-// and both arms must agree on a type. array.set() is void while array.shift()
-// returns the element removed, so ending the arms on those made this
-// "void; series int". The size cap sits ABOVE the pushes so both arms end on
-// a void call, and _found is returned explicitly.
 f_boMerge(array<float> _px, array<int> _hit, array<int> _bar, float _new, float _tol, int _bi) =>
     int _found = -1
     if not na(_new) and not na(_tol) and _tol > 0
@@ -1694,8 +1655,6 @@ f_boMerge(array<float> _px, array<int> _hit, array<int> _bar, float _new, float 
                     _found := i
                     break
         if _found >= 0
-            // running mean: the level settles where price actually reacted,
-            // not wherever the most recent wick happened to end
             int   _n = array.get(_hit, _found) + 1
             float _o = array.get(_px, _found)
             array.set(_px,  _found, _o + (_new - _o) / _n)
@@ -1734,19 +1693,12 @@ if not na(pl)
 [boRes, boResHit, boResBar] = f_boPick(boLvlPx, boLvlHit, boLvlBar, boMinTouch, true,  close)
 [boSup, boSupHit, boSupBar] = f_boPick(boLvlPx, boLvlHit, boLvlBar, boMinTouch, false, close)
 
-// The level IN FORCE before this bar opened. Testing against the CURRENT
-// bar's level can never fire: the moment price closes above a resistance,
-// that resistance is recomputed to the next one up.
 boResRef = boRes[1]
 boSupRef = boSup[1]
 boBrkHorzUp = boOn and not na(boResRef) and close > boResRef * (1 + boBufPct / 100) and close[1] <= boResRef
 boBrkHorzDn = boOn and not na(boSupRef) and close < boSupRef * (1 - boBufPct / 100) and close[1] >= boSupRef
 
-// ── SETUP QUALITY: base / new high / squeeze / targets ───────────────
-// Six fixed lengths rather than a search loop: ta.highest() needs a constant
-// length, and six pairs every bar is cheaper and more predictable than any
-// loop hunting the exact longest tight window. Longest qualifying wins — a
-// 200-bar base that also fits in 20 bars is still a 200-bar base.
+// ── SETUP QUALITY: base / new high / squeeze / targets ───
 f_suW(float _h, float _l) => _l > 0 ? (_h - _l) / _l * 100 : na
 f_suBase(float _maxW) =>
     h200 = ta.highest(high, 200), l200 = ta.lowest(low, 200)
@@ -1761,16 +1713,12 @@ f_suBase(float _maxW) =>
     t50  = bar_index >=  50 and f_suW(h50,  l50)  <= _maxW
     t30  = bar_index >=  30 and f_suW(h30,  l30)  <= _maxW
     t20  = bar_index >=  20 and f_suW(h20,  l20)  <= _maxW
-    // assigned to locals first: Pine's line-continuation rules inside a
-    // multi-line tuple literal are fragile, and a one-line return is not.
     bb = t200 ? 200 : t120 ? 120 : t80 ? 80 : t50 ? 50 : t30 ? 30 : t20 ? 20 : 0
     bh = t200 ? h200 : t120 ? h120 : t80 ? h80 : t50 ? h50 : t30 ? h30 : t20 ? h20 : na
     bl = t200 ? l200 : t120 ? l120 : t80 ? l80 : t50 ? l50 : t30 ? l30 : t20 ? l20 : na
     [bb, bh, bl]
 
 f_suSqueeze(float _pct) =>
-    // CW10004: a ta.* call inside a ternary runs only on some bars, which
-    // corrupts its own history. Hoisted out of the conditional.
     _basis = ta.sma(close, 20)
     _sd    = ta.stdev(close, 20)
     _w     = _basis > 0 ? (4 * _sd) / _basis * 100 : na
@@ -1778,42 +1726,25 @@ f_suSqueeze(float _pct) =>
     not na(_w) and not na(_lo) and _lo > 0 and _w <= _lo * (1 + _pct / 100)
 
 [suBars, suHi, suLo] = f_suBase(suBaseMax)
-// CW10002, and a real fault rather than a style note: `suOn and f_suSqueeze()`
-// short-circuits, so with the input OFF the function never ran and its
-// ta.lowest history went stale — then reading true the moment it was switched
-// back on. Called unconditionally, gated afterwards.
 suSqzRaw = f_suSqueeze(suSqzPct)
 suSqz    = suOn and suSqzRaw
 suIsBase = suOn and suBars >= suBaseMin
-// Tested against the PREVIOUS bar's ceiling, for the same reason as every
-// other break here.
 suBaseBrk = suIsBase and not na(suHi[1]) and close > suHi[1] and close[1] <= suHi[1]
-// hi52 and hiAll were already computed above and fed exactly one panel row;
-// they were never allowed to signal. 0.5% tolerance so a close a tick under
-// the old high still reads as a new high rather than a near miss.
 suNewATH = suOn and close >= hiAll * 0.995
 suNew52  = suOn and close >= hi52  * 0.995
 suATHBrk = suOn and close > hiAll[1] and close[1] <= hiAll[1]
-// the base's own height projected from its ceiling — what a posted chart's
-// 161.8 / 261.8 labels actually are: the range repeated, not a magic ratio
 suHeight = na(suHi) or na(suLo) ? na : suHi - suLo
 suTgt1   = na(suHeight) ? na : suHi + suHeight
 suTgt2   = na(suHeight) ? na : suHi + suHeight * 1.618
 suPts    = (suIsBase ? 1 : 0) + (suNewATH ? 2 : suNew52 ? 1 : 0) + (suSqz ? 1 : 0)
 suGrade  = not suOn ? "—" : suPts >= 4 ? "A+" : suPts == 3 ? "A" : suPts == 2 ? "B" : suPts == 1 ? "C" : "D"
 
-// ── STRUCTURE: the converging pair, its apex, the channel ────────────
-// Built on the SHORT swing anchors (hiA/hiB, loA/loB), not the PRO scan.
-// On SPCX daily with 119 bars the PRO scan reported "swings H1 L1, no valid
-// res line, no valid sup line" and drew nothing, while these were perfectly
-// well formed. A structure read that needs a decade of history is useless on
-// exactly the charts people most want it for.
+// ── STRUCTURE: the converging pair, its apex, the channel ───
 f_wgCalc(float _flatTol) =>
     _ok = not na(hiA_px) and not na(hiB_px) and not na(loA_px) and not na(loB_px) and not na(tlUpNow) and not na(tlLoNow) and hiB_bar > hiA_bar and loB_bar > loA_bar
     _rs = _ok ? (hiB_px - hiA_px) / (hiB_bar - hiA_bar) : na
     _ss = _ok ? (loB_px - loA_px) / (loB_bar - loA_bar) : na
     _gp = _ok ? tlUpNow - tlLoNow : na
-    // positive = support gaining on resistance = converging
     _cv = _ok ? _ss - _rs : na
     [_ok, _rs, _ss, _gp, _cv]
 
@@ -1823,39 +1754,13 @@ wgApexOk = wgOn and not na(wgApexN) and wgApexN <= wgMaxBar
 wgTol    = na(atrV) ? na : wgFlat * atrV
 wgRFlat  = wgHave and not na(wgTol) and math.abs(wgResSl) <= wgTol
 wgSFlat  = wgHave and not na(wgTol) and math.abs(wgSupSl) <= wgTol
-// Named the way a chartist names them — by what the two slopes do, not by
-// any forecast attached to the name.
 wgType   = not wgOn or not wgHave ? "—" : wgApexOk ? (wgRFlat and wgSupSl > 0 ? "ASCENDING TRIANGLE" : wgSFlat and wgResSl < 0 ? "DESCENDING TRIANGLE" : wgResSl < 0 and wgSupSl > 0 ? "SYMMETRICAL TRIANGLE" : wgResSl < 0 and wgSupSl < 0 ? "FALLING WEDGE" : wgResSl > 0 and wgSupSl > 0 ? "RISING WEDGE" : "CONVERGING") : (not na(wgGap) and wgGap < 0 ? "APEX PASSED — lines crossed" : not na(wgConv) and wgConv < 0 ? "BROADENING" : "CHANNEL")
-// wgGap is tlUpNow - tlLoNow, and it goes NEGATIVE once the two lines have
-// crossed — the apex is behind us and the "resistance" now sits under the
-// "support". Nothing downstream caught that: wgApexN is guarded by wgGap > 0
-// so it went na, wgApexOk went false, and the classifier fell through to the
-// channel branch. BTCUSD weekly printed "CHANNEL · gap -7.6%", which is wrong
-// twice over — it is not a channel, and a gap cannot be negative. A crossed
-// pair is a STALE structure waiting to re-anchor on the next swing, and it is
-// now reported as exactly that.
 wgCrossed = wgHave and not na(wgGap) and wgGap < 0
 wgIsChan = not wgCrossed and (wgType == "CHANNEL" or wgType == "BROADENING")
 wgPct    = wgHave and close > 0 and not wgCrossed ? wgGap / close * 100 : na
 wgPos    = wgHave and not na(wgGap) and wgGap > 0 ? (close - tlLoNow) / wgGap * 100 : na
 
-// ── BULL / BEAR FLAGS ────────────────────────────────────────────────
-// The shape in those AMZN and GOOGL charts: a sharp advance, then a tight
-// DOWNWARD-sloping parallel channel, then a break upward and continuation.
-// AMZN repeats it five times on one screen.
-//
-// The script could already see the channel and could already see the break.
-// What it could not see is the POLE — and the pole is the entire difference
-// between a continuation pattern and a plain downtrend. A falling channel
-// after a 40% advance is a flag; the identical channel after nothing is just
-// price going down. Both were labelled "CHANNEL".
-//
-// Three conditions, all of which a chartist checks by eye:
-//   1. a pole — price ran at least flagPoleMin% into the pause
-//   2. a shallow retrace — a flag that gives back more than half the pole is
-//      a reversal, not a pause
-//   3. the channel leans AGAINST the pole — a bull flag slopes down
-// Fixed windows throughout, because ta.highest needs a constant length.
+// ── BULL / BEAR FLAGS ───
 f_flag(int _poleLen, int _flagLen) =>
     _top = ta.highest(high, _flagLen)
     _lo  = ta.lowest(low,  _flagLen)
@@ -1868,26 +1773,18 @@ flagPoleUp = flagPLo > 0 ? (flagTop - flagPLo) / flagPLo * 100 : na
 flagPoleDn = flagPHi > 0 ? (flagPHi - flagLow) / flagPHi * 100 : na
 flagRetUp  = flagTop > flagPLo ? (flagTop - flagLow) / (flagTop - flagPLo) * 100 : na
 flagRetDn  = flagPHi > flagLow ? (flagTop - flagLow) / (flagPHi - flagLow) * 100 : na
-// "parallel enough": the two slopes within 60% of each other. A flag drawn by
-// hand is never exactly parallel and should not have to be.
 flagPar = wgHave and not na(wgResSl) and not na(wgSupSl) and math.abs(wgResSl - wgSupSl) <= math.max(math.abs(wgResSl), math.abs(wgSupSl)) * 0.6
 flagBull = flagOn and flagPar and wgResSl < 0 and wgSupSl < 0 and not na(flagPoleUp) and flagPoleUp >= flagPoleMin and not na(flagRetUp) and flagRetUp <= flagRetMax
 flagBear = flagOn and flagPar and wgResSl > 0 and wgSupSl > 0 and not na(flagPoleDn) and flagPoleDn >= flagPoleMin and not na(flagRetDn) and flagRetDn <= flagRetMax
-// the break of the flag's own rail, not of anything else
 flagBrkUp = flagBull[1] and not na(tlUpNow) and not na(tlUpNow[1]) and close > tlUpNow and close[1] <= tlUpNow[1]
 flagBrkDn = flagBear[1] and not na(tlLoNow) and not na(tlLoNow[1]) and close < tlLoNow and close[1] >= tlLoNow[1]
-// measured move: the pole repeated from the rail it broke
 flagTgtUp = flagBull or flagBrkUp ? nz(tlUpNow, close) + (flagTop - flagPLo) : na
 flagTgtDn = flagBear or flagBrkDn ? nz(tlLoNow, close) - (flagPHi - flagLow) : na
 flagWord  = flagBull ? "BULL FLAG" : flagBear ? "BEAR FLAG" : ""
 
-// ── THE EVENT: six sources, four of them already in this script ─────
+// ── THE EVENT: six sources, four of them already in this script ───
 boBrkUp = boOn and (flagBrkUp or suBaseBrk or suATHBrk or boBrkHorzUp or proBreakUp or tlBreakUp or buySignal)
 boBrkDn = boOn and (flagBrkDn or boBrkHorzDn or proBreakDn or tlBreakDn or sellSignal)
-// An int code rather than a `var string` written inside an if: Pine cannot
-// assign to a global from inside a function, and everything here had to move
-// into functions for CE10295. A code survives ta.valuewhen and is decoded for
-// display, which needs no global write at all.
 boKindCode = flagBrkUp ? 7 : flagBrkDn ? -7 : suATHBrk ? 6 : suBaseBrk ? 5 : boBrkHorzUp ? 4 : proBreakUp ? 3 : tlBreakUp ? 2 : buySignal ? 1 : boBrkHorzDn ? -4 : proBreakDn ? -3 : tlBreakDn ? -2 : sellSignal ? -1 : 0
 boKindAt   = ta.valuewhen(boBrkUp or boBrkDn, boKindCode, 0)
 boAgeUp = ta.barssince(boBrkUp)
@@ -1895,53 +1792,21 @@ boAgeDn = ta.barssince(boBrkDn)
 boLiveUp = not na(boAgeUp) and boAgeUp <= boFresh and (na(boAgeDn) or boAgeUp < boAgeDn)
 boLiveDn = not na(boAgeDn) and boAgeDn <= boFresh and (na(boAgeUp) or boAgeDn < boAgeUp)
 
-// Captured AT the breakout bar — these describe the EVENT and are meaningless
-// read off a later bar.
-//
-// WHY THIS DOES NOT USE volRatio, which is right there and looks correct.
-//   volRatio substitutes the PREVIOUS finished bar whenever the live bar is
-//   still filling, because a forming bar's volume is partial. Right for c4,
-//   which describes the symbol NOW. Wrong here: k1 must describe the BREAKOUT
-//   BAR, and a break firing on the live bar would be scored on the volume of
-//   the bar BEFORE it. Observed on BRK.B weekly — a 9/10 setup with a 94%
-//   close gated out by "0.86x volume" belonging to the previous week.
 boVolOwn  = volAvg > 0 ? volume / volAvg : na
 boVolAt   = ta.valuewhen(boBrkUp or boBrkDn, boVolOwn, 0)
 boCloAt   = ta.valuewhen(boBrkUp or boBrkDn, (close - low) / math.max(high - low, syminfo.mintick), 0)
-// The level that broke depends on WHICH line broke. Quoting the horizontal
-// level after a trendline break would put the stop where nothing happened.
 boLvlNow  = flagBrkUp ? tlUpNow : flagBrkDn ? tlLoNow : suATHBrk ? hiAll[1] : suBaseBrk ? suHi[1] : boBrkHorzUp ? boResRef : proBreakUp ? proResNow : tlBreakUp ? tlUpNow : boBrkHorzDn ? boSupRef : proBreakDn ? proSupNow : tlBreakDn ? tlLoNow : (buySignal or sellSignal) ? moneyLine : na
 boLvlAt   = ta.valuewhen(boBrkUp or boBrkDn, nz(boLvlNow, close), 0)
 boLiveBar = barstate.islast and time_close > timenow
 
-
-// ── THE FAILED BREAKOUT ──────────────────────────────────────────────
-// "All-time high breakouts are important, and more important is that the
-// back test holds." The NVDA chart labels two FAILED ATH breakouts before the
-// one that worked, and the point made under it is the right one: the damage
-// came after price LOST the level, not while it was still holding.
-//
-// Everything above scores a break at the moment it happens. Nothing watched
-// what happened NEXT. A break that price closes back under is not a weak
-// breakout — it is a trap, and it is the most dangerous state on the chart,
-// because the people who bought the break are now all offside and become the
-// supply that drives the next leg down.
-//
-// Deliberately judged on the CLOSE and only inside boFailBars. A wick back
-// under is noise; a close back under is the trade being wrong. After the
-// window the level is simply old news, not a live trap.
+// ── THE FAILED BREAKOUT ───
 boTrapUp = not na(boLvlAt) and not na(boAgeUp) and boAgeUp <= boFailBars and boAgeUp > 0 and close < boLvlAt
 boTrapDn = not na(boLvlAt) and not na(boAgeDn) and boAgeDn <= boFailBars and boAgeDn > 0 and close > boLvlAt
 boFailUp = boTrapUp and not boTrapUp[1]
 boFailDn = boTrapDn and not boTrapDn[1]
-// the ATH case is the one worth naming, because there is no overhead supply
-// to blame — only the buyers who just got trapped
 boFailATH = boTrapUp and boKindAt == 6
 
-// ── k1-k10: IS THIS BREAKOUT REAL ────────────────────────────────────
-// Direction-aware, same discipline as c1-c9: in a breakdown the bearish
-// reading is the PASS. Each check is one way a breakout fails, as a pass
-// condition.
+// ── k1-k10: IS THIS BREAKOUT REAL ───
 boDir = boLiveUp ? 1 : boLiveDn ? -1 : 0
 k1  = na(boVolAt) ? false : boVolAt >= boVolSurge                                      // participation
 k2  = na(boCloAt) ? false : (boDir >= 0 ? boCloAt >= 0.60 : boCloAt <= 0.40)           // closed strong, not rejected
@@ -1955,10 +1820,6 @@ k9  = na(adxV)    ? false : adxV >= adxMin                                      
 k10 = na(ext200)  ? false : math.abs(ext200) <= extMax                                 // not stretched
 boScore = (k1?1:0)+(k2?1:0)+(k3?1:0)+(k4?1:0)+(k5?1:0)+(k6?1:0)+(k7?1:0)+(k8?1:0)+(k9?1:0)+(k10?1:0)
 
-// A partial bar can CONFIRM a pass — volume only goes up — but can never
-// confirm a FAIL. Reporting "no volume" on a bar still filling is a false
-// negative that would stand for days on a weekly chart, so an unsettled gate
-// is PENDING: not an entry, and not a rejection.
 boBrkAge    = boDir == 1 ? boAgeUp : boDir == -1 ? boAgeDn : na
 boBrkUnconf = boDir != 0 and not na(boBrkAge) and boBrkAge == 0 and boLiveBar
 boGate      = k1 and k2
@@ -1967,32 +1828,11 @@ boAssess    = boDir != 0
 boVerdict = not boOn ? "OFF" : thinHist ? "NO CALL — too little history" : boDir == 0 ? "NO SETUP" : boPending ? "PENDING — bar still forming" : boDir == 1 ? (boGate and boScore >= 8 ? "STRONG BUY" : boGate and boScore >= 6 ? "BUY" : boScore >= 6 ? "WATCH — no volume / weak close" : boScore >= 4 ? "WATCH" : "STAND ASIDE") : (boGate and boScore >= 8 ? "STRONG SELL" : boGate and boScore >= 6 ? "SELL" : boScore >= 6 ? "WATCH — no volume / weak close" : boScore >= 4 ? "WATCH" : "STAND ASIDE")
 boActing  = boVerdict == "STRONG BUY" or boVerdict == "BUY" or boVerdict == "STRONG SELL" or boVerdict == "SELL"
 
-// Trade geometry off the BROKEN LEVEL, not the Money Line: sizing a breakout
-// off a regime stop 25% away turns 2% risk into 25%.
 boEntry  = close
 boStop   = boDir == 1 ? nz(boLvlAt, close) - boStopATR * atrV : boDir == -1 ? nz(boLvlAt, close) + boStopATR * atrV : na
 boRisk   = na(boStop) ? na : math.abs(boEntry - boStop)
-// On a chart making new highs there is no old level above to aim at, and that
-// is exactly when a target is most needed. Fall back to the measured move.
-// Three real references, in order of how directly price has transacted there,
-// never an invented number. BTCUSD weekly sat in a confirmed long with no
-// defended level overhead and no base, so Target read "— (no level beyond)"
-// and R:R could not be computed at all — on a chart whose all-time high was
-// plainly visible above. The ATH only qualifies while price is still under it.
 boTgtATH = boDir == 1 and not na(hiAll) and hiAll > close * 1.005 ? hiAll : na
 boTgtMA  = boDir == -1 and not na(ma200bar) and ma200bar < close * 0.995 ? ma200bar : na
-// A flag's measured move comes FIRST: it is the only target here derived from
-// the move that is actually under way, rather than from where price has been.
-// A target has to be far enough away to be worth the risk. HDFCBANK weekly
-// picked its nearest defended support at 704.55 against an entry of 704.90 -
-// 0.05% away, R:R 0.01. Arithmetically true and completely useless, and worse
-// than useless on the panel because a tiny R:R reads as "bad trade" when the
-// real fault was the target, not the setup.
-//
-// So the chain now SKIPS a candidate that is inside boMinTgtATR and takes the
-// next one out, in the same order of preference as before.
-// Four plain locals rather than a helper: Pine declares functions at global
-// scope only, so the nested _ok() this started as would not have compiled.
 f_tgt(float _a, float _b, float _c, float _d, bool _up, float _px, float _at, float _min) =>
     _g  = na(_at) or _at <= 0 ? 0.0 : _min * _at
     _oa = na(_a) ? false : (_up ? _a - _px >= _g : _px - _a >= _g)
@@ -2004,45 +1844,10 @@ f_tgt(float _a, float _b, float _c, float _d, bool _up, float _px, float _at, fl
 boTarget = boDir == 1 ? f_tgt(flagTgtUp, boRes, suTgt1, boTgtATH, true, close, atrV, boMinTgtATR) : boDir == -1 ? f_tgt(flagTgtDn, boSup, suLo, boTgtMA, false, close, atrV, boMinTgtATR) : na
 boTgtSrc = not na(boTarget) and not na(flagTgtUp) and boTarget == flagTgtUp ? " (flag measured move)" : not na(boTarget) and not na(flagTgtDn) and boTarget == flagTgtDn ? " (flag measured move)" : boDir == 1 and na(boRes) and not na(suTgt1) ? " (measured move)" : boDir == 1 and na(boRes) and na(suTgt1) and not na(boTgtATH) ? " (all-time high)" : boDir == -1 and na(boSup) and na(suLo) and not na(boTgtMA) ? " (200-bar mean)" : ""
 boRR     = na(boTarget) or na(boRisk) or boRisk <= 0 ? na : math.abs(boTarget - boEntry) / boRisk
-// The raw arithmetic, and then a ceiling on it. Fixed-fractional sizing says a
-// tighter stop earns a bigger position, which is true right up to the point
-// where the position is most of the account — and the tightest stops are
-// exactly the ones a gap goes straight through, so the 1% being risked is only
-// 1% if the market trades through every price on the way. NIFTY weekly asked
-// for 58.8% off a 1.7% stop. The ceiling is the input; the raw number is kept
-// so the row can show both and you can see what was trimmed.
 boSizeRaw = na(boRisk) or boEntry <= 0 or boRisk <= 0 ? na : riskPct / (boRisk / boEntry * 100) * 100
 boSizePc  = na(boSizeRaw) ? na : math.min(boSizeRaw, boMaxSize)
 
-// ── THE FAST PAIR, THE EXTENSION, AND THE POLARITY FLIP ──────────────
-// Three things on a posted chart that nothing above could produce.
-//
-// 1. 9 / 21 EMA. This file had no EMA at all — ma50/100/200 and the 200-bar
-//    line are all SMAs, and all of them are SLOW. The pair momentum traders
-//    actually read on a leader is the 9 and 21 EMA, which is why the chart
-//    labels them by name. They are the line price rides on the way up and the
-//    first thing it loses when the run ends.
-//
-// 2. ATR EXTENSION FROM THEM. ext200 above measures distance from the mean as
-//    a PERCENT, which is not comparable across symbols — 10% is nothing on a
-//    high-ATR name and a lot on a utility. Measured in ATR it is the same
-//    statement everywhere: "1.5 ATR above the 21 EMA" means the same thing on
-//    any chart. Past about 3-4 ATR a move is extended and a new entry there is
-//    paying for someone else's position.
-//
-// 3. RESISTANCE TURNED INTO SUPPORT — the line you labelled by hand, and the
-//    one genuinely missing idea here. A level only becomes interesting TWICE:
-//    once when it caps price, and again, from underneath, after price has
-//    taken it. The script knew about defended levels and knew when one broke,
-//    but threw the level away the moment it was taken. It is kept now: the
-//    most recent level broken upward is carried forward as support for as
-//    long as price stays above it, and the console says whether price has
-//    come back to test it or has simply run.
-//
-//    A retest that HOLDS is the lowest-risk entry on any of these charts,
-//    because the stop is a few percent away instead of back at the base. A
-//    level that has never been retested is not worse — it is just unproven,
-//    and the console says which it is rather than pretending to know.
+// ── THE FAST PAIR, THE EXTENSION, AND THE POLARITY FLIP ───
 emaFastLen = input.int(9,  "Fast EMA", minval = 2, maxval = 50, group = "9. Fast pair & polarity")
 emaSlowLen = input.int(21, "Slow EMA", minval = 3, maxval = 100, group = "9. Fast pair & polarity")
 emaAtrLen  = input.int(11, "ATR length for the extension reading", minval = 2, maxval = 50, tooltip = "Shorter than the 21 used by the Money Line, because this measures how stretched price is RIGHT NOW rather...", group = "9. Fast pair & polarity")
@@ -2055,110 +1860,39 @@ f_emaExt(int _f, int _s, int _a) =>
     _at  = ta.atr(_a)
     _x9  = _at > 0 ? (close - _e9) / _at : na
     _x21 = _at > 0 ? (close - _e21) / _at : na
-    // how long the trend has actually held its line — persistence, not slope
     _ba  = ta.barssince(close < _e21)
     [_e9, _e21, _at, _x9, _x21, _ba]
 
 [emaF, emaS, emaAtr, emaX9, emaX21, emaBarsAbove] = f_emaExt(emaFastLen, emaSlowLen, emaAtrLen)
 emaAtrPct = close > 0 and not na(emaAtr) ? emaAtr / close * 100 : na
-// Your reference panel quotes BOTH ("21 EMA 884.31  24.77%" next to
-// "1.46x above"), and both earn their place: the percent is what you feel in
-// the P&L, the ATR multiple is what lets you compare this chart with the next.
 emaPctF = not na(emaF) and emaF > 0 ? (close - emaF) / emaF * 100 : na
 emaPctS = not na(emaS) and emaS > 0 ? (close - emaS) / emaS * 100 : na
 emaOver   = not na(emaX21) and emaX21 >= emaExtMax
 
-// The most recent level taken to the upside, carried forward. valuewhen keeps
-// it without a `var` write, which matters because everything here had to move
-// into functions for CE10295 and Pine cannot assign to a global from one.
 boFlipLvl = ta.valuewhen(boBrkHorzUp or suBaseBrk or suATHBrk, nz(boLvlNow, close), 0)
 boFlipOn  = not na(boFlipLvl) and close > boFlipLvl
-// Retested = price has since traded back down into it and still closed above.
-// Tracked as a count of bars whose LOW reached the level while the close held.
 boFlipTag = boFlipOn and low <= boFlipLvl * 1.015 and close > boFlipLvl
-// Hoisted and na-guarded rather than inlined: ta.barssince returns na until
-// its condition has fired once, and `na < x` is na, not false — a na bool
-// propagating into the LINES SAY ladder would silently skip a branch.
 boFlipAgo = ta.barssince(boFlipTag)
 boBrkAgoU = ta.barssince(boBrkHorzUp or suBaseBrk or suATHBrk)
 boFlipRe  = boFlipOn and not na(boFlipAgo) and not na(boBrkAgoU) and boFlipAgo < boBrkAgoU
 boFlipPct = boFlipOn and close > 0 ? (close - boFlipLvl) / close * 100 : na
-// A broken level stops being the relevant support once price has run away
-// from it. MSFT weekly carried one 28.3% below price and LINES SAY leaned on
-// it — "buy a pullback into it or stand aside" — on a name that was 12 bars
-// above its 9-week EMA and +16% since reclaiming. Waiting for a 28% pullback
-// is not patience, it is the wrong level. Measured in ATR so it means the same
-// on every symbol; the row still SHOWS the level, it just stops being treated
-// as actionable.
 boFlipATR = boFlipOn and not na(emaAtr) and emaAtr > 0 ? (close - boFlipLvl) / emaAtr : na
 boFlipFar = boFlipOn and not na(boFlipATR) and boFlipATR > boFlipMaxATR
 boFlipLive = boFlipOn and not boFlipFar
 
-// ── THE NEAREST LEVEL THAT MATTERS ───────────────────────────────────
-// GOLD weekly printed "support 2075.792 (-50.2%)" while DO THIS, four rows
-// above, correctly told you to watch the base floor at 3942.710 — about 5%
-// away. Both rows were right about their own object and the panel
-// contradicted itself.
-//
-// boRes/boSup are the nearest DEFENDED levels, and on a symbol that has
-// trended for years the nearest price it has transacted at twice can be half
-// the chart away. A base edge is a level too, and when it is nearer it is the
-// one you will trade against. Take whichever is closer on each side and say
-// which it is, rather than printing a number nobody will ever use.
+// ── THE NEAREST LEVEL THAT MATTERS ───
 lvlR    = na(boRes) ? (suIsBase and not na(suHi) and suHi > close ? suHi : na) : (suIsBase and not na(suHi) and suHi > close and suHi < boRes ? suHi : boRes)
-// Three candidates below price, and the nearest one wins. VOO weekly showed
-// why the flip level has to be among them: its defended support sat 38% away
-// and its base floor 19%, while a broken resistance it had retested and held
-// sat 2.2% below — the only one of the three anybody would actually place a
-// stop against, and the only one the support slot could not reach.
 lvlSa   = na(boSup) or boSup >= close ? na : boSup
 lvlSb   = suIsBase and not na(suLo) and suLo < close ? suLo : na
 lvlSc   = boFlipLive and not na(boFlipLvl) and boFlipLvl < close ? boFlipLvl : na
 lvlS    = math.max(nz(lvlSa, -1e18), math.max(nz(lvlSb, -1e18), nz(lvlSc, -1e18)))
 lvlS    := lvlS <= -1e17 ? na : lvlS
-// GOOGL weekly still printed "support 152.10 (-56.9%)" after the base
-// fallback went in, because GOOGL has NO base — so there was nothing to fall
-// back TO and the 57%-away defended level stood. The fallback fixed one case
-// and left the general one: a level you cannot reach is not a level,
-// whether or not a base happens to exist. Capped in ATR so it means the same
-// on every symbol.
-// atrV, not emaAtr: emaAtr is declared 120 lines below this point and using
-// it here was an undeclared-identifier error. atrV is v62's own chart ATR,
-// available since line 201, and is the same measure the Money Line uses.
 lvlRfar = na(lvlR) or na(atrV) or atrV <= 0 ? false : (lvlR - close) / atrV > lvlMaxATR
 lvlSfar = na(lvlS) or na(atrV) or atrV <= 0 ? false : (close - lvlS) / atrV > lvlMaxATR
 lvlRsrc = na(lvlR) ? "" : (not na(boRes) and lvlR == boRes ? " defended" : " base top")
 lvlSsrc = na(lvlS) ? "" : (not na(lvlSc) and lvlS == lvlSc ? " flip-support" + (boFlipRe ? " ✓held" : " ·untested") : not na(lvlSa) and lvlS == lvlSa ? " defended" : " base floor")
 
-// ── THE WEEKLY 9 EMA RULE ────────────────────────────────────────────
-// A named, testable method rather than another indicator: enter as close to
-// the weekly 9 EMA as possible, judge it on the WEEKLY CLOSE, and ignore the
-// daily noise in between. Reclaiming it is the entry; losing it on a weekly
-// close is the exit; pulling back INTO it and closing above is the lowest-risk
-// add there is.
-//
-// WHY IT IS ANCHORED IN WEEKS AND NOT TO THE CHART
-//   The whole point of the method is to ZOOM OUT, so a 9 EMA that silently
-//   becomes a 9-BAR EMA on a 15-minute chart would invert it — you would be
-//   reacting to exactly the noise it exists to ignore. The length is therefore
-//   specified in WEEKS and converted through f_daysToBars, which this file
-//   already uses for the same reason.
-//
-//   HONEST ABOUT THE APPROXIMATION. On a WEEKLY chart this is exactly the
-//   weekly 9 EMA — f_daysToBars(45) returns 9. On a DAILY chart it returns 45,
-//   a span-matched 45-day EMA: very close, but not identical, because an EMA
-//   of daily closes samples differently from an EMA of weekly closes. The true
-//   series would need a request.security call, and this file already uses
-//   exactly 40 of the 40 allowed (32 focus list + daily + weekly + 6
-//   financials) — one more breaks the whole script, not just this row. The
-//   console says which of the two you are looking at rather than letting you
-//   assume.
-//
-// AND IT IS AN ADAPTATION, NOT A LAW. Its author put it forward as what works
-// when a market is hitting stops left and right; it is a way to stop being
-// shaken out of names that are still fine. In a trending market a tighter
-// stop may well do better. The row reports the state and does not override the
-// Money Line, the gate or k1-k10.
+// ── THE WEEKLY 9 EMA RULE ───
 profOn    = input.bool(true, "Weekly 9 EMA rule (reclaim / respect / lose)", group = "10. Weekly 9 EMA rule")
 profWeeks = input.int(9, "EMA length in WEEKS (not bars)", minval = 2, maxval = 52, tooltip = "Converted to bars for whatever chart you are on, so it stays a NINE-WEEK average everywhere. On a weekly...", group = "10. Weekly 9 EMA rule")
 profNear  = input.float(0.5, "'At the line' = within this many ATR of it", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "The method asks for an entry as close to the line as possible, because that is what makes the stop small....", group = "10. Weekly 9 EMA rule")
@@ -2168,8 +1902,6 @@ f_prof(int _wk, float _atr) =>
     _len = f_daysToBars(_wk * 5)
     _e   = ta.ema(close, _len)
     _ab  = close > _e
-    // every test is on the CLOSE. A wick through the line is not a loss of it,
-    // which is the entire point of judging this on the weekly close.
     _rec = _ab and not _ab[1]
     _los = not _ab and _ab[1]
     _res = _ab and low <= _e
@@ -2184,11 +1916,7 @@ profGain  = profAbove and not na(profRecPx) and profRecPx > 0 ? (close - profRec
 profAtLine = profAbove and not na(profDist) and profDist <= profNear
 profPct   = not na(profEma) and profEma > 0 ? (close - profEma) / profEma * 100 : na
 
-// ── DRAWING — every object this section owns lives in one of three arrays ──
-// Pine cannot assign to a global inside a function, so `var line x = na` +
-// `x := line.new(...)` cannot be wrapped and would have to stay in the main
-// body. Arrays are reference types and CAN be mutated inside a function, so
-// the drawables go in arrays, wiped and repopulated on the last bar.
+// ── DRAWING — every object this section owns lives in one of three arr
 var array<line>  boLn = array.new<line>()
 var array<label> boLb = array.new<label>()
 var array<box>   boBx = array.new<box>()
@@ -2210,15 +1938,12 @@ f_wipe(array<line> _l, array<label> _b, array<box> _x) =>
     0
 
 f_boDraw(array<line> _l, array<label> _b, array<box> _x) =>
-    // defended horizontals, labelled with how many times they held
     if boShowLvl and not na(boRes)
         array.push(_l, line.new(bar_index - 100, boRes, bar_index + 12, boRes, extend = extend.right, color = color.new(#ff5252, 0), width = 2))
         array.push(_b, label.new(bar_index + 12, boRes, "DEFENDED R " + str.tostring(boRes, format.mintick) + "  ·  " + str.tostring(boResHit, "#") + " touches", style = label.style_label_left, color = color.new(#ff5252, 25), textcolor = color.white, size = size.tiny))
     if boShowLvl and not na(boSup)
         array.push(_l, line.new(bar_index - 100, boSup, bar_index + 12, boSup, extend = extend.right, color = color.new(#00e676, 0), width = 2))
         array.push(_b, label.new(bar_index + 12, boSup, "DEFENDED S " + str.tostring(boSup, format.mintick) + "  ·  " + str.tostring(boSupHit, "#") + " touches", style = label.style_label_left, color = color.new(#00e676, 25), textcolor = color.white, size = size.tiny))
-    // the base box — the SNOW / PLTR rectangle. A box and not two lines
-    // because the DURATION is as much the point as the price.
     if suOn and suShowBox and suIsBase and not na(suHi) and not na(suLo)
         array.push(_x, box.new(bar_index - suBars + 1, suHi, bar_index, suLo, border_color = color.new(#00bcd4, 20), border_width = 2, bgcolor = color.new(#00bcd4, 92), text = str.tostring(suBars, "#") + "-bar base  ·  " + str.tostring(f_suW(suHi, suLo), "#.#") + "% wide", text_color = color.new(#00bcd4, 0), text_size = size.small, text_halign = text.align_center, text_valign = text.align_top))
     if suOn and suShowTgt and suIsBase and not na(suTgt1)
@@ -2226,21 +1951,15 @@ f_boDraw(array<line> _l, array<label> _b, array<box> _x) =>
         array.push(_b, label.new(bar_index + 12, suTgt1, "T1 " + str.tostring(suTgt1, format.mintick) + "  (1.0x base)", style = label.style_label_left, color = color.new(#9c27b0, 30), textcolor = color.white, size = size.tiny))
         array.push(_l, line.new(bar_index - suBars + 1, suTgt2, bar_index + 12, suTgt2, extend = extend.right, color = color.new(#9c27b0, 55), style = line.style_dashed, width = 1))
         array.push(_b, label.new(bar_index + 12, suTgt2, "T2 " + str.tostring(suTgt2, format.mintick) + "  (1.618x)", style = label.style_label_left, color = color.new(#9c27b0, 55), textcolor = color.white, size = size.tiny))
-    // the all-time high: the only level with no overhead supply behind it
     if suOn and suShowATH and not na(hiAll)
         array.push(_l, line.new(bar_index - 100, hiAll, bar_index + 12, hiAll, extend = extend.right, color = color.new(#ffc107, 20), style = line.style_dotted, width = 2))
         array.push(_b, label.new(bar_index + 12, hiAll, (suNewATH ? "AT ALL-TIME HIGH " : "ATH ") + str.tostring(hiAll, format.mintick), style = label.style_label_left, color = color.new(#ffc107, 25), textcolor = color.black, size = size.tiny))
-    // the converging pair, drawn TO the apex and stopped there. Not
-    // extend.right: a wedge has a natural right-hand end where the lines
-    // cross, and stopping there keeps a steep projection off the axis.
     if wgOn and wgHave and wgApexOk
-        // int(): math.round() returns a float and line.new needs a series int
         wgApexBar = bar_index + int(math.round(wgApexN))
         wgApexPx  = tlUpNow + wgResSl * wgApexN
         array.push(_l, line.new(hiB_bar, hiB_px, wgApexBar, wgApexPx, color = color.new(#2962ff, 0), width = 2))
         array.push(_l, line.new(loB_bar, loB_px, wgApexBar, wgApexPx, color = color.new(#2962ff, 0), width = 2))
         array.push(_b, label.new(wgApexBar, wgApexPx, wgType + "\napex in " + str.tostring(wgApexN, "#") + " bars", style = label.style_label_left, color = color.new(#2962ff, 20), textcolor = color.white, size = size.tiny))
-    // a channel gets three rails, which is the shape people actually draw
     if wgOn and wgHave and wgIsChan
         array.push(_l, line.new(hiB_bar, hiB_px, bar_index + 15, tlUpNow + wgResSl * 15, color = color.new(#2962ff, 15), width = 2))
         array.push(_l, line.new(loB_bar, loB_px, bar_index + 15, tlLoNow + wgSupSl * 15, color = color.new(#2962ff, 15), width = 2))
@@ -2248,7 +1967,6 @@ f_boDraw(array<line> _l, array<label> _b, array<box> _x) =>
             wgMidSl = (wgResSl + wgSupSl) / 2
             wgMidNw = (tlUpNow + tlLoNow) / 2
             array.push(_l, line.new(bar_index - 40, wgMidNw - wgMidSl * 40, bar_index + 15, wgMidNw + wgMidSl * 15, color = color.new(#2962ff, 45), style = line.style_dashed, width = 1))
-    // the line you labelled by hand
     if boFlipOn and boShowLvl
         array.push(_l, line.new(bar_index - 60, boFlipLvl, bar_index + 12, boFlipLvl, extend = extend.right, color = color.new(#2962ff, 10), width = 2))
         array.push(_b, label.new(bar_index + 12, boFlipLvl, "Resistance turned into support  " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? "  ✓ retested" : "  · untested"), style = label.style_label_left, color = color.new(#2962ff, 25), textcolor = color.white, size = size.tiny))
@@ -2275,63 +1993,23 @@ if barstate.islast
 if barstate.islast and boOn and not syncMode
     f_boDraw(boLn, boLb, boBx)
 
-// ── THE CONSOLE ──────────────────────────────────────────────────────
-// Reading a global inside a function is allowed; only ASSIGNING to one is
-// not. table.cell() on a global table is a call, so the whole console fits
-// in a function and costs the main body a single statement.
+// ── THE CONSOLE ───
 f_boKind(float _c) => _c == 7 ? "BULL FLAG" : _c == -7 ? "BEAR FLAG" : _c == 6 ? "ALL-TIME HIGH" : _c == 5 ? "BASE BREAKOUT" : _c == 4 ? "DEFENDED LEVEL" : _c == 3 ? "PRO TRENDLINE" : _c == 2 ? "SWING TRENDLINE" : _c == 1 ? "ATR MONEY LINE" : _c == -4 ? "DEFENDED LEVEL" : _c == -3 ? "PRO TRENDLINE" : _c == -2 ? "SWING TRENDLINE" : _c == -1 ? "ATR MONEY LINE" : "—"
-// NO SETUP is not the same as FAILED. With boDir == 0 the k-checks still
-// evaluate (boDir >= 0 takes the long arm), so without this the console
-// printed a red "FAILED" gate and red rows describing a breakout that never
-// happened — seen on TCS weekly, "nothing broke in the last 3 bars" above
-// six red rows.
 
-// The method's own branches fire on price-vs-line alone, which is correct for
-// the method but incomplete as advice. On TSLA weekly it read "AT THE 9-WEEK
-// EMA — this is where the method wants you in" while the ATR model was BEAR,
-// MODELS said SPLIT, ADX was 11 and the gate had failed on volume. Its author
-// uses that line to HOLD winners and re-enter reclaims, not to buy into a dead
-// tape. The branches still fire — this just refuses to let them read clean.
 f_emaCaveat() =>
-    // Two INDEPENDENT notes, not a chain. As an else-if the timing note was
-    // suppressed whenever the regime note fired — GOOGL weekly sat 3 bars from
-    // a symmetrical triangle's apex and the row never said so, because the ATR
-    // model being bearish had already claimed the slot. A decision three bars
-    // away is not less important than a sizing note; it is usually more.
-    //
-    // The sizing words also left with it: the branch that calls this already
-    // opens with "HALF SIZE AT MOST", so repeating it here printed it twice.
     _sz = ""
     _tm = ""
     if trend == -1
         _sz := "  ⚠ the ATR model is BEARISH — a scout entry against the regime."
     else if not na(adxV) and adxV < adxMin
         _sz := "  ⚠ ADX is " + str.tostring(adxV, "#.#") + " — no trend to ride yet, so expect chop."
-    // GOOGL weekly sat at the line with a SYMMETRICAL TRIANGLE three bars from
-    // its apex and a squeeze on. "Buy near the line" was true and badly
-    // incomplete: a decision was three bars away and the row never said so,
-    // because the structure branch sits ten rungs below the method branch and
-    // never gets reached. Timing is not a caveat about size, so it is added
-    // even when the regime is clean.
     if wgApexOk and not na(wgApexN) and wgApexN <= 5
         _tm := "  ⏱ a " + wgType + " resolves in " + str.tostring(wgApexN, "#") + " bars — size for either outcome, not just this one."
     else if suOn and suSqz
         _tm := "  ⏱ the squeeze is on — expect the range to expand soon, in whichever direction."
     _sz + _tm
 
-// ── THE TWO MODELS, SCORED SEPARATELY ────────────────────────────────
-// boDir only ever described a FRESH break inside boFresh bars, so between
-// events it read 0 and the lines had no opinion at all. That is fine for
-// scoring an event and useless for "are the lines bullish right now", which
-// is a standing question. Four plain facts, each worth one vote, each one a
-// line you can point at on the chart:
-//     price vs the weekly 9 EMA   — the method's own line
-//     price vs the 21 EMA         — the faster trend line
-//     the last structural break   — up or down, whatever broke last
-//     price vs the 200-bar mean   — the slow line
-// Net +4 to -4. Deliberately NOT weighted: a vote you cannot explain in one
-// sentence is a vote you will not trust at 9am, and the row prints all four
-// so the score can always be checked against the chart.
+// ── THE TWO MODELS, SCORED SEPARATELY ───
 lnV1 = not na(profEma) ? (close > profEma ? 1 : -1) : 0
 lnV2 = not na(emaS)    ? (close > emaS    ? 1 : -1) : 0
 lnV3 = na(boKindAt) or boKindAt == 0 ? 0 : (boKindAt > 0 ? 1 : -1)
@@ -2340,101 +2018,25 @@ lnNet  = lnV1 + lnV2 + lnV3 + lnV4
 lnBull = lnNet >= 2
 lnBear = lnNet <= -2
 lnWord = lnBull ? "BULLISH" : lnBear ? "BEARISH" : "MIXED"
-// The ATR model is one clean fact and needs no scoring.
 atrBull = trend == 1
-// Agreement is the whole point of running two models. Named plainly so the
-// row can be read without reference to anything else on the panel.
 bothBuy  = atrBull and lnBull
 bothSell = not atrBull and lnBear
 agreeWord = bothBuy ? "BOTH AGREE — BUY SIDE" : bothSell ? "BOTH AGREE — SELL SIDE" : "SPLIT — they disagree, wait"
 
-// ── WHAT TO DO ───────────────────────────────────────────────────────
-// LINES SAY explains the READING. This is the INSTRUCTION, with the numbers
-// already filled in, so the row can be acted on without doing arithmetic off
-// the other rows. Kept separate deliberately: a sentence that both explains
-// and instructs ends up doing neither well, and the instruction is the part
-// you want at a glance.
-//
-// Ordered so EXITS come before entries, and an unfinished bar outranks both:
-// acting on a level that has not closed is the single most expensive mistake
-// this console can invite.
-// Plain words beside every number. "RSI 58" is a reading; "58 healthy" is an
-// answer, and the second one is what you want at a glance.
+// ── WHAT TO DO ───
 f_rsiWord(float _v) => na(_v) ? "—" : _v >= 70 ? "overbought" : _v >= 55 ? "healthy" : _v >= 45 ? "neutral" : _v >= 30 ? "weak" : "oversold"
 f_adxWord(float _v) => na(_v) ? "—" : _v >= 40 ? "strong trend" : _v >= adxMin ? "trending" : "no trend (chop)"
 f_volWord(float _v) => na(_v) ? "—" : _v >= 2.0 ? "heavy" : _v >= 1.5 ? "above average" : _v >= 0.8 ? "normal" : "light"
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ───
 // v64 — THE BOTTOM LINE   (anchored VWAP from the cycle low)
-// ═══════════════════════════════════════════════════════════════════════════
-// Every other line on this chart answers "is the trend up". None of them
-// answers the question you actually ask at a bottom: has the selling
-// finished, and will anyone else hold what I buy here.
-//
-// This is the volume-weighted average price of EVERY bar since the lowest
-// low of the lookback — the real average cost of everyone who has bought
-// since the bottom printed. It is not a moving average, so it does not lag
-// the turn the way the 21/50/200 do:
-//
-//   price ABOVE it → the average buyer off the low is in PROFIT. Dips get
-//                    bought, supply is absorbed, the base is working.
-//   price BELOW it → the average buyer off the low is UNDERWATER. Every
-//                    bounce runs into people getting out at break-even.
-//                    That is what a failing bottom looks like, and it is why
-//                    most "it is cheap here" buys bleed for months.
-//
-// A base that holds this line WHILE IT RISES is the buy-and-hold entry. The
-// line is also the stop: a close back under it says the base failed.
-//
-// The anchor re-arms whenever a NEW cycle low prints (low <= the lookback
-// low), not when the old low merely rolls out of the window — otherwise the
-// average cost would reset on a quiet drift that nobody actually bought.
+// ───
 botOn   = input.bool(true, "Bottom line — average cost of every buyer since the low", group = "v64 · BOTTOM LINE")
 botLook = input.int(250, "How far back to hunt for the cycle low (bars)", minval = 50, maxval = 1000, group = "v64 · BOTTOM LINE")
 botMinB  = input.int(10, "Bars of base required before it is tradable", minval = 3, maxval = 100, group = "v64 · BOTTOM LINE")
-// GOLD weekly anchored to the 2022 low and reported "BASE WORKING — 55.4%
-// above average cost 1858.851 ... out on a weekly close under it" while price
-// was 4168 and making new highs. The arithmetic was right and the advice was
-// worthless: a 55% stop is not a stop, and nothing about a five-year-old low
-// tells you anything about today. Past this many ATR the setup has matured
-// into a trend and the line stops being a bottom reference.
 botMaxATR = input.float(6.0, "Stop calling it a bottom past this many ATR above average cost", minval = 1.0, maxval = 30.0, step = 0.5, group = "v64 · BOTTOM LINE")
-// ATR alone was not enough. GOLD weekly read "BOTTOM 4/7" while sitting 29.9%
-// above its average cost, because on a slow-trending instrument that distance
-// is still under 6 ATR. ATR measures stretch against this symbol's own
-// volatility, which is the right test on something fast and the wrong one on
-// something that grinds; percent measures it against the money. Either
-// crossing is enough to say the bottom has long since happened.
 botMaxPct = input.float(20.0, "...or past this % above average cost", minval = 3.0, maxval = 100.0, step = 1.0, group = "v64 · BOTTOM LINE")
 
-// The anchor is found fresh every bar: ta.lowestbars gives the offset of the
-// lowest low inside the lookback, and the average is summed from that bar
-// forward. That is the whole fix for a family of bugs - CRM reported
-// "anchored 750 bars back at 31.58", the first bar of the calculation window
-// in 2012, because the old incremental accumulator only re-anchored when a
-// NEW window low printed, which in a long uptrend never happens again after
-// the first bar. RELIANCE and NIFTY showed the same fault from the other
-// side: an average cost BELOW the low it named, because the anchor had
-// rolled out of the window while the reported low had not. Recomputing
-// cannot drift, because there is no stored state left to go stale.
-// TWO ANCHORS, because there are two kinds of bottom and only one of them is
-// the lowest low on the chart.
-//
-// GOLD is the case that forced this. Its cycle low is 1614.92 from 2022, and
-// the panel correctly called that MATURED - 30% and 5.8 ATR below price, far
-// too old to trade against. But the bottom a buyer actually wants is 3942.71,
-// the low of the CURRENT correction, which is a HIGHER low inside an intact
-// uptrend. Anchoring only to the lowest low in the window made the script
-// structurally blind to those, and in a long uptrend every buyable bottom is
-// a higher low. That is not an edge case; on a strong chart it is the only
-// case that ever occurs.
-//
-// So the cycle low is found as before, and a correction low is found as the
-// lowest low SINCE the highest high of the lookback. When the cycle anchor
-// has gone stale, the engine switches to the correction anchor and scores it
-// exactly the same way. Nothing else downstream changes - row 11, the BOTTOM
-// label and the scale-in branch all read whichever anchor is live, and row 11
-// names which one it is so the number is never ambiguous.
 botCorrMin = input.float(10.0, "A correction must be at least this deep (%) to count", minval = 2.0, maxval = 60.0, step = 1.0, group = "v64 · BOTTOM LINE")
 
 botHi  = ta.highest(high, botLook)
@@ -2449,12 +2051,8 @@ f_anchVwap(int _n) =>
         _pv += hlc3[_i] * nz(volume[_i])
         _vv += nz(volume[_i])
         _px += hlc3[_i]
-    // nz(volume) plus the bar-count fallback keeps the line drawing on
-    // indices and feeds that report no volume at all, such as TVC:GOLD.
     _vv > 0 ? _pv / _vv : _px / (_n + 1)
 
-// Offset of the lowest low within the last _n+1 bars. Written as a loop
-// rather than ta.lowestbars because the length here is a series value.
 f_lowOff(int _n) =>
     _lo = high
     _k = 0
@@ -2468,9 +2066,6 @@ corrOff = f_lowOff(botHiO)
 corrLo  = low[corrOff]
 corrDD  = botHi > 0 ? (botHi - corrLo) / botHi * 100 : na
 
-// Both VWAPs are computed unconditionally and selected afterwards. Calling
-// one inside a ternary would make it a conditional call, which Pine cannot
-// keep consistent history for.
 cycAV  = f_anchVwap(botCyc)
 corrAV = f_anchVwap(corrOff)
 cycLo  = low[botCyc]
@@ -2478,9 +2073,6 @@ cycStr = na(cycAV) or na(atrV) or atrV <= 0 ? na : (close - cycAV) / atrV
 cycPct = na(cycAV) ? na : (close - cycAV) / close * 100
 cycOld = not na(cycStr) and cycStr > botMaxATR or not na(cycPct) and cycPct > botMaxPct
 
-// Switch to the correction anchor only when the cycle one is stale AND the
-// correction is both old enough to have built a base and deep enough to be a
-// correction at all. A 3% dip is not a bottom to buy.
 useCorr = cycOld and corrOff >= botMinB and not na(corrDD) and corrDD >= botCorrMin
 
 botAV    = useCorr ? corrAV : cycAV
@@ -2494,18 +2086,7 @@ botStr   = na(botAV) or na(atrV) or atrV <= 0 ? na : (close - botAV) / atrV
 botDistP = na(botAV) ? na : (close - botAV) / close * 100
 botMature = cycOld and not useCorr
 
-// ── BOTTOM SCORE ───────────────────────────────────────────────────────────
-// Seven independent pieces of evidence. No single one calls a bottom - RSI
-// under 30 keeps going down, a volume spike can be the start of the slide,
-// and a reclaim of the 21 EMA inside a downtrend is the most common trap on
-// the chart. What identifies a real low is several of them landing together,
-// which is what this counts.
-//
-// Be clear about what this cannot do: it cannot mark the exact low in real
-// time. Three of the seven checks need bars AFTER the low to exist at all -
-// a pivot has to confirm, the EMA has to be reclaimed, the average-cost line
-// has to turn up. So it fires a few bars late, by construction. Anything
-// that claims to print on the exact low is reading bars it did not have.
+// ── BOTTOM SCORE ───
 botDeep  = input.float(20.0, "Washout: % off the high to qualify", minval = 5.0, maxval = 80.0, step = 1.0, group = "v64 · BOTTOM SCORE")
 botRsiOS = input.float(32.0, "Oversold: RSI must have reached this", minval = 10.0, maxval = 50.0, step = 1.0, group = "v64 · BOTTOM SCORE")
 botRec   = input.int(30, "How recently those must have happened (bars)", minval = 5, maxval = 200, group = "v64 · BOTTOM SCORE")
@@ -2522,11 +2103,6 @@ botDD   = botHi > 0 ? (botHi - close) / botHi * 100 : na
 botRsLo = ta.lowest(rsiV, botRec)
 botCapV = close < open and volAvg > 0 ? volume / volAvg : 0.0
 botCap  = ta.highest(botCapV, botRec)
-// Capitulation measured by RANGE instead of volume, for TVC:GOLD, indices and
-// FX feeds that report none. The old code passed that check for free on those
-// symbols, which quietly inflated their score by one on exactly the charts
-// where the least is known. A wide-range down bar is the same event volume
-// would have shown: holders leaving in a hurry.
 botCapR = close < open and not na(atrV) and atrV > 0 ? ta.tr / atrV : 0.0
 botCapX = ta.highest(botCapR, botRec)
 botPv   = ta.pivotlow(low, botPivL, botPivR)
@@ -2540,30 +2116,6 @@ if not na(botPv)
     pvP1 := botPv
     pvR1 := rsiV[botPivR]
 
-// 1 WASHOUT - a real decline, not a dip. 2 OVERSOLD - sellers got forced out.
-// 3 STRUCTURE - either price made a lower low while RSI made a higher one
-//   (the sellers are weaker than the price suggests), or price simply made a
-//   higher low. Either is the market refusing to go lower.
-// 4 CAPITULATION - a down bar on heavy volume is the last holders giving up.
-//   Symbols with no volume feed pass this, matching how the breakout gate
-//   already handles them, rather than being penalised for their data.
-// 5 RECLAIM, 6 MOMENTUM, 7 COST - the three that need bars after the low.
-// Four of these were written for a cycle bottom after a bear market and were
-// unreachable, or free, on a pullback inside an uptrend - which is why gold
-// could never score well no matter what price did.
-//
-// 1 DEPTH scales to the anchor. A cycle bottom needs a real washout; a
-//   correction only has to be as deep as a correction, so it is measured
-//   against the depth the pullback actually reached.
-// 2 OVERSOLD scales too. Corrections in a strong trend bottom at RSI 40-45
-//   and essentially never print 32, so the strict level made this check
-//   impossible to pass on the exact charts worth buying.
-// 3 STRUCTURE no longer waits on two confirmed pivots, which on a weekly
-//   chart is weeks of lag and was the single largest delay in the whole
-//   engine. A low that has simply refused to be retested - every recent bar
-//   holding clear of the anchor, well after a base should have formed -
-//   is the same information, available now instead of three bars late.
-// 4 CAPITULATION falls back to range where there is no volume feed.
 bv1 = useCorr ? not na(corrDD) and corrDD >= botCorrMin : not na(botDD) and botDD >= botDeep
 bv2 = not na(botRsLo) and botRsLo <= (useCorr ? botRsiUp : botRsiOS)
 bv3 = not na(pvP1) and not na(pvP2) and (pvP1 < pvP2 and pvR1 > pvR2 or pvP1 > pvP2) or botReady and not na(atrV) and atrV > 0 and not na(botAnc) and ta.lowest(low, 3) - botAnc >= botHLatr * atrV
@@ -2574,19 +2126,6 @@ bv7 = botAbove and botRise
 botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ? 1 : 0) + (bv6 ? 1 : 0) + (bv7 ? 1 : 0)
 botConf = botScr >= botNeed and not botMature and botReady
 
-// A BOTTOM label that later gets undercut is the most dangerous mark on this
-// chart: it says BUY, and then it stays there forever while price makes new
-// lows under it. INFY printed one and row 11 said "TOO EARLY, only 3 bars
-// since the low" in the same breath - the label was real when it fired and
-// had been invalidated by the time anyone read it. The script already calls a
-// retaken breakout a FAILED BREAKOUT; a bottom deserves the same honesty.
-// NIFTY printed BOTTOM on several adjacent bars. botConf is a standing state,
-// not an event, so whenever the score wobbles across the threshold - 5, 4, 5
-// again - the rising edge fires again and the chart collects a cluster of
-// labels that each look like a fresh signal. One bottom is one signal, so a
-// repeat inside the cooldown is suppressed. A failure clears the cooldown,
-// because after price undercuts the low the next confirmation is genuinely a
-// different bottom rather than the same one flickering.
 var int botLastSig = na
 var float botSigLo = na
 var int botSigBar = na
@@ -2627,25 +2166,7 @@ f_botSay() =>
     _s
 botSay = f_botSay()
 
-// ── ROW 12 · BUY BIG AND HOLD ──────────────────────────────────────────────
-// Row 11 answers "has the selling stopped". That is a chart question, and a
-// chart question alone is not enough to hold something for years: a confirmed
-// bottom in a shrinking business is a bounce you must sell, and most of the
-// deepest, most tempting drawdowns on any screen are exactly that.
-//
-// So this row grades the BUSINESS on the financials the script already pulls,
-// and only calls BUY BIG when four separate things are true at once:
-//   1 the bottom is confirmed on the chart   (row 11, 5 of 7)
-//   2 the business qualifies                 (profit, ROE, debt, growth)
-//   3 you are getting a real discount        (% off the high)
-//   4 the long-term trend is still intact    (200-bar MA above where it was
-//     a year ago) — this is the falling-knife filter. A business in genuine
-//     decline also prints washouts, oversold RSI and capitulation volume; it
-//     prints them the whole way down. A rising 200-bar MA under a big
-//     drawdown is what separates a sale from a value trap.
-//
-// Indices, commodities and crypto return no financials, so this row says so
-// plainly rather than grading them on nothing.
+// ── ROW 12 · BUY BIG AND HOLD ───
 bigRoe  = input.float(12.0, "Quality: minimum ROE %", minval = 0.0, maxval = 60.0, step = 1.0, group = "v64 · BUY BIG")
 bigDE   = input.float(1.5, "Quality: maximum debt / equity", minval = 0.1, maxval = 10.0, step = 0.1, group = "v64 · BUY BIG")
 bigDD   = input.float(25.0, "Discount: minimum % off the high", minval = 5.0, maxval = 80.0, step = 1.0, group = "v64 · BUY BIG")
@@ -2684,25 +2205,7 @@ f_bigSay() =>
     _b
 bigSay = f_bigSay()
 
-// ── ROW 13 · EXIT THE LONG-TERM HOLD ───────────────────────────────────────
-// Row 12 buys on two pillars: the business, and a long-term trend that is
-// still rising. Row 13 is the mirror - it sells when those same two pillars
-// break, and it ignores everything else.
-//
-// This is deliberately NOT the ordinary SELL label. The ATR money line flips
-// on every intermediate correction, and a long-term holder who sells each
-// flip gives up the compounding that was the whole reason to hold. On your
-// own charts the ATR model flipped bearish on TCS, ITC and RELIANCE while
-// each remains a going concern; those are trading signals, not exits from an
-// investment. A multi-year position should only be closed for a reason that
-// takes multiple years to repair:
-//
-//   the 200-bar average rolling over  — the trend that paid you is gone
-//   the business deteriorating        — the reason you held it is gone
-//
-// Both at once is the one unambiguous sell. Either alone is still serious
-// enough to act on, and the row says which it is rather than averaging them
-// into a single vague warning.
+// ── ROW 13 · EXIT THE LONG-TERM HOLD ───
 exTrim = input.float(8.0, "Trim when this many ATR above the 200-bar MA", minval = 2.0, maxval = 30.0, step = 0.5, group = "v64 · EXIT")
 
 exRoll = not na(ma200bar) and not na(ma200bar[52]) and ma200bar < ma200bar[52]
@@ -2734,7 +2237,6 @@ f_exitSay() =>
     _x
 exitSay = f_exitSay()
 
-
 f_whatToDo() =>
     _a = ""
     if not boOn
@@ -2755,33 +2257,16 @@ f_whatToDo() =>
         _a := (bothSell ? "BUY SMALL — against the trend. " : "BUY ") + (na(boSizePc) ? "" : str.tostring(boSizePc, "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk") + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "." + (bothSell ? " Row 3 reads sell side: a confirmed break up here is an early turn, not a trend trade." : "")
     else if profOn and (profReclaim or profRespect or profAtLine) and not emaOver
         _a := (trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + str.tostring(profEma, format.mintick) + " — the " + str.tostring(profWeeks, "#") + "-week EMA. Stop on a CLOSE below it." + (trend == -1 ? "" : " Size up here because the stop is close.") + f_emaCaveat()
-    // ORCL weekly read "BOTH AGREE — SELL SIDE" on row 3 and "BUY the retest of
-    // 131.19" on row 4. This branch had no regime guard at all, so a flip level
-    // holding was reported as a buy even with the ATR model bearish and 1 of 4
-    // lines up. A retest that holds inside a downtrend is a bounce, not an entry,
-    // and the instruction has to say which one it is.
     else if boFlipLive and boFlipRe and not emaOver
         _a := (bothSell ? "COUNTER-TREND BOUNCE ONLY at " : trend == -1 ? "HALF SIZE AT MOST at " : "BUY the retest of ") + str.tostring(boFlipLvl, format.mintick) + ". Stop just under it — tightest stop available on this chart." + (bothSell ? " Both models read sell side, so this is a trade against the trend, not an entry." : "")
     else if emaOver
         _a := "DO NOT START HERE. " + str.tostring(emaX21, "#.#") + " ATR above the " + str.tostring(emaSlowLen, "#") + " EMA. Hold what you have; add only back near " + str.tostring(emaS, format.mintick) + "."
     else if profOn and profAbove and not na(profBars) and profBars >= 3 and trend == 1
         _a := "HOLD. Exit is a CLOSE below " + str.tostring(profEma, format.mintick) + ". Add only on a pullback back toward it — do not add " + (na(profDist) ? "out here." : str.tostring(profDist, "#.#") + " ATR above it.")
-    // The buy-and-hold case the ATR model structurally cannot make: it only
-    // turns bullish after the money line is reclaimed, which at a true bottom
-    // is routinely 20-30% off the low. The average-cost line turns first.
     else if botOn and botConf and trend == -1
         _a := "SCALE IN SLOWLY — bottom score " + str.tostring(botScr, "#") + "/7. ATR model still bearish, but price holds above the average cost since the low (" + str.tostring(botAV, format.mintick) + ") and that line is RISING. Quarter size · add above " + str.tostring(moneyLine, format.mintick) + " · out below " + str.tostring(botAV, format.mintick) + "."
-    // "DO NOTHING" is true but unhelpful on its own: mid-base is exactly when
-    // you want the buy levels spelled out, not withheld. Name the whole ladder
-    // so the trigger is a number on the chart rather than a judgement call.
     else if suIsBase
         _a := "DO NOTHING YET — mid-base, nothing to buy here. LADDER (" + tfWord + " closes): " + (profOn and not na(profEma) ? "above " + str.tostring(profEma, format.mintick) + " " + str.tostring(profWeeks, "#") + "wEMA = pullback over · " : "") + "above " + str.tostring(moneyLine, format.mintick) + " = ATR turns bullish · above " + str.tostring(suHi, format.mintick) + " = base breaks, full size · below " + str.tostring(suLo, format.mintick) + " = all off."
-    // Both fallbacks used to speak as if only the ATR model existed. TCS weekly
-    // read "HOLD. Only act if a weekly candle CLOSES below 2061.9" while row 2
-    // said 0 OF 4 LINES BULLISH and row 3 said SPLIT — the panel disagreeing
-    // with itself three rows apart, and "HOLD" is the one word you must not
-    // use loosely when every line on the chart is pointing the other way.
-    // The split is the information; the instruction has to carry it.
     else if trend == 1 and lnBear
         _a := "HOLD ONLY IF ALREADY LONG — and do not add. The ATR line is still bullish but " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines are. That gap usually closes by the ATR line giving way. Exit on a close below " + str.tostring(moneyLine, format.mintick) + "."
     else if trend == 1
@@ -2792,20 +2277,9 @@ f_whatToDo() =>
         _a := "STAY OUT. Your only entry trigger is a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away)."
     _a
 
-// CE10272 + CW10003: declared HERE, above f_boSummary, because that is
-// where it is read. Built every bar at global scope rather than inside the
-// last-bar table block, so nothing in it can drift between calls.
-// built every bar at global scope instead of inside the last-bar
 boWTD = f_whatToDo()
 
-// ── THE 10-LINE SUMMARY ──────────────────────────────────────────────
-// The full console is 26 rows. That is a reference, not a summary, and on a
-// weekly chart it runs off the screen. This is the whole panel in ten lines,
-// built so the first three answer the only question that matters: what does
-// each model say, and do they agree.
-// The barstate guard lives INSIDE so the call itself is unconditional, which
-// is what CW10003 asks for: a function reached on only some bars cannot keep
-// its own history straight, and Pine cannot tell which functions are pure.
+// ── THE 10-LINE SUMMARY ───
 f_boSummary(table _t) =>
     if barstate.islast and boOn
         table.clear(_t, 0, 0, 1, 25)
@@ -2814,11 +2288,6 @@ f_boSummary(table _t) =>
         vCol = boTrapUp or boTrapDn ? color.new(#d50000, 0) : bothBuy ? color.new(#00c853, 0) : bothSell ? color.new(#d50000, 0) : color.new(color.orange, 15)
 
         table.cell(_t, 0, 0, "1  ATR MODEL", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-        // Distance is measured FROM PRICE and named, because a bare signed
-        // percentage read differently on every chart: ORCL showed "-24.5% away"
-        // on row 1 and CRCL "38% away" on row 4 for the same kind of gap, one
-        // divided by the money line and the other by close. Now both divide by
-        // close and row 1 says which side the trigger sits on.
         table.cell(_t, 1, 0, (atrBull ? "▲ BULLISH   —   STAY LONG above " + str.tostring(moneyLine, format.mintick) + "   ·   SELL on a " + tfWord + " close BELOW it" : "▼ BEARISH   —   STAY OUT below " + str.tostring(moneyLine, format.mintick) + "   ·   BUY on a " + tfWord + " close ABOVE it") + "   (" + str.tostring(math.abs(moneyLine - close) / close * 100, "#.#") + "% " + (moneyLine > close ? "above" : "below") + " price)", text_color = color.white, bgcolor = aCol, text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 1, "2  LINES", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
@@ -2864,14 +2333,7 @@ f_boSummary(table _t) =>
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
 var table bot = table.new(boPosMap, 2, 26, border_width = 2)
 
-// ── CHART SYNC MODE — remove only what drags the axis ────────────────
-// A delete pass, not a guard on the drawing blocks, and that is deliberate:
-// the PRO block COMPUTES proResNow, proSupNow and the touch counts inside
-// the same block that draws, and proBreakUp/Dn are built from those. Gating
-// it would switch off a third of the breakout engine's inputs whenever
-// someone ticked a display option. A display setting must never change a
-// signal. Deleting another block's line is a call, not a global assignment,
-// so this is legal inside a function.
+// ── CHART SYNC MODE — remove only what drags the axis ───
 f_syncWipe() =>
     if barstate.islast and syncMode
         line.delete(proResLn)
@@ -2897,7 +2359,6 @@ f_syncWipe() =>
     line.delete(tlLoLn)
     0
 
-// Both calls are unconditional; each function guards itself inside.
 f_boSummary(bot)
 f_syncWipe()
 
