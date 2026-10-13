@@ -2152,17 +2152,18 @@ botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ?
 //   level has already fooled the engine once, one more check is the price of
 //   admission to try again.
 var bool botFail = false
+var float botSigLo = na
+var int botSigBar = na
 botHiBars = input.int(8, "Structure break: close above the high of this many bars", minval = 3, maxval = 52, group = "v64 · BOTTOM SCORE")
 botLTreq  = input.bool(true, "Require the long-term trend to be up (stops knife-catching)", group = "v64 · BOTTOM SCORE")
 ltDown  = not na(ma200bar) and not na(ma200bar[52]) and ma200bar < ma200bar[52]
 botNewHi = close > ta.highest(high, botHiBars)[1]
-botNeedN = botNeed + (botFail ? 1 : 0)
+botRFail = botFail and not na(botSigBar) and bar_index - botSigBar <= botLook
+botNeedN = botNeed + (botRFail ? 1 : 0)
 botBlock = botLTreq and ltDown ? "long-term trend still DOWN" : not botNewHi ? "no structure break yet" : ""
 botConf = botScr >= botNeedN and not botMature and botReady and botBlock == ""
 
 var int botLastSig = na
-var float botSigLo = na
-var int botSigBar = na
 botSigRaw = botOn and botConf and not botConf[1]
 botSig = botSigRaw and (na(botLastSig) or bar_index - botLastSig >= botCool or botFail)
 if botSig
@@ -2195,12 +2196,10 @@ f_botSay() =>
         _s := "—"
     else if botMature
         _s := "MATURED — a trend now, not a bottom. " + f_n1(cycPct) + "% above the cycle low's average cost, and the current pullback is only " + f_n1(corrDD) + "% deep — too shallow to call a bottom. Judge this on rows 1-10 and 13."
-    else if botFail and bar_index - botSigBar <= botLook
-        _s := "⚠ THE BOTTOM LABEL ON THIS CHART FAILED — price went under " + f_px(botSigLo) + ", the low it was built on, " + f_n0(bar_index - botSigBar) + " bars after it printed. Ignore that label. Score is " + f_n0(botScr) + "/7 now and needs a fresh " + f_n0(botNeed) + "."
     else if not botReady
         _s := "TOO EARLY — only " + f_n0(botN) + " bar(s) since the " + botSrc + " at " + f_px(botAnc) + ". Let a base build before buying."
     else
-        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + f_n0(botScr) + "/" + f_n0(botNeedN) + " " + (botConf ? "✓ CONFIRMED — buy zone" : botBlock != "" ? "⚠ BOUNCE ONLY — " + botBlock : botScr >= botNeedN - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + " (" + botSrc + " " + f_px(botAnc) + ").  " + f_botTicks() + (botAbove ? "  ·  " + f_n1(botDistP) + "% above avg cost " + f_px(botAV) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + f_px(botAV) + ", buyers off the low are offside")
+        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + f_n0(botScr) + "/" + f_n0(botNeedN) + " " + (botConf ? "✓ CONFIRMED — buy zone" : botBlock != "" ? "⚠ BOUNCE ONLY — " + botBlock : botScr >= botNeedN - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + (botRFail ? "  ·  a bottom here already failed at " + f_px(botSigLo) + ", bar raised" : "") + " (" + botSrc + " " + f_px(botAnc) + ").  " + f_botTicks() + (botAbove ? "  ·  " + f_n1(botDistP) + "% above avg cost " + f_px(botAV) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + f_px(botAV) + ", buyers off the low are offside")
     _s
 botSay = f_botSay()
 
