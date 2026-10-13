@@ -2539,7 +2539,7 @@ f_botSay() =>
     if not botOn or na(botAV)
         _s := "—"
     else if botMature
-        _s := "MATURED — a trend now, not a bottom. " + str.tostring(botStr, "#.#") + " ATR (" + str.tostring(botDistP, "#.#") + "%) above the average cost, anchored " + str.tostring(botN, "#") + " bars back at " + str.tostring(botAnc, format.mintick) + " — far too low to be a stop. Judge this on rows 1-10."
+        _s := "MATURED — a trend now, not a bottom. " + str.tostring(botStr, "#.#") + " ATR (" + str.tostring(botDistP, "#.#") + "%) above the average cost, anchored " + str.tostring(botN, "#") + " bars back at " + str.tostring(botAnc, format.mintick) + " — far too low to be a stop. Judge this on rows 1-10 and 13."
     else if botFail and bar_index - botSigBar <= botLook
         _s := "⚠ THE BOTTOM LABEL ON THIS CHART FAILED — price went under " + str.tostring(botSigLo, format.mintick) + ", the low it was built on, " + str.tostring(bar_index - botSigBar, "#") + " bars after it printed. Ignore that label. Score is " + str.tostring(botScr, "#") + "/7 now and needs a fresh " + str.tostring(botNeed, "#") + "."
     else if not botReady
