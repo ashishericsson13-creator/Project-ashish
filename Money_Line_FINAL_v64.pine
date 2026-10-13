@@ -2262,7 +2262,7 @@ f_exitSay() =>
     else if exRoll and exBiz
         _x := "⛔ SELL EVERYTHING — the 200-bar MA is FALLING and the business is deteriorating (" + f_n0(bqN) + "/4). Both reasons to own this are gone. This is not a dip to buy."
     else if exRoll
-        _x := "EXIT THE LONG-TERM HOLD — the 200-bar MA has rolled over, so the multi-year trend is finished" + (bqHave ? " even though the business still grades " + f_n0(bqN) + "/4" : "") + ". Close the investment; trade it on rows 1-10 if you still want exposure."
+        _x := "EXIT THE LONG-TERM HOLD — the 200-bar MA has rolled over, so the multi-year trend is finished" + (bqHave ? " even though the business still grades " + f_n0(bqN) + "/4" : "") + ". Close the investment; trade it on rows 1-11 if you still want exposure."
     else if exBiz
         _x := "WARNING — the business is deteriorating (" + f_n0(bqN) + "/4)" + (na(revGrowth) or revGrowth >= 0 ? "" : ", revenue " + f_n1(revGrowth) + "%") + ". The trend still holds, but this is how long-term holds die. Stop adding. Exit if the 200-bar MA rolls over."
     else if exHot
