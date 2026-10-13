@@ -2187,7 +2187,14 @@ f_botTicks() =>
 // jumps from one average cost straight to the other and TradingView draws the
 // connector, which on gold was a near-vertical teal line a thousand points
 // long - a price level that never existed, through bars nobody traded at.
-botJump = useCorr != useCorr[1]
+// botN counts bars since the anchor, so in normal running it goes up by one
+// each bar. Any other step means the anchor itself moved - a new low printed,
+// or the old one rolled out of the lookback - and the average cost is then
+// measured from a different bar, which is a different number, not a move in
+// the old one. Breaking only on the mode switch missed this: TCS still drew
+// 1,500-point vertical teal lines in 2020 and 2022 where the cycle anchor
+// jumped while useCorr never changed.
+botJump = useCorr != useCorr[1] or botN != nz(botN[1]) + 1
 plot(botOn and not syncMode and not botJump ? botAV : na, "Bottom line — average cost since the anchor low", color = color.new(#00bfa5, 0), linewidth = 3)
 
 f_botSay() =>
