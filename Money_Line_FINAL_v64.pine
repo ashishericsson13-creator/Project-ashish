@@ -2209,7 +2209,7 @@ f_bigSay() =>
     else if not botConf
         _b := "NOT YET — the bottom is not confirmed on the chart (row 11). Business grade " + f_n0(bqN) + "/4" + (bqN >= bigNeed ? ", which is fine — it is the chart that is not ready." : ", so it would not qualify anyway.")
     else if not bqTrend
-        _b := "NO — the 200-bar MA is LOWER than a year ago. This is a broken business, not a discount. A declining company prints washouts and oversold RSI the whole way down. Do not hold this one."
+        _b := "NOT A LONG-TERM BUY — the 200-bar MA is LOWER than a year ago, so the multi-year uptrend is over. The business itself grades " + f_n0(bqN) + "/4" + (bqN >= bigNeed ? ", which is not the problem" : ", which is also weak") + ". A rolled-over trend keeps printing washouts and oversold RSI the whole way down however good the company is. Trade it on rows 1-10; do not hold it until that average turns up."
     else if bqN < bigNeed
         _b := "NO — the chart bottomed but the business does not qualify (" + f_n0(bqN) + "/4): " + (bqProf ? "" : "not profitable · ") + (bqGrow ? "" : "revenue not growing · ") + (bqRoe ? "" : "ROE below " + f_n0(bigRoe) + "% · ") + (bqDebt ? "" : "debt too high") + ". Trade it, do not hold it."
     else
