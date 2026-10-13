@@ -2417,7 +2417,29 @@ botMaxPct = input.float(20.0, "...or past this % above average cost", minval = 3
 // side: an average cost BELOW the low it named, because the anchor had
 // rolled out of the window while the reported low had not. Recomputing
 // cannot drift, because there is no stored state left to go stale.
-botOff = math.abs(ta.lowestbars(low, botLook))
+// TWO ANCHORS, because there are two kinds of bottom and only one of them is
+// the lowest low on the chart.
+//
+// GOLD is the case that forced this. Its cycle low is 1614.92 from 2022, and
+// the panel correctly called that MATURED - 30% and 5.8 ATR below price, far
+// too old to trade against. But the bottom a buyer actually wants is 3942.71,
+// the low of the CURRENT correction, which is a HIGHER low inside an intact
+// uptrend. Anchoring only to the lowest low in the window made the script
+// structurally blind to those, and in a long uptrend every buyable bottom is
+// a higher low. That is not an edge case; on a strong chart it is the only
+// case that ever occurs.
+//
+// So the cycle low is found as before, and a correction low is found as the
+// lowest low SINCE the highest high of the lookback. When the cycle anchor
+// has gone stale, the engine switches to the correction anchor and scores it
+// exactly the same way. Nothing else downstream changes - row 11, the BOTTOM
+// label and the scale-in branch all read whichever anchor is live, and row 11
+// names which one it is so the number is never ambiguous.
+botCorrMin = input.float(10.0, "A correction must be at least this deep (%) to count", minval = 2.0, maxval = 60.0, step = 1.0, group = "v64 · BOTTOM LINE")
+
+botHi  = ta.highest(high, botLook)
+botCyc = math.abs(ta.lowestbars(low, botLook))
+botHiO = math.abs(ta.highestbars(high, botLook))
 
 f_anchVwap(int _n) =>
     _pv = 0.0
@@ -2431,15 +2453,46 @@ f_anchVwap(int _n) =>
     // indices and feeds that report no volume at all, such as TVC:GOLD.
     _vv > 0 ? _pv / _vv : _px / (_n + 1)
 
-botAV    = na(botOff) ? na : f_anchVwap(botOff)
-botAnc   = na(botOff) ? na : low[botOff]
-botN     = nz(botOff)
+// Offset of the lowest low within the last _n+1 bars. Written as a loop
+// rather than ta.lowestbars because the length here is a series value.
+f_lowOff(int _n) =>
+    _lo = high
+    _k = 0
+    for _i = 0 to _n
+        if low[_i] < _lo
+            _lo := low[_i]
+            _k := _i
+    _k
+
+corrOff = f_lowOff(botHiO)
+corrLo  = low[corrOff]
+corrDD  = botHi > 0 ? (botHi - corrLo) / botHi * 100 : na
+
+// Both VWAPs are computed unconditionally and selected afterwards. Calling
+// one inside a ternary would make it a conditional call, which Pine cannot
+// keep consistent history for.
+cycAV  = f_anchVwap(botCyc)
+corrAV = f_anchVwap(corrOff)
+cycLo  = low[botCyc]
+cycStr = na(cycAV) or na(atrV) or atrV <= 0 ? na : (close - cycAV) / atrV
+cycPct = na(cycAV) ? na : (close - cycAV) / close * 100
+cycOld = not na(cycStr) and cycStr > botMaxATR or not na(cycPct) and cycPct > botMaxPct
+
+// Switch to the correction anchor only when the cycle one is stale AND the
+// correction is both old enough to have built a base and deep enough to be a
+// correction at all. A 3% dip is not a bottom to buy.
+useCorr = cycOld and corrOff >= botMinB and not na(corrDD) and corrDD >= botCorrMin
+
+botAV    = useCorr ? corrAV : cycAV
+botAnc   = useCorr ? corrLo : cycLo
+botN     = useCorr ? corrOff : botCyc
+botSrc   = useCorr ? "correction low" : "cycle low"
 botRise  = not na(botAV) and not na(botAV[1]) and botAV > botAV[1]
 botAbove = not na(botAV) and close > botAV
 botReady = botN >= botMinB
 botStr   = na(botAV) or na(atrV) or atrV <= 0 ? na : (close - botAV) / atrV
 botDistP = na(botAV) ? na : (close - botAV) / close * 100
-botMature = not na(botStr) and botStr > botMaxATR or not na(botDistP) and botDistP > botMaxPct
+botMature = cycOld and not useCorr
 
 // ── BOTTOM SCORE ───────────────────────────────────────────────────────────
 // Seven independent pieces of evidence. No single one calls a bottom - RSI
@@ -2462,7 +2515,6 @@ botPivR  = input.int(3, "Pivot right bars (this is the confirmation lag)", minva
 botNeed  = input.int(5, "Checks required to call it a bottom (of 7)", minval = 3, maxval = 7, group = "v64 · BOTTOM SCORE")
 botCool  = input.int(20, "Minimum bars between BOTTOM labels", minval = 1, maxval = 200, group = "v64 · BOTTOM SCORE")
 
-botHi   = ta.highest(high, botLook)
 botDD   = botHi > 0 ? (botHi - close) / botHi * 100 : na
 botRsLo = ta.lowest(rsiV, botRec)
 botCapV = close < open and volAvg > 0 ? volume / volAvg : 0.0
@@ -2539,13 +2591,13 @@ f_botSay() =>
     if not botOn or na(botAV)
         _s := "—"
     else if botMature
-        _s := "MATURED — a trend now, not a bottom. " + str.tostring(botStr, "#.#") + " ATR (" + str.tostring(botDistP, "#.#") + "%) above the average cost, anchored " + str.tostring(botN, "#") + " bars back at " + str.tostring(botAnc, format.mintick) + " — far too low to be a stop. Judge this on rows 1-10 and 13."
+        _s := "MATURED — a trend now, not a bottom. " + str.tostring(cycPct, "#.#") + "% above the cycle low's average cost, and the current pullback is only " + str.tostring(corrDD, "#.#") + "% deep — too shallow to call a bottom. Judge this on rows 1-10 and 13."
     else if botFail and bar_index - botSigBar <= botLook
         _s := "⚠ THE BOTTOM LABEL ON THIS CHART FAILED — price went under " + str.tostring(botSigLo, format.mintick) + ", the low it was built on, " + str.tostring(bar_index - botSigBar, "#") + " bars after it printed. Ignore that label. Score is " + str.tostring(botScr, "#") + "/7 now and needs a fresh " + str.tostring(botNeed, "#") + "."
     else if not botReady
-        _s := "TOO EARLY — only " + str.tostring(botN, "#") + " bar(s) since the low at " + str.tostring(botAnc, format.mintick) + ". Let a base build before buying."
+        _s := "TOO EARLY — only " + str.tostring(botN, "#") + " bar(s) since the " + botSrc + " at " + str.tostring(botAnc, format.mintick) + ". Let a base build before buying."
     else
-        _s := "BOTTOM " + str.tostring(botScr, "#") + "/7 " + (botConf ? "✓ CONFIRMED — buy zone" : botScr >= botNeed - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + ".  " + f_botTicks() + (botAbove ? "  ·  " + str.tostring(botDistP, "#.#") + "% above avg cost " + str.tostring(botAV, format.mintick) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + str.tostring(botAV, format.mintick) + ", buyers off the low are offside")
+        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + str.tostring(botScr, "#") + "/7 " + (botConf ? "✓ CONFIRMED — buy zone" : botScr >= botNeed - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + " (" + botSrc + " " + str.tostring(botAnc, format.mintick) + ").  " + f_botTicks() + (botAbove ? "  ·  " + str.tostring(botDistP, "#.#") + "% above avg cost " + str.tostring(botAV, format.mintick) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + str.tostring(botAV, format.mintick) + ", buyers off the low are offside")
     _s
 botSay = f_botSay()
 
