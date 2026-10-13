@@ -2399,6 +2399,13 @@ botMinB  = input.int(10, "Bars of base required before it is tradable", minval =
 // tells you anything about today. Past this many ATR the setup has matured
 // into a trend and the line stops being a bottom reference.
 botMaxATR = input.float(6.0, "Stop calling it a bottom past this many ATR above average cost", minval = 1.0, maxval = 30.0, step = 0.5, group = "v64 · BOTTOM LINE")
+// ATR alone was not enough. GOLD weekly read "BOTTOM 4/7" while sitting 29.9%
+// above its average cost, because on a slow-trending instrument that distance
+// is still under 6 ATR. ATR measures stretch against this symbol's own
+// volatility, which is the right test on something fast and the wrong one on
+// something that grinds; percent measures it against the money. Either
+// crossing is enough to say the bottom has long since happened.
+botMaxPct = input.float(20.0, "...or past this % above average cost", minval = 3.0, maxval = 100.0, step = 1.0, group = "v64 · BOTTOM LINE")
 
 // The anchor is found fresh every bar: ta.lowestbars gives the offset of the
 // lowest low inside the lookback, and the average is summed from that bar
@@ -2431,8 +2438,8 @@ botRise  = not na(botAV) and not na(botAV[1]) and botAV > botAV[1]
 botAbove = not na(botAV) and close > botAV
 botReady = botN >= botMinB
 botStr   = na(botAV) or na(atrV) or atrV <= 0 ? na : (close - botAV) / atrV
-botMature = not na(botStr) and botStr > botMaxATR
 botDistP = na(botAV) ? na : (close - botAV) / close * 100
+botMature = not na(botStr) and botStr > botMaxATR or not na(botDistP) and botDistP > botMaxPct
 
 // ── BOTTOM SCORE ───────────────────────────────────────────────────────────
 // Seven independent pieces of evidence. No single one calls a bottom - RSI
