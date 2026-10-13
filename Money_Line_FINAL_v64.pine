@@ -1607,6 +1607,12 @@ alertcondition(proBreakDn, title = "PRO LINE breakdown (closed below long suppor
 
 // ═══════════════════════════════════════════════════════════════════════════
 // v64 — BREAKOUT CONSOLE + SETUP QUALITY + STRUCTURE
+// Formatting helpers. Three str.tostring forms account for 106 calls in this
+// block; at roughly five tokens each over a plain call they were most of the
+// 48 tokens the script was over CE10117's limit of 100,256.
+f_px(float _v) => str.tostring(_v, format.mintick)
+f_n1(float _v) => str.tostring(_v, "#.#")
+f_n0(float _v) => str.tostring(_v, "#")
 // ───
 boOn       = input.bool(true, "Enable BREAKOUT console", group = "6. Breakout Console")
 boMinTouch = input.int(2, "Horizontal level: minimum touches", minval = 1, maxval = 6, tooltip = "How many times price must have reacted at a price before it counts as a level.", group = "6. Breakout Console")
@@ -1940,26 +1946,26 @@ f_wipe(array<line> _l, array<label> _b, array<box> _x) =>
 f_boDraw(array<line> _l, array<label> _b, array<box> _x) =>
     if boShowLvl and not na(boRes)
         array.push(_l, line.new(bar_index - 100, boRes, bar_index + 12, boRes, extend = extend.right, color = color.new(#ff5252, 0), width = 2))
-        array.push(_b, label.new(bar_index + 12, boRes, "DEFENDED R " + str.tostring(boRes, format.mintick) + "  ·  " + str.tostring(boResHit, "#") + " touches", style = label.style_label_left, color = color.new(#ff5252, 25), textcolor = color.white, size = size.tiny))
+        array.push(_b, label.new(bar_index + 12, boRes, "DEFENDED R " + f_px(boRes) + "  ·  " + f_n0(boResHit) + " touches", style = label.style_label_left, color = color.new(#ff5252, 25), textcolor = color.white, size = size.tiny))
     if boShowLvl and not na(boSup)
         array.push(_l, line.new(bar_index - 100, boSup, bar_index + 12, boSup, extend = extend.right, color = color.new(#00e676, 0), width = 2))
-        array.push(_b, label.new(bar_index + 12, boSup, "DEFENDED S " + str.tostring(boSup, format.mintick) + "  ·  " + str.tostring(boSupHit, "#") + " touches", style = label.style_label_left, color = color.new(#00e676, 25), textcolor = color.white, size = size.tiny))
+        array.push(_b, label.new(bar_index + 12, boSup, "DEFENDED S " + f_px(boSup) + "  ·  " + f_n0(boSupHit) + " touches", style = label.style_label_left, color = color.new(#00e676, 25), textcolor = color.white, size = size.tiny))
     if suOn and suShowBox and suIsBase and not na(suHi) and not na(suLo)
-        array.push(_x, box.new(bar_index - suBars + 1, suHi, bar_index, suLo, border_color = color.new(#00bcd4, 20), border_width = 2, bgcolor = color.new(#00bcd4, 92), text = str.tostring(suBars, "#") + "-bar base  ·  " + str.tostring(f_suW(suHi, suLo), "#.#") + "% wide", text_color = color.new(#00bcd4, 0), text_size = size.small, text_halign = text.align_center, text_valign = text.align_top))
+        array.push(_x, box.new(bar_index - suBars + 1, suHi, bar_index, suLo, border_color = color.new(#00bcd4, 20), border_width = 2, bgcolor = color.new(#00bcd4, 92), text = f_n0(suBars) + "-bar base  ·  " + str.tostring(f_suW(suHi, suLo), "#.#") + "% wide", text_color = color.new(#00bcd4, 0), text_size = size.small, text_halign = text.align_center, text_valign = text.align_top))
     if suOn and suShowTgt and suIsBase and not na(suTgt1)
         array.push(_l, line.new(bar_index - suBars + 1, suTgt1, bar_index + 12, suTgt1, extend = extend.right, color = color.new(#9c27b0, 25), style = line.style_dashed, width = 1))
-        array.push(_b, label.new(bar_index + 12, suTgt1, "T1 " + str.tostring(suTgt1, format.mintick) + "  (1.0x base)", style = label.style_label_left, color = color.new(#9c27b0, 30), textcolor = color.white, size = size.tiny))
+        array.push(_b, label.new(bar_index + 12, suTgt1, "T1 " + f_px(suTgt1) + "  (1.0x base)", style = label.style_label_left, color = color.new(#9c27b0, 30), textcolor = color.white, size = size.tiny))
         array.push(_l, line.new(bar_index - suBars + 1, suTgt2, bar_index + 12, suTgt2, extend = extend.right, color = color.new(#9c27b0, 55), style = line.style_dashed, width = 1))
-        array.push(_b, label.new(bar_index + 12, suTgt2, "T2 " + str.tostring(suTgt2, format.mintick) + "  (1.618x)", style = label.style_label_left, color = color.new(#9c27b0, 55), textcolor = color.white, size = size.tiny))
+        array.push(_b, label.new(bar_index + 12, suTgt2, "T2 " + f_px(suTgt2) + "  (1.618x)", style = label.style_label_left, color = color.new(#9c27b0, 55), textcolor = color.white, size = size.tiny))
     if suOn and suShowATH and not na(hiAll)
         array.push(_l, line.new(bar_index - 100, hiAll, bar_index + 12, hiAll, extend = extend.right, color = color.new(#ffc107, 20), style = line.style_dotted, width = 2))
-        array.push(_b, label.new(bar_index + 12, hiAll, (suNewATH ? "AT ALL-TIME HIGH " : "ATH ") + str.tostring(hiAll, format.mintick), style = label.style_label_left, color = color.new(#ffc107, 25), textcolor = color.black, size = size.tiny))
+        array.push(_b, label.new(bar_index + 12, hiAll, (suNewATH ? "AT ALL-TIME HIGH " : "ATH ") + f_px(hiAll), style = label.style_label_left, color = color.new(#ffc107, 25), textcolor = color.black, size = size.tiny))
     if wgOn and wgHave and wgApexOk
         wgApexBar = bar_index + int(math.round(wgApexN))
         wgApexPx  = tlUpNow + wgResSl * wgApexN
         array.push(_l, line.new(hiB_bar, hiB_px, wgApexBar, wgApexPx, color = color.new(#2962ff, 0), width = 2))
         array.push(_l, line.new(loB_bar, loB_px, wgApexBar, wgApexPx, color = color.new(#2962ff, 0), width = 2))
-        array.push(_b, label.new(wgApexBar, wgApexPx, wgType + "\napex in " + str.tostring(wgApexN, "#") + " bars", style = label.style_label_left, color = color.new(#2962ff, 20), textcolor = color.white, size = size.tiny))
+        array.push(_b, label.new(wgApexBar, wgApexPx, wgType + "\napex in " + f_n0(wgApexN) + " bars", style = label.style_label_left, color = color.new(#2962ff, 20), textcolor = color.white, size = size.tiny))
     if wgOn and wgHave and wgIsChan
         array.push(_l, line.new(hiB_bar, hiB_px, bar_index + 15, tlUpNow + wgResSl * 15, color = color.new(#2962ff, 15), width = 2))
         array.push(_l, line.new(loB_bar, loB_px, bar_index + 15, tlLoNow + wgSupSl * 15, color = color.new(#2962ff, 15), width = 2))
@@ -1969,9 +1975,9 @@ f_boDraw(array<line> _l, array<label> _b, array<box> _x) =>
             array.push(_l, line.new(bar_index - 40, wgMidNw - wgMidSl * 40, bar_index + 15, wgMidNw + wgMidSl * 15, color = color.new(#2962ff, 45), style = line.style_dashed, width = 1))
     if boFlipOn and boShowLvl
         array.push(_l, line.new(bar_index - 60, boFlipLvl, bar_index + 12, boFlipLvl, extend = extend.right, color = color.new(#2962ff, 10), width = 2))
-        array.push(_b, label.new(bar_index + 12, boFlipLvl, "Resistance turned into support  " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? "  ✓ retested" : "  · untested"), style = label.style_label_left, color = color.new(#2962ff, 25), textcolor = color.white, size = size.tiny))
+        array.push(_b, label.new(bar_index + 12, boFlipLvl, "Resistance turned into support  " + f_px(boFlipLvl) + (boFlipRe ? "  ✓ retested" : "  · untested"), style = label.style_label_left, color = color.new(#2962ff, 25), textcolor = color.white, size = size.tiny))
     if boActing
-        array.push(_b, label.new(bar_index, boDir == 1 ? low : high, boVerdict + "  " + str.tostring(boScore, "#") + "/10", style = boDir == 1 ? label.style_label_up : label.style_label_down, color = boDir == 1 ? color.new(#00c853, 0) : color.new(#d50000, 0), textcolor = color.white, size = size.normal))
+        array.push(_b, label.new(bar_index, boDir == 1 ? low : high, boVerdict + "  " + f_n0(boScore) + "/10", style = boDir == 1 ? label.style_label_up : label.style_label_down, color = boDir == 1 ? color.new(#00c853, 0) : color.new(#d50000, 0), textcolor = color.white, size = size.normal))
     0
 
 f_boVert(array<line> _v) =>
@@ -2002,9 +2008,9 @@ f_emaCaveat() =>
     if trend == -1
         _sz := "  ⚠ the ATR model is BEARISH — a scout entry against the regime."
     else if not na(adxV) and adxV < adxMin
-        _sz := "  ⚠ ADX is " + str.tostring(adxV, "#.#") + " — no trend to ride yet, so expect chop."
+        _sz := "  ⚠ ADX is " + f_n1(adxV) + " — no trend to ride yet, so expect chop."
     if wgApexOk and not na(wgApexN) and wgApexN <= 5
-        _tm := "  ⏱ a " + wgType + " resolves in " + str.tostring(wgApexN, "#") + " bars — size for either outcome, not just this one."
+        _tm := "  ⏱ a " + wgType + " resolves in " + f_n0(wgApexN) + " bars — size for either outcome, not just this one."
     else if suOn and suSqz
         _tm := "  ⏱ the squeeze is on — expect the range to expand soon, in whichever direction."
     _sz + _tm
@@ -2040,6 +2046,7 @@ botMaxPct = input.float(20.0, "...or past this % above average cost", minval = 3
 botCorrMin = input.float(10.0, "A correction must be at least this deep (%) to count", minval = 2.0, maxval = 60.0, step = 1.0, group = "v64 · BOTTOM LINE")
 
 botHi  = ta.highest(high, botLook)
+botLo3 = ta.lowest(low, 3)
 botCyc = math.abs(ta.lowestbars(low, botLook))
 botHiO = math.abs(ta.highestbars(high, botLook))
 
@@ -2118,7 +2125,7 @@ if not na(botPv)
 
 bv1 = useCorr ? not na(corrDD) and corrDD >= botCorrMin : not na(botDD) and botDD >= botDeep
 bv2 = not na(botRsLo) and botRsLo <= (useCorr ? botRsiUp : botRsiOS)
-bv3 = not na(pvP1) and not na(pvP2) and (pvP1 < pvP2 and pvR1 > pvR2 or pvP1 > pvP2) or botReady and not na(atrV) and atrV > 0 and not na(botAnc) and ta.lowest(low, 3) - botAnc >= botHLatr * atrV
+bv3 = not na(pvP1) and not na(pvP2) and (pvP1 < pvP2 and pvR1 > pvR2 or pvP1 > pvP2) or botReady and not na(atrV) and atrV > 0 and not na(botAnc) and botLo3 - botAnc >= botHLatr * atrV
 bv4 = na(volRatio) ? botCapX >= botRngX : botCap >= botVolX
 bv5 = not na(emaS) and close > emaS
 bv6 = not na(macdH) and macdH > macdH[1]
@@ -2156,13 +2163,13 @@ f_botSay() =>
     if not botOn or na(botAV)
         _s := "—"
     else if botMature
-        _s := "MATURED — a trend now, not a bottom. " + str.tostring(cycPct, "#.#") + "% above the cycle low's average cost, and the current pullback is only " + str.tostring(corrDD, "#.#") + "% deep — too shallow to call a bottom. Judge this on rows 1-10 and 13."
+        _s := "MATURED — a trend now, not a bottom. " + f_n1(cycPct) + "% above the cycle low's average cost, and the current pullback is only " + f_n1(corrDD) + "% deep — too shallow to call a bottom. Judge this on rows 1-10 and 13."
     else if botFail and bar_index - botSigBar <= botLook
-        _s := "⚠ THE BOTTOM LABEL ON THIS CHART FAILED — price went under " + str.tostring(botSigLo, format.mintick) + ", the low it was built on, " + str.tostring(bar_index - botSigBar, "#") + " bars after it printed. Ignore that label. Score is " + str.tostring(botScr, "#") + "/7 now and needs a fresh " + str.tostring(botNeed, "#") + "."
+        _s := "⚠ THE BOTTOM LABEL ON THIS CHART FAILED — price went under " + f_px(botSigLo) + ", the low it was built on, " + f_n0(bar_index - botSigBar) + " bars after it printed. Ignore that label. Score is " + f_n0(botScr) + "/7 now and needs a fresh " + f_n0(botNeed) + "."
     else if not botReady
-        _s := "TOO EARLY — only " + str.tostring(botN, "#") + " bar(s) since the " + botSrc + " at " + str.tostring(botAnc, format.mintick) + ". Let a base build before buying."
+        _s := "TOO EARLY — only " + f_n0(botN) + " bar(s) since the " + botSrc + " at " + f_px(botAnc) + ". Let a base build before buying."
     else
-        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + str.tostring(botScr, "#") + "/7 " + (botConf ? "✓ CONFIRMED — buy zone" : botScr >= botNeed - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + " (" + botSrc + " " + str.tostring(botAnc, format.mintick) + ").  " + f_botTicks() + (botAbove ? "  ·  " + str.tostring(botDistP, "#.#") + "% above avg cost " + str.tostring(botAV, format.mintick) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + str.tostring(botAV, format.mintick) + ", buyers off the low are offside")
+        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + f_n0(botScr) + "/7 " + (botConf ? "✓ CONFIRMED — buy zone" : botScr >= botNeed - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + " (" + botSrc + " " + f_px(botAnc) + ").  " + f_botTicks() + (botAbove ? "  ·  " + f_n1(botDistP) + "% above avg cost " + f_px(botAV) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + f_px(botAV) + ", buyers off the low are offside")
     _s
 botSay = f_botSay()
 
@@ -2193,15 +2200,15 @@ f_bigSay() =>
     else if not bqHave
         _b := "NO FINANCIALS for this symbol — this row only grades individual stocks. Judge indices, metals and crypto on rows 1-11 and 13."
     else if bigBuy
-        _b := "★ BUY BIG AND HOLD — bottom confirmed, business qualifies " + str.tostring(bqN, "#") + "/4, " + str.tostring(botDD, "#.#") + "% off the high, 200-bar MA still rising. Size up and hold; this is the compounding entry."
+        _b := "★ BUY BIG AND HOLD — bottom confirmed, business qualifies " + f_n0(bqN) + "/4, " + f_n1(botDD) + "% off the high, 200-bar MA still rising. Size up and hold; this is the compounding entry."
     else if not botConf
-        _b := "NOT YET — the bottom is not confirmed on the chart (row 11). Business grade " + str.tostring(bqN, "#") + "/4" + (bqN >= bigNeed ? ", which is fine — it is the chart that is not ready." : ", so it would not qualify anyway.")
+        _b := "NOT YET — the bottom is not confirmed on the chart (row 11). Business grade " + f_n0(bqN) + "/4" + (bqN >= bigNeed ? ", which is fine — it is the chart that is not ready." : ", so it would not qualify anyway.")
     else if not bqTrend
         _b := "NO — the 200-bar MA is LOWER than a year ago. This is a broken business, not a discount. A declining company prints washouts and oversold RSI the whole way down. Do not hold this one."
     else if bqN < bigNeed
-        _b := "NO — the chart bottomed but the business does not qualify (" + str.tostring(bqN, "#") + "/4): " + (bqProf ? "" : "not profitable · ") + (bqGrow ? "" : "revenue not growing · ") + (bqRoe ? "" : "ROE below " + str.tostring(bigRoe, "#") + "% · ") + (bqDebt ? "" : "debt too high") + ". Trade it, do not hold it."
+        _b := "NO — the chart bottomed but the business does not qualify (" + f_n0(bqN) + "/4): " + (bqProf ? "" : "not profitable · ") + (bqGrow ? "" : "revenue not growing · ") + (bqRoe ? "" : "ROE below " + f_n0(bigRoe) + "% · ") + (bqDebt ? "" : "debt too high") + ". Trade it, do not hold it."
     else
-        _b := "GOOD, NOT GENERATIONAL — bottom confirmed and business qualifies " + str.tostring(bqN, "#") + "/4, but only " + str.tostring(botDD, "#.#") + "% off the high. Normal size. BUY BIG wants " + str.tostring(bigDD, "#") + "% or more."
+        _b := "GOOD, NOT GENERATIONAL — bottom confirmed and business qualifies " + f_n0(bqN) + "/4, but only " + f_n1(botDD) + "% off the high. Normal size. BUY BIG wants " + f_n0(bigDD) + "% or more."
     _b
 bigSay = f_bigSay()
 
@@ -2223,17 +2230,17 @@ f_exitSay() =>
     if not botOn
         _x := "—"
     else if exRoll and exBiz
-        _x := "⛔ SELL EVERYTHING — the 200-bar MA is FALLING and the business is deteriorating (" + str.tostring(bqN, "#") + "/4). Both reasons to own this are gone. This is not a dip to buy."
+        _x := "⛔ SELL EVERYTHING — the 200-bar MA is FALLING and the business is deteriorating (" + f_n0(bqN) + "/4). Both reasons to own this are gone. This is not a dip to buy."
     else if exRoll
-        _x := "EXIT THE LONG-TERM HOLD — the 200-bar MA has rolled over, so the multi-year trend is finished" + (bqHave ? " even though the business still grades " + str.tostring(bqN, "#") + "/4" : "") + ". Close the investment; trade it on rows 1-10 if you still want exposure."
+        _x := "EXIT THE LONG-TERM HOLD — the 200-bar MA has rolled over, so the multi-year trend is finished" + (bqHave ? " even though the business still grades " + f_n0(bqN) + "/4" : "") + ". Close the investment; trade it on rows 1-10 if you still want exposure."
     else if exBiz
-        _x := "WARNING — the business is deteriorating (" + str.tostring(bqN, "#") + "/4)" + (na(revGrowth) or revGrowth >= 0 ? "" : ", revenue " + str.tostring(revGrowth, "#.#") + "%") + ". The trend still holds, but this is how long-term holds die. Stop adding. Exit if the 200-bar MA rolls over."
+        _x := "WARNING — the business is deteriorating (" + f_n0(bqN) + "/4)" + (na(revGrowth) or revGrowth >= 0 ? "" : ", revenue " + f_n1(revGrowth) + "%") + ". The trend still holds, but this is how long-term holds die. Stop adding. Exit if the 200-bar MA rolls over."
     else if exHot
-        _x := "TRIM — " + str.tostring(exStr, "#.#") + " ATR above the 200-bar MA and momentum is fading. Take something off, keep the core, add back nearer " + str.tostring(ma200bar, format.mintick) + "."
+        _x := "TRIM — " + f_n1(exStr) + " ATR above the 200-bar MA and momentum is fading. Take something off, keep the core, add back nearer " + f_px(ma200bar) + "."
     else if profOn and profLost
-        _x := "IF YOU OWN IT — HOLD, BUT WATCH. Closed below the " + str.tostring(profWeeks, "#") + "-week EMA " + str.tostring(profEma, format.mintick) + ". First crack, not yet an exit: the 200-bar MA is still rising. Stop adding until it is reclaimed."
+        _x := "IF YOU OWN IT — HOLD, BUT WATCH. Closed below the " + f_n0(profWeeks) + "-week EMA " + f_px(profEma) + ". First crack, not yet an exit: the 200-bar MA is still rising. Stop adding until it is reclaimed."
     else
-        _x := "IF YOU OWN IT — HOLD. Nothing is broken: 200-bar MA still rising" + (bqHave ? ", business " + str.tostring(bqN, "#") + "/4" : "") + (na(exStr) ? "" : ", " + str.tostring(exStr, "#.#") + " ATR above the long-term mean") + ". Do nothing."
+        _x := "IF YOU OWN IT — HOLD. Nothing is broken: 200-bar MA still rising" + (bqHave ? ", business " + f_n0(bqN) + "/4" : "") + (na(exStr) ? "" : ", " + f_n1(exStr) + " ATR above the long-term mean") + ". Do nothing."
     _x
 exitSay = f_exitSay()
 
@@ -2242,39 +2249,39 @@ f_whatToDo() =>
     if not boOn
         _a := "—"
     else if thinHist
-        _a := "DO NOTHING — only " + str.tostring(histDays, "#") + " days of history. Nothing here is trustworthy yet."
+        _a := "DO NOTHING — only " + f_n0(histDays) + " days of history. Nothing here is trustworthy yet."
     else if boTrapUp
-        _a := "FAILED BREAKOUT" + (boFailATH ? " AT ALL-TIME HIGHS" : "") + " — price broke " + str.tostring(boLvlAt, format.mintick) + " and has closed back UNDER it. If you bought that break you are offside: get out. Do not re-buy until a close back above " + str.tostring(boLvlAt, format.mintick) + "."
+        _a := "FAILED BREAKOUT" + (boFailATH ? " AT ALL-TIME HIGHS" : "") + " — price broke " + f_px(boLvlAt) + " and has closed back UNDER it. If you bought that break you are offside: get out. Do not re-buy until a close back above " + f_px(boLvlAt) + "."
     else if boTrapDn
-        _a := "FAILED BREAKDOWN — price broke " + str.tostring(boLvlAt, format.mintick) + " and has closed back ABOVE it. Shorts are trapped; cover. The level has to fail again to mean anything."
+        _a := "FAILED BREAKDOWN — price broke " + f_px(boLvlAt) + " and has closed back ABOVE it. Shorts are trapped; cover. The level has to fail again to mean anything."
     else if boPending or boBrkUnconf
         _a := "WAIT for this bar to close. A level is giving way intrabar and it can still un-happen."
     else if profOn and profLost
-        _a := "EXIT. Close is below the " + str.tostring(profWeeks, "#") + "-week EMA (" + str.tostring(profEma, format.mintick) + "). Re-entry only on a close back above it."
+        _a := "EXIT. Close is below the " + f_n0(profWeeks) + "-week EMA (" + f_px(profEma) + "). Re-entry only on a close back above it."
     else if boDir == -1 and boGate and boScore >= 6
-        _a := "EXIT / STAY OUT. Stop for a short " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", target " + str.tostring(boTarget, format.mintick)) + ". Do not buy until a close back above " + str.tostring(boLvlAt, format.mintick) + "."
+        _a := "EXIT / STAY OUT. Stop for a short " + f_px(boStop) + (na(boTarget) ? "" : ", target " + f_px(boTarget)) + ". Do not buy until a close back above " + f_px(boLvlAt) + "."
     else if boDir == 1 and boGate and boScore >= 6
-        _a := (bothSell ? "BUY SMALL — against the trend. " : "BUY ") + (na(boSizePc) ? "" : str.tostring(boSizePc, "#.#") + "% of account at " + str.tostring(riskPct, "#.#") + "% risk") + ". Stop " + str.tostring(boStop, format.mintick) + (na(boTarget) ? "" : ", first target " + str.tostring(boTarget, format.mintick) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "." + (bothSell ? " Row 3 reads sell side: a confirmed break up here is an early turn, not a trend trade." : "")
+        _a := (bothSell ? "BUY SMALL — against the trend. " : "BUY ") + (na(boSizePc) ? "" : f_n1(boSizePc) + "% of account at " + f_n1(riskPct) + "% risk") + ". Stop " + f_px(boStop) + (na(boTarget) ? "" : ", first target " + f_px(boTarget) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "." + (bothSell ? " Row 3 reads sell side: a confirmed break up here is an early turn, not a trend trade." : "")
     else if profOn and (profReclaim or profRespect or profAtLine) and not emaOver
-        _a := (trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + str.tostring(profEma, format.mintick) + " — the " + str.tostring(profWeeks, "#") + "-week EMA. Stop on a CLOSE below it." + (trend == -1 ? "" : " Size up here because the stop is close.") + f_emaCaveat()
+        _a := (trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + f_px(profEma) + " — the " + f_n0(profWeeks) + "-week EMA. Stop on a CLOSE below it." + (trend == -1 ? "" : " Size up here because the stop is close.") + f_emaCaveat()
     else if boFlipLive and boFlipRe and not emaOver
-        _a := (bothSell ? "COUNTER-TREND BOUNCE ONLY at " : trend == -1 ? "HALF SIZE AT MOST at " : "BUY the retest of ") + str.tostring(boFlipLvl, format.mintick) + ". Stop just under it — tightest stop available on this chart." + (bothSell ? " Both models read sell side, so this is a trade against the trend, not an entry." : "")
+        _a := (bothSell ? "COUNTER-TREND BOUNCE ONLY at " : trend == -1 ? "HALF SIZE AT MOST at " : "BUY the retest of ") + f_px(boFlipLvl) + ". Stop just under it — tightest stop available on this chart." + (bothSell ? " Both models read sell side, so this is a trade against the trend, not an entry." : "")
     else if emaOver
-        _a := "DO NOT START HERE. " + str.tostring(emaX21, "#.#") + " ATR above the " + str.tostring(emaSlowLen, "#") + " EMA. Hold what you have; add only back near " + str.tostring(emaS, format.mintick) + "."
+        _a := "DO NOT START HERE. " + f_n1(emaX21) + " ATR above the " + f_n0(emaSlowLen) + " EMA. Hold what you have; add only back near " + f_px(emaS) + "."
     else if profOn and profAbove and not na(profBars) and profBars >= 3 and trend == 1
-        _a := "HOLD. Exit is a CLOSE below " + str.tostring(profEma, format.mintick) + ". Add only on a pullback back toward it — do not add " + (na(profDist) ? "out here." : str.tostring(profDist, "#.#") + " ATR above it.")
+        _a := "HOLD. Exit is a CLOSE below " + f_px(profEma) + ". Add only on a pullback back toward it — do not add " + (na(profDist) ? "out here." : f_n1(profDist) + " ATR above it.")
     else if botOn and botConf and trend == -1
-        _a := "SCALE IN SLOWLY — bottom score " + str.tostring(botScr, "#") + "/7. ATR model still bearish, but price holds above the average cost since the low (" + str.tostring(botAV, format.mintick) + ") and that line is RISING. Quarter size · add above " + str.tostring(moneyLine, format.mintick) + " · out below " + str.tostring(botAV, format.mintick) + "."
+        _a := "SCALE IN SLOWLY — bottom score " + f_n0(botScr) + "/7. ATR model still bearish, but price holds above the average cost since the low (" + f_px(botAV) + ") and that line is RISING. Quarter size · add above " + f_px(moneyLine) + " · out below " + f_px(botAV) + "."
     else if suIsBase
-        _a := "DO NOTHING YET — mid-base, nothing to buy here. LADDER (" + tfWord + " closes): " + (profOn and not na(profEma) ? "above " + str.tostring(profEma, format.mintick) + " " + str.tostring(profWeeks, "#") + "wEMA = pullback over · " : "") + "above " + str.tostring(moneyLine, format.mintick) + " = ATR turns bullish · above " + str.tostring(suHi, format.mintick) + " = base breaks, full size · below " + str.tostring(suLo, format.mintick) + " = all off."
+        _a := "DO NOTHING YET — mid-base, nothing to buy here. LADDER (" + tfWord + " closes): " + (profOn and not na(profEma) ? "above " + f_px(profEma) + " " + f_n0(profWeeks) + "wEMA = pullback over · " : "") + "above " + f_px(moneyLine) + " = ATR turns bullish · above " + f_px(suHi) + " = base breaks, full size · below " + f_px(suLo) + " = all off."
     else if trend == 1 and lnBear
-        _a := "HOLD ONLY IF ALREADY LONG — and do not add. The ATR line is still bullish but " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines are. That gap usually closes by the ATR line giving way. Exit on a close below " + str.tostring(moneyLine, format.mintick) + "."
+        _a := "HOLD ONLY IF ALREADY LONG — and do not add. The ATR line is still bullish but " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines are. That gap usually closes by the ATR line giving way. Exit on a close below " + f_px(moneyLine) + "."
     else if trend == 1
-        _a := "HOLD. Only act if a " + tfWord + " candle CLOSES below " + str.tostring(moneyLine, format.mintick) + "."
+        _a := "HOLD. Only act if a " + tfWord + " candle CLOSES below " + f_px(moneyLine) + "."
     else if lnBull
-        _a := "STAY OUT, but watch closely — the lines have turned up while the ATR model has not. It confirms on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away). Anything bought before that is a scout entry against the regime."
+        _a := "STAY OUT, but watch closely — the lines have turned up while the ATR model has not. It confirms on a " + tfWord + " close above " + f_px(moneyLine) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away). Anything bought before that is a scout entry against the regime."
     else
-        _a := "STAY OUT. Your only entry trigger is a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away)."
+        _a := "STAY OUT. Your only entry trigger is a " + tfWord + " close above " + f_px(moneyLine) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away)."
     _a
 
 boWTD = f_whatToDo()
@@ -2288,31 +2295,31 @@ f_boSummary(table _t) =>
         vCol = boTrapUp or boTrapDn ? color.new(#d50000, 0) : bothBuy ? color.new(#00c853, 0) : bothSell ? color.new(#d50000, 0) : color.new(color.orange, 15)
 
         table.cell(_t, 0, 0, "1  ATR MODEL", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 0, (atrBull ? "▲ BULLISH   —   STAY LONG above " + str.tostring(moneyLine, format.mintick) + "   ·   SELL on a " + tfWord + " close BELOW it" : "▼ BEARISH   —   STAY OUT below " + str.tostring(moneyLine, format.mintick) + "   ·   BUY on a " + tfWord + " close ABOVE it") + "   (" + str.tostring(math.abs(moneyLine - close) / close * 100, "#.#") + "% " + (moneyLine > close ? "above" : "below") + " price)", text_color = color.white, bgcolor = aCol, text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 0, (atrBull ? "▲ BULLISH   —   STAY LONG above " + f_px(moneyLine) + "   ·   SELL on a " + tfWord + " close BELOW it" : "▼ BEARISH   —   STAY OUT below " + f_px(moneyLine) + "   ·   BUY on a " + tfWord + " close ABOVE it") + "   (" + str.tostring(math.abs(moneyLine - close) / close * 100, "#.#") + "% " + (moneyLine > close ? "above" : "below") + " price)", text_color = color.white, bgcolor = aCol, text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 1, "2  LINES", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 1, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + str.tostring(profWeeks, "#") + "wEMA " + (lnV1 > 0 ? "▲ above" : "▼ below") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : "▼ below") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : "▼ below"), text_color = color.white, bgcolor = lCol, text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 1, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + f_n0(profWeeks) + "wEMA " + (lnV1 > 0 ? "▲ above" : "▼ below") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : "▼ below") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : "▼ below"), text_color = color.white, bgcolor = lCol, text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 2, "3  VERDICT", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 2, (boTrapUp ? "⚠ FAILED BREAKOUT — the break was retaken" : boTrapDn ? "⚠ FAILED BREAKDOWN — shorts trapped" : agreeWord) + (boDir == 0 ? "   ·   nothing has broken recently" : "   ·   " + f_boKind(boKindAt) + " broke " + str.tostring(boBrkAge, "#") + " bar(s) ago, " + str.tostring(boScore, "#") + "/10" + (boBrkUnconf ? " ⧗ bar not closed" : boGate ? " ✓gate" : " ✗gate")), text_color = color.white, bgcolor = vCol, text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 2, (boTrapUp ? "⚠ FAILED BREAKOUT — the break was retaken" : boTrapDn ? "⚠ FAILED BREAKDOWN — shorts trapped" : agreeWord) + (boDir == 0 ? "   ·   nothing has broken recently" : "   ·   " + f_boKind(boKindAt) + " broke " + f_n0(boBrkAge) + " bar(s) ago, " + f_n0(boScore) + "/10" + (boBrkUnconf ? " ⧗ bar not closed" : boGate ? " ✓gate" : " ✗gate")), text_color = color.white, bgcolor = vCol, text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 3, "4  ▶ DO THIS", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 3, boWTD, text_color = color.white, bgcolor = color.new(#00695c, 10), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 4, "5  NUMBERS", text_color = color.white, bgcolor = color.new(color.navy, 15), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 4, boDir == 0 or na(boStop) ? "no live setup — nothing to size yet" : (boGate ? "" : boPending ? "⧗ NOT SETTLED, bar still filling — reference only:  " : "⚠ GATE FAILED — reference only, do NOT size off this:  ") + "entry " + str.tostring(boEntry, format.mintick) + "   stop " + str.tostring(boStop, format.mintick) + "   (" + str.tostring(boRisk / boEntry * 100, "#.#") + "% risk)" + (na(boTarget) ? "" : "   target " + str.tostring(boTarget, format.mintick) + boTgtSrc) + (na(boRR) ? "" : "   R:R " + str.tostring(boRR, "#.##")) + (na(boSizePc) ? "" : "   size " + str.tostring(boSizePc, "#.#") + "%" + (not na(boSizeRaw) and boSizeRaw > boMaxSize + 0.05 ? " (capped, risk maths said " + str.tostring(boSizeRaw, "#.#") + "%)" : "")), text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 4, boDir == 0 or na(boStop) ? "no live setup — nothing to size yet" : (boGate ? "" : boPending ? "⧗ NOT SETTLED, bar still filling — reference only:  " : "⚠ GATE FAILED — reference only, do NOT size off this:  ") + "entry " + f_px(boEntry) + "   stop " + f_px(boStop) + "   (" + f_n1(boRisk / boEntry * 100) + "% risk)" + (na(boTarget) ? "" : "   target " + f_px(boTarget) + boTgtSrc) + (na(boRR) ? "" : "   R:R " + str.tostring(boRR, "#.##")) + (na(boSizePc) ? "" : "   size " + f_n1(boSizePc) + "%" + (not na(boSizeRaw) and boSizeRaw > boMaxSize + 0.05 ? " (capped, risk maths said " + f_n1(boSizeRaw) + "%)" : "")), text_color = color.white, bgcolor = color.new(color.navy, 35), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 5, "6  TREND", text_color = color.white, bgcolor = color.new(#ffd600, 30), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 5, na(profEma) ? "—" : (profAbove ? "above" : "below") + " the " + str.tostring(profWeeks, "#") + "wEMA " + str.tostring(profEma, format.mintick) + (profAbove and not na(profBars) ? ", held " + str.tostring(profBars, "#") + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + str.tostring(profGain, "#.#") + "% since reclaim") + (na(emaX21) ? "" : "   ·   " + str.tostring(emaX21, "#.#") + "x ATR from the 21" + (emaOver ? " ⚠ extended" : "")), text_color = color.white, bgcolor = profAbove ? color.new(#00c853, 45) : color.new(#d50000, 45), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 5, na(profEma) ? "—" : (profAbove ? "above" : "below") + " the " + f_n0(profWeeks) + "wEMA " + f_px(profEma) + (profAbove and not na(profBars) ? ", held " + f_n0(profBars) + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + f_n1(profGain) + "% since reclaim") + (na(emaX21) ? "" : "   ·   " + f_n1(emaX21) + "x ATR from the 21" + (emaOver ? " ⚠ extended" : "")), text_color = color.white, bgcolor = profAbove ? color.new(#00c853, 45) : color.new(#d50000, 45), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 6, "7  MOMENTUM", text_color = color.white, bgcolor = color.new(color.purple, 25), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 6, "RSI " + (na(rsiV) ? "—" : str.tostring(rsiV, "#") + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : str.tostring(adxV, "#") + " " + f_adxWord(adxV)), text_color = color.white, bgcolor = color.new(color.purple, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 6, "RSI " + (na(rsiV) ? "—" : f_n0(rsiV) + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : f_n0(adxV) + " " + f_adxWord(adxV)), text_color = color.white, bgcolor = color.new(color.purple, 50), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 7, "8  VOLUME", text_color = color.white, bgcolor = color.new(color.teal, 25), text_halign = text.align_left, text_size = txtSize)
         table.cell(_t, 1, 7, na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light"))), text_color = color.white, bgcolor = color.new(color.teal, 50), text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 8, "9  LEVELS", text_color = color.white, bgcolor = color.new(color.olive, 20), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 8, (na(lvlR) or lvlRfar ? "resistance — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "resistance " + str.tostring(lvlR, format.mintick) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + str.tostring(lvlMaxATR, "#") + " ATR" : "support " + str.tostring(lvlS, format.mintick) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + str.tostring(boFlipLvl, format.mintick) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 8, (na(lvlR) or lvlRfar ? "resistance — none within " + f_n0(lvlMaxATR) + " ATR" : "resistance " + f_px(lvlR) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + f_n0(lvlMaxATR) + " ATR" : "support " + f_px(lvlS) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + f_px(boFlipLvl) + (boFlipRe ? " ✓held" : " ·untested")), text_color = color.white, bgcolor = color.new(color.olive, 50), text_halign = text.align_left, text_size = txtSize)
 
         bCol = not botOn or na(botAV) ? color.new(color.gray, 40) : botConf ? color.new(#00c853, 20) : botAbove ? color.new(color.orange, 25) : color.new(#d50000, 25)
         gCol = not bqHave ? color.new(color.gray, 40) : bigBuy ? color.new(#1b5e20, 0) : botConf and bqN >= bigNeed ? color.new(#00c853, 25) : color.new(color.black, 20)
@@ -2327,7 +2334,7 @@ f_boSummary(table _t) =>
         table.cell(_t, 1, 10, botSay, text_color = color.white, bgcolor = bCol, text_halign = text.align_left, text_size = txtSize)
 
         table.cell(_t, 0, 9, "10  STRUCTURE", text_color = color.white, bgcolor = color.new(#2962ff, 25), text_halign = text.align_left, text_size = txtSize)
-        table.cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? str.tostring(suBars, "#") + "-bar base " + str.tostring(suLo, format.mintick) + "-" + str.tostring(suHi, format.mintick) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + str.tostring(wgApexN, "#") + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + str.tostring(suTgt1, format.mintick)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
+        table.cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? f_n0(suBars) + "-bar base " + f_px(suLo) + "-" + f_px(suHi) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + f_n0(wgApexN) + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + f_px(suTgt1)), text_color = color.white, bgcolor = color.new(#2962ff, 50), text_halign = text.align_left, text_size = txtSize)
     0
 
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
