@@ -2512,6 +2512,9 @@ botRec   = input.int(30, "How recently those must have happened (bars)", minval 
 botVolX  = input.float(2.0, "Capitulation: down-bar volume vs average", minval = 1.2, maxval = 10.0, step = 0.1, group = "v64 · BOTTOM SCORE")
 botPivL  = input.int(5, "Pivot left bars", minval = 2, maxval = 20, group = "v64 · BOTTOM SCORE")
 botPivR  = input.int(3, "Pivot right bars (this is the confirmation lag)", minval = 1, maxval = 20, group = "v64 · BOTTOM SCORE")
+botRsiUp = input.float(45.0, "Oversold level for a PULLBACK in an uptrend", minval = 20.0, maxval = 60.0, step = 1.0, group = "v64 · BOTTOM SCORE")
+botRngX  = input.float(2.0, "Capitulation range (x ATR) when the symbol reports no volume", minval = 1.0, maxval = 8.0, step = 0.1, group = "v64 · BOTTOM SCORE")
+botHLatr = input.float(0.5, "A holding low must sit this many ATR above the anchor", minval = 0.1, maxval = 5.0, step = 0.1, group = "v64 · BOTTOM SCORE")
 botNeed  = input.int(5, "Checks required to call it a bottom (of 7)", minval = 3, maxval = 7, group = "v64 · BOTTOM SCORE")
 botCool  = input.int(20, "Minimum bars between BOTTOM labels", minval = 1, maxval = 200, group = "v64 · BOTTOM SCORE")
 
@@ -2519,6 +2522,13 @@ botDD   = botHi > 0 ? (botHi - close) / botHi * 100 : na
 botRsLo = ta.lowest(rsiV, botRec)
 botCapV = close < open and volAvg > 0 ? volume / volAvg : 0.0
 botCap  = ta.highest(botCapV, botRec)
+// Capitulation measured by RANGE instead of volume, for TVC:GOLD, indices and
+// FX feeds that report none. The old code passed that check for free on those
+// symbols, which quietly inflated their score by one on exactly the charts
+// where the least is known. A wide-range down bar is the same event volume
+// would have shown: holders leaving in a hurry.
+botCapR = close < open and not na(atrV) and atrV > 0 ? ta.tr / atrV : 0.0
+botCapX = ta.highest(botCapR, botRec)
 botPv   = ta.pivotlow(low, botPivL, botPivR)
 var float pvP1 = na
 var float pvP2 = na
@@ -2538,10 +2548,26 @@ if not na(botPv)
 //   Symbols with no volume feed pass this, matching how the breakout gate
 //   already handles them, rather than being penalised for their data.
 // 5 RECLAIM, 6 MOMENTUM, 7 COST - the three that need bars after the low.
-bv1 = not na(botDD) and botDD >= botDeep
-bv2 = not na(botRsLo) and botRsLo <= botRsiOS
-bv3 = not na(pvP1) and not na(pvP2) and (pvP1 < pvP2 and pvR1 > pvR2 or pvP1 > pvP2)
-bv4 = na(volRatio) ? true : botCap >= botVolX
+// Four of these were written for a cycle bottom after a bear market and were
+// unreachable, or free, on a pullback inside an uptrend - which is why gold
+// could never score well no matter what price did.
+//
+// 1 DEPTH scales to the anchor. A cycle bottom needs a real washout; a
+//   correction only has to be as deep as a correction, so it is measured
+//   against the depth the pullback actually reached.
+// 2 OVERSOLD scales too. Corrections in a strong trend bottom at RSI 40-45
+//   and essentially never print 32, so the strict level made this check
+//   impossible to pass on the exact charts worth buying.
+// 3 STRUCTURE no longer waits on two confirmed pivots, which on a weekly
+//   chart is weeks of lag and was the single largest delay in the whole
+//   engine. A low that has simply refused to be retested - every recent bar
+//   holding clear of the anchor, well after a base should have formed -
+//   is the same information, available now instead of three bars late.
+// 4 CAPITULATION falls back to range where there is no volume feed.
+bv1 = useCorr ? not na(corrDD) and corrDD >= botCorrMin : not na(botDD) and botDD >= botDeep
+bv2 = not na(botRsLo) and botRsLo <= (useCorr ? botRsiUp : botRsiOS)
+bv3 = not na(pvP1) and not na(pvP2) and (pvP1 < pvP2 and pvR1 > pvR2 or pvP1 > pvP2) or botReady and not na(atrV) and atrV > 0 and not na(botAnc) and ta.lowest(low, 3) - botAnc >= botHLatr * atrV
+bv4 = na(volRatio) ? botCapX >= botRngX : botCap >= botVolX
 bv5 = not na(emaS) and close > emaS
 bv6 = not na(macdH) and macdH > macdH[1]
 bv7 = botAbove and botRise
