@@ -2156,7 +2156,12 @@ alertcondition(botSig, title = "Bottom confirmed", message = "BOTTOM confirmed o
 f_botTicks() =>
     (bv1 ? "✓" : "✗") + "washout " + (bv2 ? "✓" : "✗") + "oversold " + (bv3 ? "✓" : "✗") + "structure " + (bv4 ? "✓" : "✗") + "volume " + (bv5 ? "✓" : "✗") + "21EMA " + (bv6 ? "✓" : "✗") + "MACD " + (bv7 ? "✓" : "✗") + "cost"
 
-plot(botOn and not syncMode ? botAV : na, "Bottom line — cycle-low VWAP", color = color.new(#00bfa5, 0), linewidth = 3)
+// The plot breaks on the bar the anchor switches. Without the gap the line
+// jumps from one average cost straight to the other and TradingView draws the
+// connector, which on gold was a near-vertical teal line a thousand points
+// long - a price level that never existed, through bars nobody traded at.
+botJump = useCorr != useCorr[1]
+plot(botOn and not syncMode and not botJump ? botAV : na, "Bottom line — average cost since the anchor low", color = color.new(#00bfa5, 0), linewidth = 3)
 
 f_botSay() =>
     _s = ""
