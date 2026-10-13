@@ -2293,7 +2293,7 @@ f_whatToDo() =>
     else if boDir == 1 and boGate and boScore >= 6
         _a := (bothSell ? "BUY SMALL — against the trend. " : "BUY ") + (na(boSizePc) ? "" : f_n1(boSizePc) + "% of account at " + f_n1(riskPct) + "% risk") + ". Stop " + f_px(boStop) + (na(boTarget) ? "" : ", first target " + f_px(boTarget) + (na(boRR) ? "" : " (R:R " + str.tostring(boRR, "#.##") + ")")) + "." + (bothSell ? " Row 3 reads sell side: a confirmed break up here is an early turn, not a trend trade." : "")
     else if profOn and (profReclaim or profRespect or profAtLine) and not emaOver
-        _a := (trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + f_px(profEma) + " — the " + f_n0(profWeeks) + "-week EMA. Stop on a CLOSE below it." + (trend == -1 ? "" : " Size up here because the stop is close.") + f_emaCaveat()
+        _a := (ltDown ? "COUNTER-TREND TRADE ONLY near " : trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + f_px(profEma) + " — the " + f_n0(profWeeks) + "-week EMA. Stop on a CLOSE below it." + (ltDown ? " The 200-bar MA is falling, so this is a bounce to trade, not a position to build. Keep it small." : trend == -1 ? "" : " Size up here because the stop is close.") + f_emaCaveat()
     else if boFlipLive and boFlipRe and not emaOver
         _a := (bothSell ? "COUNTER-TREND BOUNCE ONLY at " : trend == -1 ? "HALF SIZE AT MOST at " : "BUY the retest of ") + f_px(boFlipLvl) + ". Stop just under it — tightest stop available on this chart." + (bothSell ? " Both models read sell side, so this is a trade against the trend, not an entry." : "")
     else if emaOver
