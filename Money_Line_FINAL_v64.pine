@@ -2453,6 +2453,7 @@ botVolX  = input.float(2.0, "Capitulation: down-bar volume vs average", minval =
 botPivL  = input.int(5, "Pivot left bars", minval = 2, maxval = 20, group = "v64 · BOTTOM SCORE")
 botPivR  = input.int(3, "Pivot right bars (this is the confirmation lag)", minval = 1, maxval = 20, group = "v64 · BOTTOM SCORE")
 botNeed  = input.int(5, "Checks required to call it a bottom (of 7)", minval = 3, maxval = 7, group = "v64 · BOTTOM SCORE")
+botCool  = input.int(20, "Minimum bars between BOTTOM labels", minval = 1, maxval = 200, group = "v64 · BOTTOM SCORE")
 
 botHi   = ta.highest(high, botLook)
 botDD   = botHi > 0 ? (botHi - close) / botHi * 100 : na
@@ -2487,7 +2488,6 @@ bv6 = not na(macdH) and macdH > macdH[1]
 bv7 = botAbove and botRise
 botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ? 1 : 0) + (bv6 ? 1 : 0) + (bv7 ? 1 : 0)
 botConf = botScr >= botNeed and not botMature and botReady
-botSig  = botOn and botConf and not botConf[1]
 
 // A BOTTOM label that later gets undercut is the most dangerous mark on this
 // chart: it says BUY, and then it stays there forever while price makes new
@@ -2495,10 +2495,21 @@ botSig  = botOn and botConf and not botConf[1]
 // since the low" in the same breath - the label was real when it fired and
 // had been invalidated by the time anyone read it. The script already calls a
 // retaken breakout a FAILED BREAKOUT; a bottom deserves the same honesty.
+// NIFTY printed BOTTOM on several adjacent bars. botConf is a standing state,
+// not an event, so whenever the score wobbles across the threshold - 5, 4, 5
+// again - the rising edge fires again and the chart collects a cluster of
+// labels that each look like a fresh signal. One bottom is one signal, so a
+// repeat inside the cooldown is suppressed. A failure clears the cooldown,
+// because after price undercuts the low the next confirmation is genuinely a
+// different bottom rather than the same one flickering.
+var int botLastSig = na
 var float botSigLo = na
 var int botSigBar = na
 var bool botFail = false
+botSigRaw = botOn and botConf and not botConf[1]
+botSig = botSigRaw and (na(botLastSig) or bar_index - botLastSig >= botCool or botFail)
 if botSig
+    botLastSig := bar_index
     botSigLo := botAnc
     botSigBar := bar_index
     botFail := false
