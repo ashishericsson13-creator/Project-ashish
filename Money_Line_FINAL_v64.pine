@@ -2574,7 +2574,7 @@ f_bigSay() =>
     if not botOn
         _b := "—"
     else if not bqHave
-        _b := "NO FINANCIALS for this symbol — this row only grades individual stocks. Judge indices, metals and crypto on rows 1-11."
+        _b := "NO FINANCIALS for this symbol — this row only grades individual stocks. Judge indices, metals and crypto on rows 1-11 and 13."
     else if bigBuy
         _b := "★ BUY BIG AND HOLD — bottom confirmed, business qualifies " + str.tostring(bqN, "#") + "/4, " + str.tostring(botDD, "#.#") + "% off the high, 200-bar MA still rising. Size up and hold; this is the compounding entry."
     else if not botConf
@@ -2632,9 +2632,9 @@ f_exitSay() =>
     else if exHot
         _x := "TRIM — " + str.tostring(exStr, "#.#") + " ATR above the 200-bar MA and momentum is fading. Take something off, keep the core, add back nearer " + str.tostring(ma200bar, format.mintick) + "."
     else if profOn and profLost
-        _x := "HOLD, BUT WATCH — closed below the " + str.tostring(profWeeks, "#") + "-week EMA " + str.tostring(profEma, format.mintick) + ". First crack, and not yet an exit: the 200-bar MA is still rising. Stop adding until it is reclaimed."
+        _x := "IF YOU OWN IT — HOLD, BUT WATCH. Closed below the " + str.tostring(profWeeks, "#") + "-week EMA " + str.tostring(profEma, format.mintick) + ". First crack, not yet an exit: the 200-bar MA is still rising. Stop adding until it is reclaimed."
     else
-        _x := "HOLD — nothing is broken. 200-bar MA still rising" + (bqHave ? ", business " + str.tostring(bqN, "#") + "/4" : "") + (na(exStr) ? "" : ", " + str.tostring(exStr, "#.#") + " ATR above the long-term mean") + ". Do nothing."
+        _x := "IF YOU OWN IT — HOLD. Nothing is broken: 200-bar MA still rising" + (bqHave ? ", business " + str.tostring(bqN, "#") + "/4" : "") + (na(exStr) ? "" : ", " + str.tostring(exStr, "#.#") + " ATR above the long-term mean") + ". Do nothing."
     _x
 exitSay = f_exitSay()
 
