@@ -2211,6 +2211,33 @@ f_botSay() =>
     _s
 botSay = f_botSay()
 
+// ─── BOTTOM CALL ───
+// Row 10 reports the score. This one answers the question in plain words -
+// is this the low, is it forming, or is it still a long way off - and names
+// the one thing that would move it to the next stage. The score is evidence;
+// this is the verdict, and most of the time the verdict is "not yet".
+f_botCall() =>
+    _c = ""
+    _gap = botNeedN - botScr
+    if not botOn
+        _c := "—"
+    else if botMature
+        _c := "NOT A BOTTOM QUESTION — price is a long way above its low. Judge this as a trend, on the rows above."
+    else if botConf and trend == 1
+        _c := "✅ THE BOTTOM IS IN — and the ATR model has turned up with it. This is the best entry this chart offers. Stop on a close below " + f_px(botAnc) + "."
+    else if botConf
+        _c := "✅ BOTTOM LOOKS IN — start a first position, small. The ATR model has not turned yet, so add only on a " + tfWord + " close above " + f_px(moneyLine) + ". Stop below " + f_px(botAnc) + "."
+    else if _gap <= 0 and botBlock != ""
+        _c := "⏳ BOTTOM IS FORMING — every check has passed and only one thing is missing: " + botBlock + ". Set an alert. Do not buy ahead of it."
+    else if _gap <= 1
+        _c := "⏳ BOTTOM IS FORMING — one check short" + (botBlock == "" ? "" : ", and " + botBlock) + ". This is where real bottoms begin, but it is not an entry yet."
+    else if botScr >= 2
+        _c := "⚠ BOTTOM IS STILL AWAY — " + f_n0(_gap) + " more signs needed" + (botRFail ? ", and a bottom here already failed" : "") + ". A bounce from here is a trade at best, not an entry."
+    else
+        _c := "⛔ STILL FALLING — almost no sign of a low. Stay out; there is nothing to catch yet."
+    _c
+botCall = f_botCall()
+
 // ── ROW 12 · BUY BIG AND HOLD ───
 bigRoe  = input.float(12.0, "Quality: minimum ROE %", minval = 0.0, maxval = 60.0, step = 1.0, group = "v64 · BUY BIG")
 bigDE   = input.float(1.5, "Quality: maximum debt / equity", minval = 0.1, maxval = 10.0, step = 0.1, group = "v64 · BUY BIG")
@@ -2382,6 +2409,10 @@ f_boSummary(table _t) =>
             _r := _r + 1
         f_cell(_t, 0, _r, "BOTTOM", color.new(#00bfa5, 15))
         f_cell(_t, 1, _r, botSay, bCol)
+        _r := _r + 1
+        cCol = botMature ? color.new(color.gray, 40) : botConf ? color.new(#00c853, 0) : botNeedN - botScr <= 1 ? color.new(color.orange, 10) : botScr >= 2 ? color.new(#d50000, 25) : color.new(#b71c1c, 10)
+        f_cell(_t, 0, _r, "BOTTOM CALL", color.new(#00bfa5, 0))
+        f_cell(_t, 1, _r, botCall, cCol)
         _r := _r + 1
         f_cell(_t, 0, _r, "LONG TERM", color.new(#1b5e20, 10))
         f_cell(_t, 1, _r, ltBad ? exitSay : bigSay, ltCol)
