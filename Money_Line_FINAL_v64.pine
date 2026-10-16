@@ -2363,28 +2363,24 @@ f_boSummary(table _t) =>
         f_cell(_t, 1, 5, na(profEma) ? "—" : (profAbove ? "above" : "below") + " the " + f_n0(profWeeks) + "wEMA " + f_px(profEma) + (profAbove and not na(profBars) ? ", held " + f_n0(profBars) + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + f_n1(profGain) + "% since reclaim") + (na(emaX21) ? "" : "   ·   " + f_n1(emaX21) + "x ATR from the 21" + (emaOver ? " ⚠ extended" : "")), profAbove ? color.new(#00c853, 45) : color.new(#d50000, 45))
 
         f_cell(_t, 0, 6, "7  MOMENTUM", color.new(color.purple, 25))
-        f_cell(_t, 1, 6, "RSI " + (na(rsiV) ? "—" : f_n0(rsiV) + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : f_n0(adxV) + " " + f_adxWord(adxV)), color.new(color.purple, 50))
+        f_cell(_t, 1, 6, "RSI " + (na(rsiV) ? "—" : f_n0(rsiV) + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : f_n0(adxV) + " " + f_adxWord(adxV)) + "   ·   vol " + (na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light")))), color.new(color.purple, 50))
 
-        f_cell(_t, 0, 7, "8  VOLUME", color.new(color.teal, 25))
-        f_cell(_t, 1, 7, na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light"))), color.new(color.teal, 50))
 
-        f_cell(_t, 0, 8, "9  LEVELS", color.new(color.olive, 20))
-        f_cell(_t, 1, 8, (na(lvlR) or lvlRfar ? "resistance — none within " + f_n0(lvlMaxATR) + " ATR" : "resistance " + f_px(lvlR) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + f_n0(lvlMaxATR) + " ATR" : "support " + f_px(lvlS) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + f_px(boFlipLvl) + (boFlipRe ? " ✓held" : " ·untested")), color.new(color.olive, 50))
+        f_cell(_t, 0, 7, "8  LEVELS", color.new(color.olive, 20))
+        f_cell(_t, 1, 7, (na(lvlR) or lvlRfar ? "resistance — none within " + f_n0(lvlMaxATR) + " ATR" : "resistance " + f_px(lvlR) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + f_n0(lvlMaxATR) + " ATR" : "support " + f_px(lvlS) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + f_px(boFlipLvl) + (boFlipRe ? " ✓held" : " ·untested")), color.new(color.olive, 50))
 
         bCol = not botOn or na(botAV) ? color.new(color.gray, 40) : botConf ? color.new(#00c853, 20) : botAbove ? color.new(color.orange, 25) : color.new(#d50000, 25)
-        gCol = not bqHave ? color.new(color.gray, 40) : bigBuy ? color.new(#1b5e20, 0) : botConf and bqN >= bigNeed ? color.new(#00c853, 25) : color.new(color.black, 20)
-        xCol = exRoll and exBiz ? color.new(#b71c1c, 0) : exRoll ? color.new(#d50000, 20) : exBiz or exHot ? color.new(color.orange, 20) : color.new(#1b5e20, 30)
-        f_cell(_t, 0, 12, "13  EXIT", color.new(#b71c1c, 15))
-        f_cell(_t, 1, 12, exitSay, xCol)
+        lBad = exRoll or exBiz or exHot or (profOn and profLost)
+        lCol = not bqHave and not lBad ? color.new(color.gray, 40) : exRoll and exBiz ? color.new(#b71c1c, 0) : exRoll ? color.new(#d50000, 20) : exBiz or exHot ? color.new(color.orange, 20) : bigBuy ? color.new(#1b5e20, 0) : color.new(#1b5e20, 30)
+        f_cell(_t, 0, 10, "11  LONG TERM", color.new(#1b5e20, 10))
+        f_cell(_t, 1, 10, lBad ? exitSay : bigSay, lCol)
 
-        f_cell(_t, 0, 11, "12  BUY BIG", color.new(#1b5e20, 10))
-        f_cell(_t, 1, 11, bigSay, gCol)
 
-        f_cell(_t, 0, 10, "11  BOTTOM", color.new(#00bfa5, 15))
-        f_cell(_t, 1, 10, botSay, bCol)
+        f_cell(_t, 0, 9, "10  BOTTOM", color.new(#00bfa5, 15))
+        f_cell(_t, 1, 9, botSay, bCol)
 
-        f_cell(_t, 0, 9, "10  STRUCTURE", color.new(#2962ff, 25))
-        f_cell(_t, 1, 9, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? f_n0(suBars) + "-bar base " + f_px(suLo) + "-" + f_px(suHi) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + f_n0(wgApexN) + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + f_px(suTgt1)), color.new(#2962ff, 50))
+        f_cell(_t, 0, 8, "9  STRUCTURE", color.new(#2962ff, 25))
+        f_cell(_t, 1, 8, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? f_n0(suBars) + "-bar base " + f_px(suLo) + "-" + f_px(suHi) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + f_n0(wgApexN) + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + f_px(suTgt1)), color.new(#2962ff, 50))
     0
 
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
