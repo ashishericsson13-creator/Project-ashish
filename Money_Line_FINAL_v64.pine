@@ -2225,11 +2225,11 @@ f_botSay() =>
     if not botOn or na(botAV)
         _s := "—"
     else if botMature
-        _s := "MATURED — a trend now, not a bottom. " + f_n1(cycPct) + "% above the cycle low's average cost, and the current pullback is only " + f_n1(corrDD) + "% deep — too shallow to call a bottom. Judge this on rows 1-10 and 13."
+        _s := "MATURED — a trend now, not a bottom. " + f_n1(cycPct) + "% above the cycle low's average cost, and the current pullback is only " + f_n1(corrDD) + "% deep — too shallow to call a bottom. Judge this on the rows above."
     else if not botReady
         _s := "TOO EARLY — only " + f_n0(botN) + " bar(s) since the " + botSrc + " at " + f_px(botAnc) + ". Let a base build before buying."
     else
-        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + f_n0(botScr) + "/" + f_n0(botNeedN) + " " + (botConf ? "✓ CONFIRMED — buy zone" : botBlock != "" ? "⚠ BOUNCE ONLY — " + botBlock : botScr >= botNeedN - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + (botRFail ? "  ·  a bottom here already failed at " + f_px(botSigLo) + ", bar raised" : "") + " (" + botSrc + " " + f_px(botAnc) + ").  " + f_botTicks() + (botAbove ? "  ·  " + f_n1(botDistP) + "% above avg cost " + f_px(botAV) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + f_px(botAV) + ", buyers off the low are offside")
+        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + f_n0(botScr) + " of 8 " + (botConf ? "✓ CONFIRMED — buy zone" : botBlock != "" ? "⚠ BOUNCE ONLY — " + botBlock : botScr >= botNeedN - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + (botRFail ? "  ·  a bottom here already failed at " + f_px(botSigLo) + ", bar raised" : "") + " (" + botSrc + " " + f_px(botAnc) + ").  " + f_botTicks() + (botAbove ? "  ·  " + f_n1(botDistP) + "% above avg cost " + f_px(botAV) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + f_px(botAV) + ", buyers off the low are offside")
     _s
 botSay = f_botSay()
 
@@ -2258,13 +2258,13 @@ f_bigSay() =>
     if not botOn
         _b := "—"
     else if not bqHave
-        _b := "NO FINANCIALS for this symbol — this row only grades individual stocks. Judge indices, metals and crypto on rows 1-11 and 13."
+        _b := "NO FINANCIALS for this symbol — this row only grades individual stocks. Judge indices, metals and crypto on the rows above."
     else if bigBuy
         _b := "★ BUY BIG AND HOLD — bottom confirmed, business qualifies " + f_n0(bqN) + "/4, " + f_n1(botDD) + "% off the high, 200-bar MA still rising. Size up and hold; this is the compounding entry."
     else if not botConf
-        _b := "NOT YET — the bottom is not confirmed on the chart (row 11). Business grade " + f_n0(bqN) + "/4" + (bqN >= bigNeed ? ", which is fine — it is the chart that is not ready." : ", so it would not qualify anyway.")
+        _b := "NOT YET — the bottom is not confirmed on the chart (see BOTTOM). Business grade " + f_n0(bqN) + "/4" + (bqN >= bigNeed ? ", which is fine — it is the chart that is not ready." : ", so it would not qualify anyway.")
     else if not bqTrend
-        _b := "NOT A LONG-TERM BUY — the 200-bar MA is LOWER than a year ago, so the multi-year uptrend is over. Business grades " + f_n0(bqN) + "/4" + (bqN >= bigNeed ? ", which is not the problem" : ", which is also weak") + ". Trade it on rows 1-11; do not hold until that average turns up — a rolled-over trend prints washouts all the way down."
+        _b := "NOT A LONG-TERM BUY — the 200-bar MA is LOWER than a year ago, so the multi-year uptrend is over. Business grades " + f_n0(bqN) + "/4" + (bqN >= bigNeed ? ", which is not the problem" : ", which is also weak") + ". Trade it on the rows above; do not hold until that average turns up — a rolled-over trend prints washouts all the way down."
     else if bqN < bigNeed
         _b := "NO — the chart bottomed but the business does not qualify (" + f_n0(bqN) + "/4): " + (bqProf ? "" : "not profitable · ") + (bqGrow ? "" : "revenue not growing · ") + (bqRoe ? "" : "ROE below " + f_n0(bigRoe) + "% · ") + (bqDebt ? "" : "debt too high") + ". Trade it, do not hold it."
     else
@@ -2292,7 +2292,7 @@ f_exitSay() =>
     else if exRoll and exBiz
         _x := "⛔ SELL EVERYTHING — the 200-bar MA is FALLING and the business is deteriorating (" + f_n0(bqN) + "/4). Both reasons to own this are gone. This is not a dip to buy."
     else if exRoll
-        _x := "EXIT THE LONG-TERM HOLD — the 200-bar MA has rolled over, so the multi-year trend is finished" + (bqHave ? " even though the business still grades " + f_n0(bqN) + "/4" : "") + ". Close the investment; trade it on rows 1-11 if you still want exposure."
+        _x := "EXIT THE LONG-TERM HOLD — the 200-bar MA has rolled over, so the multi-year trend is finished" + (bqHave ? " even though the business still grades " + f_n0(bqN) + "/4" : "") + ". Close the investment; trade it on the rows above if you still want exposure."
     else if exBiz
         _x := "WARNING — the business is deteriorating (" + f_n0(bqN) + "/4)" + (na(revGrowth) or revGrowth >= 0 ? "" : ", revenue " + f_n1(revGrowth) + "%") + ". The trend still holds, but this is how long-term holds die. Stop adding. Exit if the 200-bar MA rolls over."
     else if exHot
@@ -2324,7 +2324,7 @@ f_botCall() =>
     else if botConf
         _c := "✅ BOTTOM LOOKS IN — start a first position, small. The ATR model has not turned yet, so add only on a " + tfWord + " close above " + f_px(moneyLine) + ". Stop below " + f_px(botAnc) + "."
     else if _gap <= 0 and botBlock != ""
-        _c := "⏳ BOTTOM IS FORMING — every check has passed and only one thing is missing: " + botBlock + ". Set an alert. Do not buy ahead of it."
+        _c := "⏳ BOTTOM IS FORMING — enough checks have passed and only one thing is missing: " + botBlock + ". Set an alert. Do not buy ahead of it."
     else if _gap <= 1
         _c := "⏳ BOTTOM IS FORMING — one check short" + (botBlock == "" ? "" : ", and " + botBlock) + ". This is where real bottoms begin, but it is not an entry yet."
     else if botScr >= 2
