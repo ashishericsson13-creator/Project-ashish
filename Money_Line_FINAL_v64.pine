@@ -2352,6 +2352,13 @@ botCall = f_botCall()
 // This was fixed twice one branch at a time - the flip retest for ORCL, the
 // EMA reclaim for TCS - while five more branches had the same hole. One
 // caveat, appended at every such site, is the fix for the class.
+// Reaching the target is a decision point the panel never marked. NUMBERS
+// prints it while the setup is live and then says nothing when price gets
+// there, so the one moment you most need an instruction was the one moment
+// the row went quiet. It is not a sell order - the money line is still the
+// exit - but it is where you stop adding and start trailing.
+f_tgtHit() => boDir == 1 and not na(boTarget) and close >= boTarget ? "  ✓ TARGET " + f_px(boTarget) + " REACHED — bank part or trail from here; do not add." : ""
+
 f_ltWarn() => ltDown ? "  ⚠ 200-bar MA falling — counter-trend, keep it small." : ""
 
 f_whatToDo() =>
@@ -2377,9 +2384,9 @@ f_whatToDo() =>
     else if boFlipLive and boFlipRe and not emaOver
         _a := (bothSell ? "COUNTER-TREND BOUNCE ONLY at " : trend == -1 ? "HALF SIZE AT MOST at " : "BUY the retest of ") + f_px(boFlipLvl) + ". Stop just under it — tightest stop available on this chart." + (bothSell ? " Both models read sell side, so this is a trade against the trend, not an entry." : "") + f_ltWarn()
     else if emaOver
-        _a := "DO NOT START HERE. " + f_n1(emaX21) + " ATR above the " + f_n0(emaSlowLen) + " EMA. Hold what you have; add only back near " + f_px(emaS) + "."
+        _a := "DO NOT START HERE. " + f_n1(emaX21) + " ATR above the " + f_n0(emaSlowLen) + " EMA. Hold what you have; add only back near " + f_px(emaS) + "." + f_tgtHit()
     else if profOn and profAbove and not na(profBars) and profBars >= 3 and trend == 1
-        _a := "HOLD. Exit is a CLOSE below " + f_px(profEma) + ". Add only on a pullback back toward it — do not add " + (na(profDist) ? "out here." : f_n1(profDist) + " ATR above it.") + f_ltWarn()
+        _a := "HOLD. Exit is a CLOSE below " + f_px(profEma) + ". Add only on a pullback back toward it — do not add " + (na(profDist) ? "out here." : f_n1(profDist) + " ATR above it.") + f_ltWarn() + f_tgtHit()
     else if botOn and botConf and trend == -1
         _a := "SCALE IN SLOWLY — bottom score " + f_n0(botScr) + "/" + f_n0(botNeedN) + ". ATR model still bearish, but price holds above the average cost since the low (" + f_px(botAV) + ") and that line is RISING. Quarter size · add above " + f_px(moneyLine) + " · out below " + f_px(botAV) + "."
     else if suIsBase
@@ -2387,7 +2394,7 @@ f_whatToDo() =>
     else if trend == 1 and lnBear
         _a := "HOLD ONLY IF ALREADY LONG — and do not add. The ATR line is still bullish but " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines are. That gap usually closes by the ATR line giving way. Exit on a close below " + f_px(moneyLine) + "."
     else if trend == 1
-        _a := "HOLD. Only act if a " + tfWord + " candle CLOSES below " + f_px(moneyLine) + "." + f_ltWarn()
+        _a := "HOLD. Only act if a " + tfWord + " candle CLOSES below " + f_px(moneyLine) + "." + f_ltWarn() + f_tgtHit()
     else if lnBull
         _a := "STAY OUT, but watch closely — the lines have turned up while the ATR model has not. It confirms on a " + tfWord + " close above " + f_px(moneyLine) + " (" + str.tostring((moneyLine - close) / close * 100, "#.#") + "% away). Anything bought before that is a scout entry against the regime."
     else
