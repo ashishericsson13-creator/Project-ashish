@@ -2104,7 +2104,8 @@ botPivR  = input.int(3, "Pivot right bars (this is the confirmation lag)", minva
 botRsiUp = input.float(45.0, "Oversold level for a PULLBACK in an uptrend", minval = 20.0, maxval = 60.0, step = 1.0, group = "v64 · BOTTOM SCORE")
 botRngX  = input.float(2.0, "Capitulation range (x ATR) when the symbol reports no volume", minval = 1.0, maxval = 8.0, step = 0.1, group = "v64 · BOTTOM SCORE")
 botHLatr = input.float(0.5, "A holding low must sit this many ATR above the anchor", minval = 0.1, maxval = 5.0, step = 0.1, group = "v64 · BOTTOM SCORE")
-botNeed  = input.int(5, "Checks required to call it a bottom (of 7)", minval = 3, maxval = 7, group = "v64 · BOTTOM SCORE")
+botLvlATR = input.float(1.0, "The low must form within this many ATR of a real support level", minval = 0.2, maxval = 5.0, step = 0.1, group = "v64 · BOTTOM SCORE")
+botNeed  = input.int(5, "Checks required to call it a bottom (of 8)", minval = 3, maxval = 8, group = "v64 · BOTTOM SCORE")
 botCool  = input.int(20, "Minimum bars between BOTTOM labels", minval = 1, maxval = 200, group = "v64 · BOTTOM SCORE")
 
 botDD   = botHi > 0 ? (botHi - close) / botHi * 100 : na
@@ -2128,10 +2129,21 @@ bv1 = useCorr ? not na(corrDD) and corrDD >= botCorrMin : not na(botDD) and botD
 bv2 = not na(botRsLo) and botRsLo <= (useCorr ? botRsiUp : botRsiOS)
 bv3 = not na(pvP1) and not na(pvP2) and (pvP1 < pvP2 and pvR1 > pvR2 or pvP1 > pvP2) or botReady and not na(atrV) and atrV > 0 and not na(botAnc) and botLo3 - botAnc >= botHLatr * atrV
 bv4 = na(volRatio) ? botCapX >= botRngX : botCap >= botVolX
-bv5 = not na(emaS) and close > emaS
-bv6 = not na(macdH) and macdH > macdH[1]
+// 5 RECLAIM counts either moving average that matters here: the 21 EMA, or
+//   the weekly EMA the method actually trades. A low that reclaims one of
+//   them has done the same thing.
+// 6 MOMENTUM accepts a MACD cross as well as a rising histogram - the cross
+//   is the stronger signal and was being ignored.
+// 8 LEVEL is the piece that was missing entirely. A low that forms at a
+//   defended support, a base floor or an old flip level is worth far more
+//   than the same low in mid-air: there is a reason for buyers to be there.
+//   It asks that the anchor low sit within botLvlATR of a real level AND
+//   that price still hold above it.
+bv5 = not na(emaS) and close > emaS or profOn and profAbove
+bv6 = not na(macdH) and macdH > macdH[1] or macdXUp
 bv7 = botAbove and botRise
-botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ? 1 : 0) + (bv6 ? 1 : 0) + (bv7 ? 1 : 0)
+bv8 = not na(lvlS) and not na(botAnc) and not na(atrV) and atrV > 0 and math.abs(botAnc - lvlS) <= botLvlATR * atrV and close > lvlS
+botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ? 1 : 0) + (bv6 ? 1 : 0) + (bv7 ? 1 : 0) + (bv8 ? 1 : 0)
 
 // ─── THREE GATES, because the seven checks only detect a BOUNCE ───
 // TCS printed BOTTOM over and over from 4200 down to 2120. Every one of the
@@ -2182,7 +2194,7 @@ plotshape(botSig, title = "BOTTOM confirmed", style = shape.labelup, location = 
 alertcondition(botSig, title = "Bottom confirmed", message = "BOTTOM confirmed on {{ticker}} — bottom score met on the {{interval}} chart")
 
 f_botTicks() =>
-    (bv1 ? "✓" : "✗") + "washout " + (bv2 ? "✓" : "✗") + "oversold " + (bv3 ? "✓" : "✗") + "structure " + (bv4 ? "✓" : "✗") + "volume " + (bv5 ? "✓" : "✗") + "21EMA " + (bv6 ? "✓" : "✗") + "MACD " + (bv7 ? "✓" : "✗") + "cost"
+    (bv1 ? "✓" : "✗") + "washout " + (bv2 ? "✓" : "✗") + "oversold " + (bv3 ? "✓" : "✗") + "structure " + (bv4 ? "✓" : "✗") + "volume " + (bv5 ? "✓" : "✗") + "21EMA " + (bv6 ? "✓" : "✗") + "MACD " + (bv7 ? "✓" : "✗") + "cost " + (bv8 ? "✓" : "✗") + "level"
 
 // The plot breaks on the bar the anchor switches. Without the gap the line
 // jumps from one average cost straight to the other and TradingView draws the
