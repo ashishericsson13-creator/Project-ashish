@@ -2313,6 +2313,14 @@ exitSay = f_exitSay()
 f_botCall() =>
     _c = ""
     _gap = botNeedN - botScr
+    // A label that fired and then lapsed leaves nothing on screen to say so.
+    // The failure mark only appears when price undercuts the anchor low; when
+    // the low holds but the confirmation simply goes away - price slips back
+    // under the 8-bar high - the label stands there unqualified and reads as a
+    // live buy. BTC showed exactly that: a BOTTOM a few bars back, and a panel
+    // saying do not buy ahead of it, with no way to reconcile the two.
+    _age = na(botLastSig) or botFail ? na : bar_index - botLastSig
+    _lapsed = not botConf and not na(_age) and _age <= botCool ? "  ·  the BOTTOM label " + f_n0(_age) + " bars back has LAPSED — its low still holds, but the setup is no longer live" : ""
     if not botOn
         _c := "—"
     else if botMature
@@ -2324,9 +2332,9 @@ f_botCall() =>
     else if botConf
         _c := "✅ BOTTOM LOOKS IN — start a first position, small. The ATR model has not turned yet, so add only on a " + tfWord + " close above " + f_px(moneyLine) + ". Stop below " + f_px(botAnc) + "."
     else if _gap <= 0 and botBlock != ""
-        _c := "⏳ BOTTOM IS FORMING — enough checks have passed and only one thing is missing: " + botBlock + ". Set an alert. Do not buy ahead of it."
+        _c := "⏳ BOTTOM IS FORMING — enough checks have passed and only one thing is missing: " + botBlock + ". Set an alert. Do not buy ahead of it." + _lapsed
     else if _gap <= 1
-        _c := "⏳ BOTTOM IS FORMING — one check short" + (botBlock == "" ? "" : ", and " + botBlock) + ". This is where real bottoms begin, but it is not an entry yet."
+        _c := "⏳ BOTTOM IS FORMING — one check short" + (botBlock == "" ? "" : ", and " + botBlock) + ". This is where real bottoms begin, but it is not an entry yet." + _lapsed
     else if botScr >= 2
         _c := "⚠ BOTTOM IS STILL AWAY — " + f_n0(_gap) + " more signs needed" + (botRFail ? ", and a bottom here already failed" : "") + ". A bounce from here is a trade at best, not an entry."
     else
