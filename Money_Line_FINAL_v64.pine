@@ -2370,10 +2370,10 @@ f_boSummary(table _t) =>
         f_cell(_t, 1, 7, (na(lvlR) or lvlRfar ? "resistance — none within " + f_n0(lvlMaxATR) + " ATR" : "resistance " + f_px(lvlR) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + f_n0(lvlMaxATR) + " ATR" : "support " + f_px(lvlS) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + f_px(boFlipLvl) + (boFlipRe ? " ✓held" : " ·untested")), color.new(color.olive, 50))
 
         bCol = not botOn or na(botAV) ? color.new(color.gray, 40) : botConf ? color.new(#00c853, 20) : botAbove ? color.new(color.orange, 25) : color.new(#d50000, 25)
-        lBad = exRoll or exBiz or exHot or (profOn and profLost)
-        lCol = not bqHave and not lBad ? color.new(color.gray, 40) : exRoll and exBiz ? color.new(#b71c1c, 0) : exRoll ? color.new(#d50000, 20) : exBiz or exHot ? color.new(color.orange, 20) : bigBuy ? color.new(#1b5e20, 0) : color.new(#1b5e20, 30)
+        ltBad = exRoll or exBiz or exHot or (profOn and profLost)
+        ltCol = not bqHave and not ltBad ? color.new(color.gray, 40) : exRoll and exBiz ? color.new(#b71c1c, 0) : exRoll ? color.new(#d50000, 20) : exBiz or exHot ? color.new(color.orange, 20) : bigBuy ? color.new(#1b5e20, 0) : color.new(#1b5e20, 30)
         f_cell(_t, 0, 10, "11  LONG TERM", color.new(#1b5e20, 10))
-        f_cell(_t, 1, 10, lBad ? exitSay : bigSay, lCol)
+        f_cell(_t, 1, 10, ltBad ? exitSay : bigSay, ltCol)
 
 
         f_cell(_t, 0, 9, "10  BOTTOM", color.new(#00bfa5, 15))
