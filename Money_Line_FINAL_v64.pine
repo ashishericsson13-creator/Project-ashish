@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v64", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v64.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -113,38 +113,38 @@ shortLen  = input.int(3, "Short (Bearish) Lookback", minval = 1, group = "1. Lin
 atrLen    = input.int(21, "ATR Length", minval = 1, group = "1. Line Settings")
 atrMultL  = input.float(3.0, "ATR Multiplier — LONG stop", minval = 0.1, step = 0.05, group = "1. Line Settings")
 atrMultS  = input.float(3.0, "ATR Multiplier — SHORT stop", minval = 0.1, step = 0.05, group = "1. Line Settings")
-exitConfirm  = input.int(1, "Bar closes needed to SELL (chart TF)", minval = 1, maxval = 4, tooltip = "1 = sell on the FIRST weekly close below the line (original behaviour). 2 = the break must hold for two weekly closes before it counts. Higher numbers kill whipsaws but give back more before you exit. Try 2 on assets where the HOLD vs TRADE row says HOLD.", group = "1. Line Settings")
-entryConfirm = input.int(1, "Bar closes needed to BUY (chart TF)", minval = 1, maxval = 4, tooltip = "Same idea for entries. 1 = original.", group = "1. Line Settings")
-btUseStart = input.bool(true, "Limit stats to a start year", tooltip = "OFF = measure from the first bar TradingView loads, which is 1891 on GOLD and 1986 on MSFT. That makes Track Record, ASSET FIT and the return figures non-comparable between symbols, and on GOLD it includes the decades when the price was pegged by law. ON = every stat below is measured from your chosen year.", group = "4. Backtest Window")
+exitConfirm  = input.int(1, "Bar closes needed to SELL (chart TF)", minval = 1, maxval = 4, group = "1. Line Settings")
+entryConfirm = input.int(1, "Bar closes needed to BUY (chart TF)", minval = 1, maxval = 4, group = "1. Line Settings")
+btUseStart = input.bool(true, "Limit stats to a start year", group = "4. Backtest Window")
 btStartY   = input.int(2010, "Start year for all stats", minval = 1900, maxval = 2100, group = "4. Backtest Window")
-whipWeeks  = input.int(6, "Whipsaw = re-bought within N bars", minval = 1, maxval = 26, tooltip = "An exit that is followed by a BUY within N bars AT A HIGHER PRICE is counted as a whipsaw: you sold and paid up to get back in. The row at the bottom of the table counts them and totals what they cost.", group = "4. Backtest Window")
-adxMin = input.int(20, "Min ADX for a 'trending' check", minval = 10, maxval = 40, tooltip = "ADX measures how strongly price is trending, in either direction. Below this the market is ranging — the condition that produces whipsaw. 20 is the conventional threshold.", group = "4. Backtest Window")
-extMax = input.float(25.0, "Max % from the 200-day-equivalent mean", minval = 5, maxval = 100, step = 1, tooltip = "Beyond this distance from the long mean, a trend is stretched and mean-reversion risk rises. The check fails above it.", group = "4. Backtest Window")
-minHistDays = input.int(365, "Minimum symbol history (days) before trusting signals", minval = 30, maxval = 2000, tooltip = "Below this, the panel warns that the symbol has not existed long enough for a trailing stop to mean anything. Measured in calendar days, not bars — a newly listed stock produces plenty of 4H bars while still being only weeks old.", group = "4. Backtest Window")
-riskPct = input.float(1.0, "Account risk per trade %", minval = 0.1, maxval = 10, step = 0.1, tooltip = "How much of the account you are willing to lose if the trade goes straight from here to the flip line. The RISK & SIZE row turns this into a position size. A fresh signal with a tight stop allows a big position; the same signal after price has run far from the line allows a small one.", group = "4. Backtest Window")
-regimeMode = input.bool(false, "Regime mode — state, not orders", tooltip = "OFF = BUY/SELL labels and instructions, as now. ON = the chart just says what the state IS: green above the flip line, red below, with small bullish/bearish tags at the turns and no order language anywhere. IMPORTANT: this changes nothing in the maths. Trend, focus list, stats and returns are byte-identical either way. It changes what you are shown, not what the system does.", group = "5. Display Mode")
+whipWeeks  = input.int(6, "Whipsaw = re-bought within N bars", minval = 1, maxval = 26, group = "4. Backtest Window")
+adxMin = input.int(20, "Min ADX for a 'trending' check", minval = 10, maxval = 40, group = "4. Backtest Window")
+extMax = input.float(25.0, "Max % from the 200-day-equivalent mean", minval = 5, maxval = 100, step = 1, group = "4. Backtest Window")
+minHistDays = input.int(365, "Minimum symbol history (days) before trusting signals", minval = 30, maxval = 2000, group = "4. Backtest Window")
+riskPct = input.float(1.0, "Account risk per trade %", minval = 0.1, maxval = 10, step = 0.1, group = "4. Backtest Window")
+regimeMode = input.bool(false, "Regime mode — state, not orders", group = "5. Display Mode")
 
-scoutPct = input.float(0.80, "Scout entry: allowed while bearish confirmation <=", minval = 0.3, maxval = 1.0, step = 0.05, tooltip = "Share of the applicable confirmation checks. While bearish, a daily turn-up counts as a 'scout' entry only if the downtrend is NOT confirmed above this level. The old rule was <=4 of 5, which is about 0.80.", group = "4. Backtest Window")
-minTrades = input.int(12, "Min completed trades before ASSET FIT / WHIPSAW / HOLD-vs-TRADE are shown", minval = 3, maxval = 50, tooltip = "5 trades is noise. Raise this for a stricter read.", group = "4. Backtest Window")
+scoutPct = input.float(0.80, "Scout entry: allowed while bearish confirmation <=", minval = 0.3, maxval = 1.0, step = 0.05, group = "4. Backtest Window")
+minTrades = input.int(12, "Min completed trades before ASSET FIT / WHIPSAW / HOLD-vs-TRADE are shown", minval = 3, maxval = 50, group = "4. Backtest Window")
 
-minWin = input.float(35.0, "ASSET FIT: min win rate % (trend systems win < 50% by design)", minval = 10, maxval = 70, step = 1, tooltip = "ASSET FIT needs profit factor >= 1.5 AND a win rate above this. The old hard-coded 45 mislabelled normal trend-following results as MIXED.", group = "4. Backtest Window")
+minWin = input.float(35.0, "ASSET FIT: min win rate % (trend systems win < 50% by design)", minval = 10, maxval = 70, step = 1, group = "4. Backtest Window")
 
-sigMax     = input.int(12, "Show only the last N BUY/SELL labels (0 = all)", minval = 0, maxval = 200, tooltip = "Zoomed out on a daily chart the labels stack into a red wall. 12 keeps the picture readable. 0 draws every signal.", group = "2. Display")
+sigMax     = input.int(12, "Show only the last N BUY/SELL labels (0 = all)", minval = 0, maxval = 200, group = "2. Display")
 sigSizeIn  = input.string("Small", "BUY/SELL label size", options = ["Tiny", "Small", "Normal"], group = "2. Display")
 
-showPro    = input.bool(true, "PRO LINES: long trendlines + channel + key levels", tooltip = "The long clean lines: best-fit falling/rising trendline through major swings, a parallel channel line, and the nearest horizontal level where price reacted several times.", group = "2. Display")
-proS       = input.int(10, "Pro lines: swing size (bars each side)", minval = 3, maxval = 40, tooltip = "Bigger = only major swings, fewer and longer lines. Smaller = tighter lines. Try 6 for a closer view, 16 for the big picture.", group = "2. Display")
+showPro    = input.bool(true, "PRO LINES: long trendlines + channel + key levels", group = "2. Display")
+proS       = input.int(10, "Pro lines: swing size (bars each side)", minval = 3, maxval = 40, group = "2. Display")
 proLB      = input.int(500, "Pro lines: look-back (bars)", minval = 100, maxval = 1500, group = "2. Display")
-proTol     = input.float(0.6, "Pro lines: tolerance %", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "How far a close may poke through a line before the line is rejected, and how close a swing must be to count as a touch.", group = "2. Display")
+proTol     = input.float(0.6, "Pro lines: tolerance %", minval = 0.1, maxval = 3.0, step = 0.1, group = "2. Display")
 showChan   = input.bool(true, "Pro lines: parallel channel line", group = "2. Display")
 showKeyLv  = input.bool(true, "Pro lines: key horizontal levels", group = "2. Display")
 proColor   = input.color(cP17, "Pro lines: trendline colour", group = "2. Display")
 proLvlColor = input.color(color.new(#ffb300, 0), "Pro lines: key level colour", group = "2. Display")
 
-showVL    = input.bool(true, "Vertical line at each BUY / SELL signal", tooltip = "A thin vertical line on the exact bar of each signal (same last-N cap as the labels).", group = "2. Display")
-showTLV   = input.bool(true, "Vertical line at each short-trendline break (TL)", tooltip = "Blue = broke above a falling line, orange = broke below a rising line. Keeps the last 10.", group = "2. Display")
-showProV  = input.bool(true, "Vertical line + label when price closes through a long trendline", tooltip = "Marks the exact bar where price closed above the long resistance line (green) or below the long support line (red).", group = "2. Display")
-proRecent = input.int(15, "Pro lines: keep a broken line visible for N bars", minval = 3, maxval = 60, tooltip = "A long line is normally dropped once price closes through it. This keeps it on the chart, with its breakout marker, for N bars after the break.", group = "2. Display")
+showVL    = input.bool(true, "Vertical line at each BUY / SELL signal", group = "2. Display")
+showTLV   = input.bool(true, "Vertical line at each short-trendline break (TL)", group = "2. Display")
+showProV  = input.bool(true, "Vertical line + label when price closes through a long trendline", group = "2. Display")
+proRecent = input.int(15, "Pro lines: keep a broken line visible for N bars", minval = 3, maxval = 60, group = "2. Display")
 
 // ── 2. Display ──
 bullColor = input.color(cP18, "Bullish Color", group = "2. Display")
@@ -164,19 +164,19 @@ compactMode = input.bool(true, "Compact Mode (3-row table + smart note; untick f
 
 // ── 3. Scanner (bottom-right trend overview) ──
 showScanner = input.bool(true, "Show Focus List (bottom right)", group = "3. Focus List")
-scanUseChart = input.bool(false, "Focus List follows the chart timeframe", tooltip = "ON = the scan runs on whatever timeframe you are viewing, so switching chart TF switches the whole list with it. OFF = the list stays pinned to the timeframe below no matter what the chart shows.", group = "3. Focus List")
+scanUseChart = input.bool(false, "Focus List follows the chart timeframe", group = "3. Focus List")
 scanTFin     = input.timeframe("W", "Focus List Timeframe (when not following)", group = "3. Focus List")
 scanTF       = scanUseChart ? timeframe.period : scanTFin
 scanPos     = input.string("Bottom Right", "Focus List Position", options = ["Bottom Right", "Top Right", "Middle Right", "Bottom Left"], group = "3. Focus List")
 maxShow     = input.int(20, "Max rows to display (most urgent first)", minval = 3, maxval = 32, group = "3. Focus List")
-scanConfirmed = input.bool(true, "Confirmed bars only (identical on every chart)", tooltip = "ON = each symbol is read at its own last CLOSED weekly bar. This is what makes the Focus List give the same answer whether you are on an NSE chart or a NASDAQ chart. OFF = live/forming bar, which drifts between charts because sessions and holidays differ.", group = "3. Focus List")
-scanBars      = input.int(750, "History window per symbol (bars)", minval = 100, maxval = 2000, tooltip = "Fixes how many bars each symbol is calculated over so the trailing-stop state cannot depend on how much history your current chart happens to have loaded. Keep this the same on every chart.", group = "3. Focus List")
-scanNoFx      = input.bool(true, "Ignore chart currency conversion", tooltip = "Stops an INR chart from converting USD symbols (and vice versa).", group = "3. Focus List")
-addChartSym   = input.bool(true, "Always scan the chart's own symbol", tooltip = "Puts whatever symbol you have open into slot 32, so a chart that is not in the market set still gets a scanner row. Turn off to keep the fixed 32nd symbol instead.", group = "3. Focus List")
-mktFilter     = input.bool(false, "Show only symbols from the chart's market", tooltip = "ON = an NSE chart lists only NSE/BSE symbols, a US chart only US symbols, and so on. This removes the one-bar offset that appears when a symbol's exchange closes later than the chart's, which is the honest fix for it. Symbols entered without an exchange prefix always show. OFF = all 32 symbols, with the offset present on cross-market rows.", group = "3. Focus List")
-tolBars       = input.float(1.5, "Stale threshold (bars)", minval = 1.0, maxval = 5.0, step = 0.5, tooltip = "How far behind the newest symbol a row may read before it is flagged ⧗. Measured in scan bars, not days. 1.5 is the sensible floor for a mixed-exchange list: symbols on a later-closing exchange always report one bar behind on a chart whose session ended earlier, which is correct behaviour. Raise it if the warning fires constantly; lower it toward 1.0 only on a single-exchange list.", group = "3. Focus List")
-scanWarm      = input.int(120, "Warm-up bars before a symbol is trusted", minval = 40, maxval = 400, tooltip = "The trailing stop is path-dependent: it starts from an arbitrary seed and needs bars to forget it. Below this many bars a symbol's state is still partly an artefact of where its data began, so it is shown as 'warming up' rather than given a signal. Raise it if levels shift when you zoom; lower it if too many symbols are suppressed.", group = "3. Focus List")
-showAsOf      = input.bool(true, "Show 'as of' date in Focus List header", tooltip = "Diagnostic: if two charts show the same as-of date, they are reading the same week.", group = "3. Focus List")
+scanConfirmed = input.bool(true, "Confirmed bars only (identical on every chart)", group = "3. Focus List")
+scanBars      = input.int(750, "History window per symbol (bars)", minval = 100, maxval = 2000, group = "3. Focus List")
+scanNoFx      = input.bool(true, "Ignore chart currency conversion", group = "3. Focus List")
+addChartSym   = input.bool(true, "Always scan the chart's own symbol", group = "3. Focus List")
+mktFilter     = input.bool(false, "Show only symbols from the chart's market", group = "3. Focus List")
+tolBars       = input.float(1.5, "Stale threshold (bars)", minval = 1.0, maxval = 5.0, step = 0.5, group = "3. Focus List")
+scanWarm      = input.int(120, "Warm-up bars before a symbol is trusted", minval = 40, maxval = 400, group = "3. Focus List")
+showAsOf      = input.bool(true, "Show 'as of' date in Focus List header", group = "3. Focus List")
 // ── MARKET BUCKETS ───────────────────────────────────────────────────
 // Symbols only share a bar boundary if their sessions END together. NSE closes
 // 10:00 UTC Friday, NASDAQ 20:00 UTC — so on an NSE chart every US symbol
@@ -450,7 +450,7 @@ lineColor = trend == 1 ? bullColor : bearColor
 mlPlot = plot(moneyLine, "Money Line", color = lineColor, linewidth = lineWidth, style = plot.style_stepline)
 srcPlot = plot(close, "Price (invisible)", display = display.none)
 fill(srcPlot, mlPlot, color = showFill ? (trend == 1 ? color.new(bullColor, 90) : color.new(bearColor, 90)) : na)
-syncMode = input.bool(false, "Chart sync mode — hide MAs, S/R and PRO lines so the axis follows price", tooltip = "OFF (default) = unchanged; every line is drawn and the axis stretches to fit them all.", group = "2. Display")
+syncMode = input.bool(false, "Chart sync mode — hide MAs, S/R and PRO lines so the axis follows price", group = "2. Display")
 plot(show200 and not syncMode ? ma200 : na, "200-day MA", color = color.new(color.red, 35), linewidth = 2)
 ma200bar = ta.sma(close, ma200barLen)
 plot(show200bar and not syncMode ? ma200bar : na, "200-bar MA", color = cP8, linewidth = 3)
@@ -496,7 +496,7 @@ if (buySignal or sellSignal) and barstate.isconfirmed
 
 
 showFlipLine = input.bool(true, "Show Flip Level Line + Label on Chart", group = "2. Display")
-showScoreTag = input.bool(true, "Show CONFIRM score tag on chart", tooltip = "Small on-chart tag showing the n/N confirmation score for the CURRENT chart timeframe, next to the last bar.", group = "2. Display")
+showScoreTag = input.bool(true, "Show CONFIRM score tag on chart", group = "2. Display")
 var line flipLn = na
 var label flipLb = na
 if barstate.islast and showFlipLine and not na(moneyLine)
@@ -607,7 +607,7 @@ if barstate.islast and showSR
 // The breakout marker fires on the bar that CLOSES through a falling
 // resistance line (or below a rising support line).
 // ═══════════════════════════════════════════════════════════════
-showTL  = input.bool(true, "Show short-term trendlines + TL markers", tooltip = "Draws a line through the last two swing highs and the last two swing lows. Falling highs + a close above the line = breakout marker.", group = "2. Display")
+showTL  = input.bool(true, "Show short-term trendlines + TL markers", group = "2. Display")
 tlPiv   = input.int(6, "Trendline pivot strength (bars each side)", minval = 2, maxval = 30, group = "2. Display")
 tlColor = input.color(cP17, "Trendline colour", group = "2. Display")
 showMom = input.bool(true, "Show MOMENTUM row (RSI + MACD state)", group = "2. Display")
@@ -1655,38 +1655,38 @@ f_n1(float _v) => str.tostring(_v, "#.#")
 f_n0(float _v) => str.tostring(_v, "#")
 // ───
 boOn       = input.bool(true, "Enable BREAKOUT console", group = "6. Breakout Console")
-boMinTouch = input.int(2, "Horizontal level: minimum touches", minval = 1, maxval = 6, tooltip = "How many times price must have reacted at a price before it counts as a level.", group = "6. Breakout Console")
-boTolATR   = input.float(0.50, "Horizontal level: cluster width (ATR)", minval = 0.05, maxval = 3.0, step = 0.05, tooltip = "Two pivots within this distance are the SAME level and their touch counts merge. In ATR so it scales with...", group = "6. Breakout Console")
-boBufPct   = input.float(0.15, "Breakout buffer (% beyond the level)", minval = 0.0, maxval = 5.0, step = 0.05, tooltip = "How far past the level a close must land to count. Stops a close landing exactly ON the level from...", group = "6. Breakout Console")
-boFresh    = input.int(3, "Breakout stays 'live' for N bars", minval = 1, maxval = 20, tooltip = "A breakout is a dated event, not a permanent state. After this many bars the verdict stops calling it an...", group = "6. Breakout Console")
-boVolSurge = input.float(1.50, "Volume surge required (x 20-bar avg)", minval = 0.5, maxval = 5.0, step = 0.1, tooltip = "Breakout-bar volume over the 20-bar average. A level breaking on below-average volume is the textbook...", group = "6. Breakout Console")
-boRsiMax   = input.float(80.0, "RSI ceiling (above = move already spent)", minval = 60, maxval = 95, step = 1, tooltip = "RSI above this means buying the end of a run. This is the check that stops a BUY into a vertical blow-off.", group = "6. Breakout Console")
-boStopATR  = input.float(0.50, "Breakout stop: ATR below the broken level", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "A broken resistance becomes support; the trade is wrong if price closes back under it. NOT the Money Line,...", group = "6. Breakout Console")
-boFlipMaxATR = input.float(4.0, "Polarity: stale once price is this many ATR above it", minval = 1.0, maxval = 20.0, step = 0.5, tooltip = "A broken resistance acts as support while price is near it. Once price has run this far above, it is no...", group = "6. Breakout Console")
-lvlMaxATR  = input.float(5.0, "LEVELS: ignore anything further than this many ATR", minval = 2.0, maxval = 40.0, step = 1.0, tooltip = "A level you cannot reach is not a level. 5 ATR, because past that it is neither a stop nor a target for the setup in front of you. Past this distance the row says none is in range rather than printing a number nobody will trade against.", group = "6. Breakout Console")
-boMinTgtATR = input.float(1.0, "Target must be at least this many ATR away", minval = 0.1, maxval = 10.0, step = 0.1, tooltip = "A target closer than this is skipped and the next candidate is used. HDFCBANK weekly offered a target 0.05% from entry, which made R:R read 0.01 - arithmetically true and useless.", group = "6. Breakout Console")
-boMaxSize  = input.float(25.0, "Maximum position size (% of account)", minval = 1.0, maxval = 100.0, step = 1.0, tooltip = "A hard ceiling on what the risk arithmetic may suggest. NIFTY weekly produced 58.8% of account from a 1.7% stop at 1% risk - correct arithmetic and a dangerous number, because a stop that tight is also the one most likely to be gapped straight through, and a 58.8% position that gaps loses far more than the 1% it was sized for.", group = "6. Breakout Console")
-boFailBars = input.int(4, "Failed breakout: closes back under within N bars", minval = 1, maxval = 20, tooltip = "A break that price closes back under inside this window is a trap, not a breakout.", group = "6. Breakout Console")
+boMinTouch = input.int(2, "Horizontal level: minimum touches", minval = 1, maxval = 6, group = "6. Breakout Console")
+boTolATR   = input.float(0.50, "Horizontal level: cluster width (ATR)", minval = 0.05, maxval = 3.0, step = 0.05, group = "6. Breakout Console")
+boBufPct   = input.float(0.15, "Breakout buffer (% beyond the level)", minval = 0.0, maxval = 5.0, step = 0.05, group = "6. Breakout Console")
+boFresh    = input.int(3, "Breakout stays 'live' for N bars", minval = 1, maxval = 20, group = "6. Breakout Console")
+boVolSurge = input.float(1.50, "Volume surge required (x 20-bar avg)", minval = 0.5, maxval = 5.0, step = 0.1, group = "6. Breakout Console")
+boRsiMax   = input.float(80.0, "RSI ceiling (above = move already spent)", minval = 60, maxval = 95, step = 1, group = "6. Breakout Console")
+boStopATR  = input.float(0.50, "Breakout stop: ATR below the broken level", minval = 0.1, maxval = 3.0, step = 0.1, group = "6. Breakout Console")
+boFlipMaxATR = input.float(4.0, "Polarity: stale once price is this many ATR above it", minval = 1.0, maxval = 20.0, step = 0.5, group = "6. Breakout Console")
+lvlMaxATR  = input.float(5.0, "LEVELS: ignore anything further than this many ATR", minval = 2.0, maxval = 40.0, step = 1.0, group = "6. Breakout Console")
+boMinTgtATR = input.float(1.0, "Target must be at least this many ATR away", minval = 0.1, maxval = 10.0, step = 0.1, group = "6. Breakout Console")
+boMaxSize  = input.float(25.0, "Maximum position size (% of account)", minval = 1.0, maxval = 100.0, step = 1.0, group = "6. Breakout Console")
+boFailBars = input.int(4, "Failed breakout: closes back under within N bars", minval = 1, maxval = 20, group = "6. Breakout Console")
 boShowLvl  = input.bool(true, "Draw the defended horizontal levels", group = "6. Breakout Console")
 boShowVert = input.bool(true, "Vertical line at each scored breakout", group = "6. Breakout Console")
-boSlim     = input.bool(true, "Compact console — decision rows only", tooltip = "Shows ATR MODEL, LINES, VERDICT, DO THIS, BOTTOM and LONG TERM. Turn off to add NUMBERS, TREND, MOMENTUM, LEVELS and STRUCTURE.", group = "6. Breakout Console")
+boSlim     = input.bool(true, "Compact console — decision rows only", group = "6. Breakout Console")
 boPos      = input.string("Top Right", "Console position", options = ["Top Right", "Top Left", "Middle Right", "Bottom Left", "Bottom Right"], group = "6. Breakout Console")
 suOn       = input.bool(true, "Enable SETUP QUALITY (base, new high, squeeze, targets)", group = "7. Setup Quality")
-suBaseMax  = input.float(25.0, "Base: max range width (% of its low)", minval = 3.0, maxval = 80.0, step = 0.5, tooltip = "How tight a stretch must be to count as a base. The script tries 200, 120, 80, 50, 30 and 20 bars and...", group = "7. Setup Quality")
-suBaseMin  = input.int(30, "Base: minimum bars to call it a base", minval = 10, maxval = 200, tooltip = "Below this the range is chop, not a base. On weekly, 30 bars is about seven months — roughly where enough...", group = "7. Setup Quality")
-suSqzPct   = input.float(15.0, "Squeeze: within % of the tightest band in 100 bars", minval = 2.0, maxval = 60.0, step = 1.0, tooltip = "Bollinger width against its own lowest reading over 100 bars. Inside this margin the market is coiled.", group = "7. Setup Quality")
+suBaseMax  = input.float(25.0, "Base: max range width (% of its low)", minval = 3.0, maxval = 80.0, step = 0.5, group = "7. Setup Quality")
+suBaseMin  = input.int(30, "Base: minimum bars to call it a base", minval = 10, maxval = 200, group = "7. Setup Quality")
+suSqzPct   = input.float(15.0, "Squeeze: within % of the tightest band in 100 bars", minval = 2.0, maxval = 60.0, step = 1.0, group = "7. Setup Quality")
 suShowBox  = input.bool(true, "Draw the base box", group = "7. Setup Quality")
 suShowTgt  = input.bool(true, "Draw measured-move targets (1.0 / 1.618)", group = "7. Setup Quality")
 suShowATH  = input.bool(true, "Draw the 52-week and all-time high lines", group = "7. Setup Quality")
 wgOn       = input.bool(true, "Draw the converging pair / channel + apex", group = "8. Structure")
-wgMaxBar   = input.int(60, "Apex: ignore if further out than N bars", minval = 5, maxval = 400, tooltip = "Two nearly-parallel lines meet hundreds of bars away, which is not an apex anyone trades. Past this the...", group = "8. Structure")
-wgFlat     = input.float(0.02, "Flat-slope tolerance (ATR per bar)", minval = 0.001, maxval = 0.5, step = 0.005, tooltip = "A slope smaller than this per bar counts as horizontal, which is what separates an ASCENDING triangle...", group = "8. Structure")
+wgMaxBar   = input.int(60, "Apex: ignore if further out than N bars", minval = 5, maxval = 400, group = "8. Structure")
+wgFlat     = input.float(0.02, "Flat-slope tolerance (ATR per bar)", minval = 0.001, maxval = 0.5, step = 0.005, group = "8. Structure")
 wgShowMid  = input.bool(true, "Channel: draw the midline (3rd rail)", group = "8. Structure")
 flagOn     = input.bool(true, "Detect BULL / BEAR FLAGS (pole + channel)", group = "8. Structure")
-flagPoleLen = input.int(20, "Flag: bars of 'pole' to look back through", minval = 5, maxval = 100, tooltip = "How far back to look for the sharp move that the flag is resting after. The pole is what makes a flag a...", group = "8. Structure")
-flagLen    = input.int(12, "Flag: maximum bars the flag itself may run", minval = 3, maxval = 60, tooltip = "A flag is a pause, not a trend. Past this many bars the pullback has become its own move and should not be...", group = "8. Structure")
-flagPoleMin = input.float(20.0, "Flag: minimum pole size (%)", minval = 3.0, maxval = 200.0, step = 1.0, tooltip = "How far price must have run before the pause counts as a pole. Too small and every wobble becomes a flag.", group = "8. Structure")
-flagRetMax = input.float(50.0, "Flag: maximum retrace of the pole (%)", minval = 15.0, maxval = 90.0, step = 5.0, tooltip = "A flag that gives back more than this is no longer a pause in the move — it is a reversal of it. 50% is...", group = "8. Structure")
+flagPoleLen = input.int(20, "Flag: bars of 'pole' to look back through", minval = 5, maxval = 100, group = "8. Structure")
+flagLen    = input.int(12, "Flag: maximum bars the flag itself may run", minval = 3, maxval = 60, group = "8. Structure")
+flagPoleMin = input.float(20.0, "Flag: minimum pole size (%)", minval = 3.0, maxval = 200.0, step = 1.0, group = "8. Structure")
+flagRetMax = input.float(50.0, "Flag: maximum retrace of the pole (%)", minval = 15.0, maxval = 90.0, step = 5.0, group = "8. Structure")
 
 // ── DEFENDED HORIZONTAL LEVELS ───
 var array<float> boLvlPx  = array.new_float()
@@ -1897,8 +1897,8 @@ boSizePc  = na(boSizeRaw) ? na : math.min(boSizeRaw, boMaxSize)
 // ── THE FAST PAIR, THE EXTENSION, AND THE POLARITY FLIP ───
 emaFastLen = input.int(9,  "Fast EMA", minval = 2, maxval = 50, group = "9. Fast pair & polarity")
 emaSlowLen = input.int(21, "Slow EMA", minval = 3, maxval = 100, group = "9. Fast pair & polarity")
-emaAtrLen  = input.int(11, "ATR length for the extension reading", minval = 2, maxval = 50, tooltip = "Shorter than the 21 used by the Money Line, because this measures how stretched price is RIGHT NOW rather...", group = "9. Fast pair & polarity")
-emaExtMax  = input.float(3.0, "Extended beyond this many ATR from the slow EMA", minval = 0.5, maxval = 10.0, step = 0.25, tooltip = "Past this the move is stretched and a fresh entry is paying for someone else's position. It is a warning...", group = "9. Fast pair & polarity")
+emaAtrLen  = input.int(11, "ATR length for the extension reading", minval = 2, maxval = 50, group = "9. Fast pair & polarity")
+emaExtMax  = input.float(3.0, "Extended beyond this many ATR from the slow EMA", minval = 0.5, maxval = 10.0, step = 0.25, group = "9. Fast pair & polarity")
 emaShow    = input.bool(true, "Plot the fast pair", group = "9. Fast pair & polarity")
 
 f_emaExt(int _f, int _s, int _a) =>
@@ -1941,8 +1941,8 @@ lvlSsrc = na(lvlS) ? "" : (not na(lvlSc) and lvlS == lvlSc ? " flip-support" + (
 
 // ── THE WEEKLY 9 EMA RULE ───
 profOn    = input.bool(true, "Weekly 9 EMA rule (reclaim / respect / lose)", group = "10. Weekly 9 EMA rule")
-profWeeks = input.int(9, "EMA length in WEEKS (not bars)", minval = 2, maxval = 52, tooltip = "Converted to bars for whatever chart you are on, so it stays a NINE-WEEK average everywhere. On a weekly...", group = "10. Weekly 9 EMA rule")
-profNear  = input.float(0.5, "'At the line' = within this many ATR of it", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "The method asks for an entry as close to the line as possible, because that is what makes the stop small....", group = "10. Weekly 9 EMA rule")
+profWeeks = input.int(9, "EMA length in WEEKS (not bars)", minval = 2, maxval = 52, group = "10. Weekly 9 EMA rule")
+profNear  = input.float(0.5, "'At the line' = within this many ATR of it", minval = 0.1, maxval = 3.0, step = 0.1, group = "10. Weekly 9 EMA rule")
 profShow  = input.bool(true, "Plot the weekly 9 EMA", group = "10. Weekly 9 EMA rule")
 
 f_prof(int _wk, float _atr) =>
