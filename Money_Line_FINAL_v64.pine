@@ -1616,14 +1616,14 @@ alertcondition(proBreakDn, title = "PRO LINE breakdown (closed below long suppor
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// v64 — BREAKOUT CONSOLE
+// v64 — BREAKOUT CONSOLE + SETUP QUALITY + STRUCTURE
 // Palette: colour constructions this block repeated 3+ times each.
 cP5 = color.new(#00e676, 0)
 cP0 = color.new(#d50000, 0)
 cP1 = color.new(#00c853, 0)
 cP2 = color.new(color.black, 0)
 cP3 = color.new(color.gray, 40)
-cP4 = color.new(#d50000, 25) + SETUP QUALITY + STRUCTURE
+cP4 = color.new(#d50000, 25)
 // Formatting helpers. Three str.tostring forms account for 106 calls in this
 // block; at roughly five tokens each over a plain call they were most of the
 // 48 tokens the script was over CE10117's limit of 100,256.
