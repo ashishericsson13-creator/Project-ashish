@@ -67,6 +67,36 @@
 // deeper record, lower it for a lighter script.
 indicator("Money Line MASTER v64", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
+// PALETTE: every colour construction this script builds three or more times,
+// made once. Pure de-duplication - each name is the identical expression it
+// replaces - and it is what keeps the whole console under CE10117.
+cP0 = color.new(color.gray, 60)
+cP1 = color.new(color.black, 20)
+cP2 = color.new(color.orange, 25)
+cP3 = color.new(color.orange, 30)
+cP4 = color.new(#00c853, 0)
+cP5 = color.new(#d50000, 0)
+cP6 = color.new(#d50000, 20)
+cP7 = color.new(color.gray, 55)
+cP8 = color.new(color.black, 0)
+cP9 = color.new(color.gray, 40)
+cP10 = color.new(#00c853, 30)
+cP11 = color.new(#d50000, 25)
+cP12 = color.new(#00c853, 20)
+cP13 = color.new(#00c853, 25)
+cP14 = color.new(#00c853, 15)
+cP15 = color.new(color.orange, 20)
+cP16 = color.new(#d50000, 15)
+cP17 = color.new(#2962ff, 0)
+cP18 = color.new(#00e676, 0)
+cP19 = color.new(color.blue, 20)
+cP20 = color.new(#d50000, 30)
+cP21 = color.new(#ff1744, 0)
+cP22 = color.new(#2962ff, 20)
+cP23 = color.new(#00c853, 35)
+cP24 = color.new(#2962ff, 25)
+
+
 // ═══════════════════════════════════════════════════════════════
 //  THE SYNTHESIS (from everything we tested):
 //  • Engine = CLEAN baseline (1-close flip) → trades EVERY asset,
@@ -108,7 +138,7 @@ proLB      = input.int(500, "Pro lines: look-back (bars)", minval = 100, maxval 
 proTol     = input.float(0.6, "Pro lines: tolerance %", minval = 0.1, maxval = 3.0, step = 0.1, tooltip = "How far a close may poke through a line before the line is rejected, and how close a swing must be to count as a touch.", group = "2. Display")
 showChan   = input.bool(true, "Pro lines: parallel channel line", group = "2. Display")
 showKeyLv  = input.bool(true, "Pro lines: key horizontal levels", group = "2. Display")
-proColor   = input.color(color.new(#2962ff, 0), "Pro lines: trendline colour", group = "2. Display")
+proColor   = input.color(cP17, "Pro lines: trendline colour", group = "2. Display")
 proLvlColor = input.color(color.new(#ffb300, 0), "Pro lines: key level colour", group = "2. Display")
 
 showVL    = input.bool(true, "Vertical line at each BUY / SELL signal", tooltip = "A thin vertical line on the exact bar of each signal (same last-N cap as the labels).", group = "2. Display")
@@ -117,8 +147,8 @@ showProV  = input.bool(true, "Vertical line + label when price closes through a 
 proRecent = input.int(15, "Pro lines: keep a broken line visible for N bars", minval = 3, maxval = 60, tooltip = "A long line is normally dropped once price closes through it. This keeps it on the chart, with its breakout marker, for N bars after the break.", group = "2. Display")
 
 // ── 2. Display ──
-bullColor = input.color(color.new(#00e676, 0), "Bullish Color", group = "2. Display")
-bearColor = input.color(color.new(#ff1744, 0), "Bearish Color", group = "2. Display")
+bullColor = input.color(cP18, "Bullish Color", group = "2. Display")
+bearColor = input.color(cP21, "Bearish Color", group = "2. Display")
 lineWidth = input.int(3, "Line Width", minval = 1, maxval = 6, group = "2. Display")
 showFill  = input.bool(true, "Fill Between Price and Line", group = "2. Display")
 show200   = input.bool(true, "Show 200-day MA (red)", group = "2. Display")
@@ -423,11 +453,11 @@ fill(srcPlot, mlPlot, color = showFill ? (trend == 1 ? color.new(bullColor, 90) 
 syncMode = input.bool(false, "Chart sync mode — hide MAs, S/R and PRO lines so the axis follows price", tooltip = "OFF (default) = unchanged; every line is drawn and the axis stretches to fit them all.", group = "2. Display")
 plot(show200 and not syncMode ? ma200 : na, "200-day MA", color = color.new(color.red, 35), linewidth = 2)
 ma200bar = ta.sma(close, ma200barLen)
-plot(show200bar and not syncMode ? ma200bar : na, "200-bar MA", color = color.new(color.black, 0), linewidth = 3)
+plot(show200bar and not syncMode ? ma200bar : na, "200-bar MA", color = cP8, linewidth = 3)
 ma50bar = ta.sma(close, ma50barLen)
-plot(show50bar and not syncMode ? ma50bar : na, "50-bar MA", color = color.new(color.orange, 20), linewidth = 2)
+plot(show50bar and not syncMode ? ma50bar : na, "50-bar MA", color = cP15, linewidth = 2)
 ma100bar = ta.sma(close, ma100barLen)
-plot(show100bar and not syncMode ? ma100bar : na, "100-bar MA", color = color.new(#2962ff, 20), linewidth = 2)
+plot(show100bar and not syncMode ? ma100bar : na, "100-bar MA", color = cP22, linewidth = 2)
 
 // ── CORE variant: buy the same first signal, then hold until a weekly close
 // breaks the 200-week line. Runs from the SAME start date as the system and the
@@ -452,7 +482,7 @@ var array<label> sigLbls = array.new<label>()
 var array<line>  sigVLines = array.new<line>()
 if (buySignal or sellSignal) and barstate.isconfirmed
     sigTxt = regimeMode ? (buySignal ? "bullish" : "bearish") : (buySignal ? "▲ BUY" : "▼ SELL")
-    sigCol = regimeMode ? color.new(buySignal ? bullColor : bearColor, 15) : (buySignal ? color.new(#00c853, 0) : color.new(#d50000, 0))
+    sigCol = regimeMode ? color.new(buySignal ? bullColor : bearColor, 15) : (buySignal ? cP4 : cP5)
     array.push(sigLbls, label.new(bar_index, buySignal ? low : high, sigTxt, style = buySignal ? label.style_label_up : label.style_label_down, color = sigCol, textcolor = color.white, size = sigSz))
     if sigMax > 0 and array.size(sigLbls) > sigMax
         label.delete(array.shift(sigLbls))
@@ -480,7 +510,7 @@ var label scoreLb = na
 if barstate.islast and showScoreTag
     label.delete(scoreLb)
     sTxt = thinHist ? "⚠ " + str.tostring(histDays, "#") + "d only" : (trend == 1 ? "Bullish " : "Bearish ") + str.tostring(score) + "/" + str.tostring(nChk) + ""
-    sCol = thinHist ? color.new(#d50000, 15) : scorePct >= 0.88 ? color.new(#00c853, 15) : scorePct >= 0.66 ? color.new(color.orange, 20) : color.new(#d50000, 20)
+    sCol = thinHist ? cP16 : scorePct >= 0.88 ? cP14 : scorePct >= 0.66 ? cP15 : cP6
     scoreLb := label.new(bar_index + 2, close, sTxt + "  ·  " + tfWord, style = label.style_label_left, color = sCol, textcolor = color.white, size = size.small)
 
 // ═══════════════════════════════════════════════════════════════
@@ -579,7 +609,7 @@ if barstate.islast and showSR
 // ═══════════════════════════════════════════════════════════════
 showTL  = input.bool(true, "Show short-term trendlines + TL markers", tooltip = "Draws a line through the last two swing highs and the last two swing lows. Falling highs + a close above the line = breakout marker.", group = "2. Display")
 tlPiv   = input.int(6, "Trendline pivot strength (bars each side)", minval = 2, maxval = 30, group = "2. Display")
-tlColor = input.color(color.new(#2962ff, 0), "Trendline colour", group = "2. Display")
+tlColor = input.color(cP17, "Trendline colour", group = "2. Display")
 showMom = input.bool(true, "Show MOMENTUM row (RSI + MACD state)", group = "2. Display")
 
 tlPH = ta.pivothigh(high, tlPiv, tlPiv)
@@ -818,7 +848,7 @@ if barstate.islast
                         lvq1 = rPa + (rPb - rPa) / (rOa - rOb) * (rOa - q - 1)
                         if close[q] > lvq and close[q + 1] <= lvq1
                             proBrkUpAgo := q
-                            proBrkUpLn := line.new(bar_index - q, low[q], bar_index - q, high[q] + syminfo.mintick, extend = extend.both, color = color.new(#00c853, 0), style = line.style_dashed, width = 2)
+                            proBrkUpLn := line.new(bar_index - q, low[q], bar_index - q, high[q] + syminfo.mintick, extend = extend.both, color = cP4, style = line.style_dashed, width = 2)
                             proBrkUpLb := label.new(bar_index - q, low[q], "▲ BREAKOUT — long resistance broken", style = label.style_label_up, color = color.new(#00c853, 10), textcolor = color.white, size = size.small)
                             break
                 if sSc > 0
@@ -827,7 +857,7 @@ if barstate.islast
                         lvq1 = sPa + (sPb - sPa) / (sOa - sOb) * (sOa - q - 1)
                         if close[q] < lvq and close[q + 1] >= lvq1
                             proBrkDnAgo := q
-                            proBrkDnLn := line.new(bar_index - q, low[q], bar_index - q, high[q] + syminfo.mintick, extend = extend.both, color = color.new(#d50000, 0), style = line.style_dashed, width = 2)
+                            proBrkDnLn := line.new(bar_index - q, low[q], bar_index - q, high[q] + syminfo.mintick, extend = extend.both, color = cP5, style = line.style_dashed, width = 2)
                             proBrkDnLb := label.new(bar_index - q, high[q], "▼ BREAKDOWN — long support broken", style = label.style_label_down, color = color.new(#d50000, 10), textcolor = color.white, size = size.small)
                             break
 
@@ -957,7 +987,7 @@ if barstate.islast
     // two independent warnings — neither may hide the other
     unconfTag = (unconf ? "   ⚠ UNCONFIRMED — " + leftTxt : "") + histTag
     actionTxt = regimeMode ? ((trend == 1 ? "BULLISH — above the flip line" : "BEARISH — below the flip line") + unconfTag) : sellSignal ? "SELL NOW" + unconfTag : buySignal ? "BUY NOW (" + grade + " — " + sizeHint + ")" + unconfTag : trend == 1 ? "HOLDING" + unconfTag : "STAY OUT" + unconfTag
-    actionCol = sellSignal ? color.new(#d50000, 0) : buySignal ? color.new(#00c853, 0) : trend == 1 ? color.new(#00e676, 20) : color.new(#ff1744, 20)
+    actionCol = sellSignal ? cP5 : buySignal ? cP4 : trend == 1 ? color.new(#00e676, 20) : color.new(#ff1744, 20)
 
     // Row 1 — the one price that matters (the flip level)
     lvlName = regimeMode ? "Flip Level" : trend == 1 ? "Flip Level (SELL if " + tfBar + " close under)" : "Flip Level (BUY if " + tfBar + " close over)"
@@ -974,13 +1004,13 @@ if barstate.islast
     // core rows — always shown (compact and full)
     distPct = moneyLine > 0 ? (close - moneyLine) / moneyLine * 100 : na
     lvlVal2 = str.tostring(moneyLine, format.mintick) + "  (price " + (distPct >= 0 ? "+" : "") + str.tostring(distPct, "#.#") + "% vs level)"
-    f_cellL(t, 0, 0, regimeMode ? "TREND" : "ACTION", color.new(color.black, 0))
+    f_cellL(t, 0, 0, regimeMode ? "TREND" : "ACTION", cP8)
     f_cellC(t, 1, 0, actionTxt, actionCol)
-    f_cellL(t, 0, 1, lvlName, color.new(color.black, 20))
-    table.cell(t, 1, 1, lvlVal2, text_color = color.yellow, bgcolor = color.new(color.black, 20), text_halign = text.align_center, text_size = txtSize)
+    f_cellL(t, 0, 1, lvlName, cP1)
+    table.cell(t, 1, 1, lvlVal2, text_color = color.yellow, bgcolor = cP1, text_halign = text.align_center, text_size = txtSize)
     distTxt = "price " + (close >= moneyLine ? "+" : "") + str.tostring((close - moneyLine) / moneyLine * 100, "#.#") + "% vs the line"
-    f_cellL(t, 0, 2, regimeMode ? "Distance" : "Position", color.new(color.black, 20))
-    f_cellC(t, 1, 2, regimeMode ? distTxt : posTxt, color.new(color.black, 20))
+    f_cellL(t, 0, 2, regimeMode ? "Distance" : "Position", cP1)
+    f_cellC(t, 1, 2, regimeMode ? distTxt : posTxt, cP1)
 
     // ═══ REGIME PANEL — the whole table collapses to state, nothing else ═══
     if regimeMode
@@ -989,7 +1019,7 @@ if barstate.islast
         rgC = f_arw(trend)
         nBull = (regD == 1 ? 1 : 0) + (regW == 1 ? 1 : 0) + (trend == 1 ? 1 : 0)
         conflu = na(regD) or na(regW) ? "partial data" : nBull == 3 ? "ALIGNED BULL" : nBull == 0 ? "ALIGNED BEAR" : "CONFLICT (" + str.tostring(nBull) + "/3 bull)"
-        confluCol = na(regD) or na(regW) ? color.new(color.gray, 55) : nBull == 3 ? color.new(#00c853, 20) : nBull == 0 ? color.new(#d50000, 20) : color.new(color.orange, 25)
+        confluCol = na(regD) or na(regW) ? cP7 : nBull == 3 ? cP12 : nBull == 0 ? cP6 : cP2
         sfP = na(flipClose) or flipClose <= 0 ? na : (close - flipClose) / flipClose * 100
         sfB = na(flipBarIdx) ? na : bar_index - flipBarIdx
         rgRows = array.from("Confirm", trend == 1 ? "SELL trigger" : "BUY trigger", "Last Flip", "Flip Date", "Since Flip", "Risk to line", "Daily", "Weekly", "Chart (" + tfWord + ")", "Confluence")
@@ -1002,13 +1032,13 @@ if barstate.islast
              not inPos ? (na(trigDist) ? "—" : "no position  |  buy trigger " + str.tostring(trigDist, "#.#") + "% above") : na(stopDist) ? "—" : str.tostring(stopDist, "#.#") + "% to exit  |  " + str.tostring(math.min(posSize, 100), "#.#") + "% position at " + str.tostring(riskPct, "#.#") + "% risk",
              rgD, rgW, rgC, conflu)
         for i = 0 to 9
-            f_cellL(t, 0, 3 + i, array.get(rgRows, i), color.new(color.black, 20))
-            f_cellC(t, 1, 3 + i, array.get(rgVals, i), i == 9 ? confluCol : i == 0 ? (thinHist ? color.new(#d50000, 15) : scorePct >= 0.88 ? color.new(#00c853, 25) : scorePct >= 0.66 ? color.new(color.orange, 25) : color.new(#d50000, 25)) : i == 5 ? (not inPos or na(stopDist) ? color.new(color.gray, 55) : stopDist <= 8 ? color.new(#00c853, 25) : stopDist <= 15 ? color.new(color.orange, 25) : color.new(#d50000, 20)) : color.new(color.gray, 55))
+            f_cellL(t, 0, 3 + i, array.get(rgRows, i), cP1)
+            f_cellC(t, 1, 3 + i, array.get(rgVals, i), i == 9 ? confluCol : i == 0 ? (thinHist ? cP16 : scorePct >= 0.88 ? cP13 : scorePct >= 0.66 ? cP2 : cP11) : i == 5 ? (not inPos or na(stopDist) ? cP7 : stopDist <= 8 ? cP13 : stopDist <= 15 ? cP2 : cP6) : cP7)
 
     if not regimeMode and not compactMode
         // Row 3 — quality checks live
         qTxt = (trend == 1 ? "Bullish " : "Bearish ") + str.tostring(score) + "/" + str.tostring(nChk) + "   Daily " + (c1 ? "✓" : "✗") + "  200d " + (c2 ? "✓" : "✗") + "  Stack " + (c3 ? "✓" : "✗") + "  Vol " + (c4 ? "✓" : "✗") + "  RSI " + (c5 ? "✓" : "✗") + "  ADX " + (c6 ? "✓" : "✗") + "  Mom " + (c7 ? "✓" : "✗") + "  Ext " + (c8 ? "✓" : "✗") + (wRedundant ? "" : "  Wkly " + (c9 ? "✓" : "✗"))
-        qCol = scorePct >= 0.88 ? color.new(#00c853, 40) : scorePct >= 0.66 ? color.new(color.orange, 30) : color.new(#ff1744, 40)
+        qCol = scorePct >= 0.88 ? color.new(#00c853, 40) : scorePct >= 0.66 ? cP3 : color.new(#ff1744, 40)
 
         // Row 4 — LONG-TERM view in plain words
         ltTxt = above200 and bullStack and trend == 1 ? "HEALTHY UPTREND — ok to hold" :
@@ -1016,11 +1046,11 @@ if barstate.islast
              not c2 and trend == 1 ? "RECOVERY ATTEMPT — not proven yet" :
              c2 ? "PULLBACK in uptrend — watch the line" :
              "DOWNTREND — do not hold long-term"
-        ltCol = above200 and bullStack and trend == 1 ? color.new(#00c853, 20) : trend == 1 or above200 ? color.new(color.orange, 20) : color.new(#d50000, 20)
+        ltCol = above200 and bullStack and trend == 1 ? cP12 : trend == 1 or above200 ? cP15 : cP6
 
-        f_cellL(t, 0, 3, "Quality", color.new(color.black, 20))
+        f_cellL(t, 0, 3, "Quality", cP1)
         f_cellC(t, 1, 3, qTxt, qCol)
-        f_cellL(t, 0, 4, "MEDIUM-TERM (200d)", color.new(color.blue, 20))
+        f_cellL(t, 0, 4, "MEDIUM-TERM (200d)", cP19)
         f_cellC(t, 1, 4, ltTxt, ltCol)
 
         // ── Track Record + Asset Fit (the asset-map lesson, automated) ──
@@ -1031,23 +1061,23 @@ if barstate.islast
         recStart = btUseStart ? "  |  from " + str.tostring(btStartY, "#") : na(firstEntry) ? "" : "  |  since " + str.format_time(firstEntryTime, "MMM yyyy")
         trTxt = tradeCount == 0 ? "no completed trades yet" : str.tostring(winCount) + "/" + str.tostring(tradeCount) + " wins  |  PF " + (na(pfVal) ? "∞" : str.tostring(pfVal, "#.##")) + recStart
         fitTxt = tradeCount < minTrades ? "COLLECTING DATA (need " + str.tostring(minTrades) + "+ trades)" : (not na(pfVal) and pfVal >= 1.5 and winRate >= minWin) or na(pfVal) ? "GOOD — system suits this asset" : pfVal >= 1.0 ? "MIXED — trade small here" : "POOR — hold or skip this asset"
-        fitCol = tradeCount < minTrades ? color.new(color.gray, 40) : (not na(pfVal) and pfVal >= 1.5 and winRate >= minWin) or na(pfVal) ? color.new(#00c853, 20) : pfVal >= 1.0 ? color.new(color.orange, 20) : color.new(#d50000, 20)
-        f_cellL(t, 0, 5, "Track Record", color.new(color.black, 20))
-        f_cellC(t, 1, 5, trTxt, color.new(color.gray, 60))
+        fitCol = tradeCount < minTrades ? cP9 : (not na(pfVal) and pfVal >= 1.5 and winRate >= minWin) or na(pfVal) ? cP12 : pfVal >= 1.0 ? cP15 : cP6
+        f_cellL(t, 0, 5, "Track Record", cP1)
+        f_cellC(t, 1, 5, trTxt, cP0)
         f_cellL(t, 0, 6, "ASSET FIT", color.new(color.purple, 20))
         f_cellC(t, 1, 6, fitTxt, fitCol)
 
         // ── Early Entry scout: daily flipped up while weekly still bearish ──
         earlyTxt = trend == 1 ? "—  (already in: " + tfWord + " confirmed)" : dailyTrend == 1 and scorePct <= scoutPct ? "DAILY TURNED UP — scout entry possible (half size), full size on " + tfWord + " BUY" : dailyTrend == 1 ? "daily up, but the downtrend is still well confirmed — wait" : "no — daily still down, nothing to do"
-        earlyCol = trend == 1 ? color.new(color.gray, 60) : dailyTrend == 1 and scorePct <= scoutPct ? color.new(#00c853, 30) : dailyTrend == 1 ? color.new(color.orange, 30) : color.new(color.gray, 60)
+        earlyCol = trend == 1 ? cP0 : dailyTrend == 1 and scorePct <= scoutPct ? cP10 : dailyTrend == 1 ? cP3 : cP0
         f_cellL(t, 0, 7, "EARLY ENTRY", color.new(color.teal, 20))
         f_cellC(t, 1, 7, earlyTxt, earlyCol)
 
         // ── Confirmation depth: consecutive weekly closes since the flip ──
         confN = na(flipBarIdx) ? 0 : math.min(bar_index - flipBarIdx + 1, 2)
         confTxt2 = trend == 1 ? (confN >= 2 ? "Bullish 2/2 — reinforced (2+ " + tfWord + " closes held)" : "Bullish 1/2 — fresh flip, could still fake out") : (confN >= 2 ? "Bearish 2/2 — reinforced" : "Bearish 1/2 — fresh flip")
-        confCol2 = trend == 1 ? (confN >= 2 ? color.new(#00c853, 20) : color.new(color.orange, 25)) : (confN >= 2 ? color.new(#d50000, 20) : color.new(color.orange, 25))
-        f_cellL(t, 0, 8, "CONFIRM", color.new(color.black, 20))
+        confCol2 = trend == 1 ? (confN >= 2 ? cP12 : cP2) : (confN >= 2 ? cP6 : cP2)
+        f_cellL(t, 0, 8, "CONFIRM", cP1)
         f_cellC(t, 1, 8, confTxt2, confCol2)
 
         // ── HOLD vs TRADE: system's compounded return vs buy&hold since first signal ──
@@ -1055,18 +1085,18 @@ if barstate.islast
         coreRet = coreOn ? (coreEq * coreOpenMult - 1) * 100 : na
         hvtNums = "   [ signals " + f_pc(sysRet) + "  ·  core/" + coreName + " " + f_pc(coreRet) + "  ·  hold " + f_pc(bhRet) + " ]"
         hvtTxt = na(bhRet) or tradeCount < minTrades ? "COLLECTING DATA (need " + str.tostring(minTrades) + "+ trades)" : (bhRet > sysRet * 1.3 and bhRet > 0 ? "HOLD — buy&hold beat the system here (compounder)" : sysRet > bhRet ? "TRADE — system beat buy&hold here" : "EITHER — similar results, your choice") + hvtNums
-        hvtCol = na(bhRet) or tradeCount < minTrades ? color.new(color.gray, 40) : bhRet > sysRet * 1.3 and bhRet > 0 ? color.new(#2962ff, 20) : sysRet > bhRet ? color.new(#00c853, 20) : color.new(color.orange, 25)
+        hvtCol = na(bhRet) or tradeCount < minTrades ? cP9 : bhRet > sysRet * 1.3 and bhRet > 0 ? cP22 : sysRet > bhRet ? cP12 : cP2
         f_cellL(t, 0, 9, "HOLD vs TRADE", color.new(color.navy, 10))
         f_cellC(t, 1, 9, hvtTxt, hvtCol)
 
         // ── Last Flip: price + date (Bullmania-style) ──
         lfTxt = na(lastFlipPx) or na(flipBarIdx) ? "—" : "level " + str.tostring(lastFlipPx, format.mintick) + " crossed on " + str.format_time(flipTime, "yyyy-MM-dd")
-        f_cellL(t, 0, 10, "Last Flip", color.new(color.black, 20))
-        f_cellC(t, 1, 10, lfTxt, color.new(color.gray, 60))
+        f_cellL(t, 0, 10, "Last Flip", cP1)
+        f_cellC(t, 1, 10, lfTxt, cP0)
 
         // ── Tripwire: intraweek price vs the buy level (only meaningful while flat) ──
         twTxt = trend == 1 ? (buySignal and unconf ? "⚡ LIVE CROSS above the buy level — unconfirmed until the " + tfBar + " closes" : "—  (in position; watching exit level instead)") : close > moneyLine ? "⚡ PRICE ABOVE BUY LEVEL — unconfirmed until wk close (early-entry zone)" : "below buy level — waiting  (" + str.tostring((close - moneyLine) / moneyLine * 100, "#.#") + "% away)"
-        twCol = trend == 1 ? (buySignal and unconf ? color.new(#00c853, 15) : color.new(color.gray, 60)) : close > moneyLine ? color.new(#00c853, 15) : color.new(color.gray, 50)
+        twCol = trend == 1 ? (buySignal and unconf ? cP14 : cP0) : close > moneyLine ? cP14 : color.new(color.gray, 50)
         f_cellL(t, 0, 11, "TRIPWIRE", color.new(color.teal, 10))
         f_cellC(t, 1, 11, twTxt, twCol)
 
@@ -1075,7 +1105,7 @@ if barstate.islast
         weeksIn = na(flipBarIdx) ? na : bar_index - flipBarIdx
         atNewHigh = close >= hiAll * 0.995
         stageTxt = trend != 1 ? "—  (no active uptrend)" : atNewHigh ? "BREAKOUT — at/near 500-bar highs, " + str.tostring(weeksIn) + tfBar + " into trend" : offHi > -3 ? "TESTING HIGHS — within 3% of 52-bar high, " + str.tostring(weeksIn) + tfBar + " in" : offHi > -15 ? "RECOVERING — " + str.tostring(-offHi, "#.#") + "% below 52-bar high, " + str.tostring(weeksIn) + tfBar + " in" : "EARLY — still " + str.tostring(-offHi, "#.#") + "% below 52-bar high, " + str.tostring(weeksIn) + tfBar + " in"
-        stageCol = trend != 1 ? color.new(color.gray, 60) : atNewHigh ? color.new(#00c853, 15) : offHi > -3 ? color.new(color.orange, 25) : color.new(color.blue, 30)
+        stageCol = trend != 1 ? cP0 : atNewHigh ? cP14 : offHi > -3 ? cP2 : color.new(color.blue, 30)
         f_cellL(t, 0, 12, "TREND STAGE", color.new(color.maroon, 15))
         f_cellC(t, 1, 12, stageTxt, stageCol)
 
@@ -1084,26 +1114,26 @@ if barstate.islast
         vs200w = ma200bar > 0 ? (close - ma200bar) / ma200bar * 100 : na
         rsiCold = not na(rsiV) and rsiV <= 35
         downTxt = trend == 1 ? "—  (in uptrend)" : not na(vs200w) and vs200w <= 2 and vs200w >= -8 ? "AT " + coreName + " LINE — historic cycle-low zone (" + str.tostring(ddPct, "#.#") + "% off high)" : not na(vs200w) and vs200w < -8 ? "BELOW " + coreName + " LINE — deep bear territory (" + str.tostring(ddPct, "#.#") + "% off high)" : rsiCold ? "STRETCHED — RSI " + str.tostring(rsiV, "#") + ", " + str.tostring(ddPct, "#.#") + "% off high, still above " + coreName + "" : "DECLINING — " + str.tostring(ddPct, "#.#") + "% off high, no exhaustion signs yet"
-        downCol = trend == 1 ? color.new(color.gray, 60) : not na(vs200w) and vs200w <= 2 and vs200w >= -8 ? color.new(#00c853, 30) : rsiCold ? color.new(color.orange, 30) : color.new(color.gray, 45)
+        downCol = trend == 1 ? cP0 : not na(vs200w) and vs200w <= 2 and vs200w >= -8 ? cP10 : rsiCold ? cP3 : color.new(color.gray, 45)
         f_cellL(t, 0, 13, "DOWNSIDE CONTEXT", color.new(color.maroon, 15))
         f_cellC(t, 1, 13, downTxt, downCol)
 
         // ── WHAT TO DO: full plain-English instruction, always on screen ──
         wtdRegime = trend == 1 ? "State is BULLISH. Line sits at " + str.tostring(moneyLine, format.mintick) + ". It turns bearish only on a " + tfWord + " CLOSE below that. No order is implied — decide your own size and horizon." : "State is BEARISH. Line sits at " + str.tostring(moneyLine, format.mintick) + ". It turns bullish only on a " + tfWord + " CLOSE above that."
         wtdTxt = regimeMode ? wtdRegime : buySignal ? "ENTER now (" + sizeHint + "). Set your exit at " + str.tostring(moneyLine, format.mintick) + ". Do nothing else until a " + tfWord + " close breaks it." : sellSignal ? "EXIT now at market. Then wait — do not re-enter until a new BUY prints." : trend == 1 ? "HOLD. Do nothing. Only act if a " + tfWord + " candle CLOSES below " + str.tostring(moneyLine, format.mintick) + " — then sell." : trend == -1 and dailyTrend == 1 and scorePct <= scoutPct ? "OPTIONAL scout: buy HALF size now, complete on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + ". Cut it if the daily rolls back over." : "STAY OUT. Do nothing. Wait for a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " — that is your only entry trigger."
-        wtdCol = buySignal ? color.new(#00c853, 0) : sellSignal ? color.new(#d50000, 0) : trend == 1 ? color.new(#00c853, 35) : color.new(color.gray, 40)
-        f_cellL(t, 0, 14, "WHAT TO DO", color.new(color.black, 0))
+        wtdCol = buySignal ? cP4 : sellSignal ? cP5 : trend == 1 ? cP23 : cP9
+        f_cellL(t, 0, 14, "WHAT TO DO", cP8)
         f_cellC(t, 1, 14, wtdTxt, wtdCol)
 
         // ── BUSINESS QUALITY + VALUATION (reported financials) ──
         if showFund
             bqTxt = na(netMargin) and na(roeFY) ? "n/a (no financials for this symbol)" : "Net margin " + (na(netMargin) ? "—" : str.tostring(netMargin, "#.#") + "%") + "  |  ROE " + (na(roeFY) ? "—" : str.tostring(roeFY, "#.#") + "%") + "  |  Rev growth " + (na(revGrowth) ? "—" : (revGrowth >= 0 ? "+" : "") + str.tostring(revGrowth, "#.#") + "%") + "  |  D/E " + (na(deFY) ? "—" : str.tostring(deFY, "#.##"))
-            bqCol = na(netMargin) ? color.new(color.gray, 60) : netMargin >= 15 and (na(revGrowth) or revGrowth > 0) ? color.new(#00c853, 30) : netMargin >= 8 ? color.new(color.orange, 30) : color.new(#d50000, 30)
+            bqCol = na(netMargin) ? cP0 : netMargin >= 15 and (na(revGrowth) or revGrowth > 0) ? cP10 : netMargin >= 8 ? cP3 : cP20
             f_cellL(t, 0, 15, "BUSINESS QUALITY", color.new(color.green, 25))
             f_cellC(t, 1, 15, bqTxt, bqCol)
 
             valTxt = na(peRatio) ? "n/a" : "P/E " + str.tostring(peRatio, "#.#") + (peRatio < 15 ? "  — historically cheap zone" : peRatio < 30 ? "  — moderate" : "  — rich; needs growth to justify")
-            valCol = na(peRatio) ? color.new(color.gray, 60) : peRatio < 15 ? color.new(#00c853, 30) : peRatio < 30 ? color.new(color.orange, 30) : color.new(#d50000, 30)
+            valCol = na(peRatio) ? cP0 : peRatio < 15 ? cP10 : peRatio < 30 ? cP3 : cP20
             f_cellL(t, 0, 16, "VALUATION", color.new(color.green, 25))
             f_cellC(t, 1, 16, valTxt, valCol)
 
@@ -1115,13 +1145,13 @@ if barstate.islast
         bullN = (regD == 1 ? 1 : 0) + (regW == 1 ? 1 : 0) + (trend == 1 ? 1 : 0)
         anyNa = na(regD) or na(regW)
         mtfTxt = "daily " + f_arw(regD) + "     weekly " + f_arw(regW) + "     " + tfWord + " " + f_arw(trend) + "     —  " + (anyNa ? "partial data" : bullN == 3 ? "ALIGNED BULL" : bullN == 0 ? "ALIGNED BEAR" : "CONFLICT (" + str.tostring(bullN) + "/3 bullish)")
-        mtfCol = anyNa ? color.new(color.gray, 55) : bullN == 3 ? color.new(#00c853, 20) : bullN == 0 ? color.new(#d50000, 20) : color.new(color.orange, 25)
+        mtfCol = anyNa ? cP7 : bullN == 3 ? cP12 : bullN == 0 ? cP6 : cP2
         f_cellL(t, 0, 21, "REGIME (MTF)", color.new(color.teal, 10))
         f_cellC(t, 1, 21, mtfTxt, mtfCol)
 
         // ── TRIGGER: the price that changes the state, spelled out ──
         trgTxt = na(moneyLine) ? "—" : trend == 1 ? "SELL / exit on a " + tfWord + " close below " + str.tostring(moneyLine, format.mintick) + "   (turns BEARISH)" : "BUY / enter on a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + "   (turns BULLISH)"
-        trgCol = na(moneyLine) ? color.new(color.gray, 60) : trend == 1 ? color.new(#d50000, 35) : color.new(#00c853, 35)
+        trgCol = na(moneyLine) ? cP0 : trend == 1 ? color.new(#d50000, 35) : cP23
         f_cellL(t, 0, 23, trend == 1 ? "SELL TRIGGER" : "BUY TRIGGER", color.new(color.black, 15))
         f_cellC(t, 1, 23, trgTxt, trgCol)
 
@@ -1129,14 +1159,14 @@ if barstate.islast
         sfPct = na(flipClose) or flipClose <= 0 ? na : (close - flipClose) / flipClose * 100
         sfWks = na(flipBarIdx) ? na : bar_index - flipBarIdx
         sfTxt = na(sfPct) ? "no flip on record yet" : (trend == 1 ? "BULLISH" : "BEARISH") + " for " + str.tostring(sfWks) + tfBar + "  |  " + (sfPct >= 0 ? "+" : "") + str.tostring(sfPct, "#.#") + "% since the flip at " + str.tostring(flipClose, format.mintick)
-        sfCol = na(sfPct) ? color.new(color.gray, 60) : (trend == 1) == (sfPct >= 0) ? color.new(#00c853, 30) : color.new(color.orange, 30)
-        f_cellL(t, 0, 20, "SINCE FLIP", color.new(color.black, 20))
+        sfCol = na(sfPct) ? cP0 : (trend == 1) == (sfPct >= 0) ? cP10 : cP3
+        f_cellL(t, 0, 20, "SINCE FLIP", cP1)
         f_cellC(t, 1, 20, sfTxt, sfCol)
 
         // ── WHIPSAW: exits that bought back higher soon after ──
         whipPct = tradeCount > 0 ? whipCount / tradeCount * 100 : na
         whipTxt = tradeCount < minTrades ? "COLLECTING DATA" : whipCount == 0 ? "none — no exit was re-bought higher within " + str.tostring(whipWeeks) + tfBar : str.tostring(whipCount) + " of " + str.tostring(tradeCount) + " exits bought back higher within " + str.tostring(whipWeeks) + tfBar + "  |  cost " + str.tostring(whipCost, "#.#") + "% total. Raise 'closes needed to SELL' to cut these."
-        whipCol = tradeCount < minTrades ? color.new(color.gray, 40) : na(whipPct) or whipPct < 10 ? color.new(#00c853, 30) : whipPct < 25 ? color.new(color.orange, 30) : color.new(#d50000, 25)
+        whipCol = tradeCount < minTrades ? cP9 : na(whipPct) or whipPct < 10 ? cP10 : whipPct < 25 ? cP3 : cP11
         f_cellL(t, 0, 19, "WHIPSAW", color.new(color.maroon, 10))
         f_cellC(t, 1, 19, whipTxt, whipCol)
 
@@ -1144,38 +1174,38 @@ if barstate.islast
         core200 = ma200bar
         coreGap = not na(core200) and core200 > 0 ? (close - core200) / core200 * 100 : na
         coreTxt = na(core200) ? "n/a — needs " + str.tostring(ma200barLen) + " bars of history" : close > core200 ? "HOLD CORE — 200-bar line at " + str.tostring(core200, format.mintick) + " (price " + (coreGap >= 0 ? "+" : "") + str.tostring(coreGap, "#.#") + "% above). Core exits ONLY on a " + tfWord + " close below it." : "CORE BROKEN — " + tfWord + " close is below the 200-bar line at " + str.tostring(core200, format.mintick) + ". This is the long-term exit, not a dip."
-        coreCol = na(core200) ? color.new(color.gray, 60) : close > core200 ? color.new(#2962ff, 25) : color.new(#d50000, 20)
+        coreCol = na(core200) ? cP0 : close > core200 ? cP24 : cP6
         f_cellL(t, 0, 18, "CORE EXIT (" + coreName + ")", color.new(color.navy, 10))
         f_cellC(t, 1, 18, coreTxt, coreCol)
 
         riskTxt = not inPos ? (na(trigDist) ? "—" : "no position — buy trigger sits " + str.tostring(trigDist, "#.#") + "% ABOVE price. Size is only meaningful once a stop exists below entry.") : na(stopDist) ? "—" : "stop is " + str.tostring(stopDist, "#.#") + "% away  |  at " + str.tostring(riskPct, "#.#") + "% risk that is a " + str.tostring(math.min(posSize, 100), "#.#") + "% position" + (stopDist > 15 ? "  — WIDE stop, ATR is inflated; size down hard" : stopDist > 8 ? "  — moderate" : "  — tight")
-        riskCol = not inPos or na(stopDist) ? color.new(color.gray, 55) : stopDist <= 8 ? color.new(#00c853, 25) : stopDist <= 15 ? color.new(color.orange, 25) : color.new(#d50000, 20)
+        riskCol = not inPos or na(stopDist) ? cP7 : stopDist <= 8 ? cP13 : stopDist <= 15 ? cP2 : cP6
         f_cellL(t, 0, 22, "RISK & SIZE", color.new(color.purple, 10))
         f_cellC(t, 1, 22, riskTxt, riskCol)
 
         f_cellL(t, 0, 17, "S/R LEVELS", color.new(color.olive, 15))
-        f_cellC(t, 1, 17, srTxt, color.new(color.gray, 55))
+        f_cellC(t, 1, 17, srTxt, cP7)
 
     if compactMode and not regimeMode
         // smart note: surfaces the single most relevant secondary fact
         noteTxt = buySignal ? "ENTER now (" + sizeHint + "); exit at " + str.tostring(moneyLine, format.mintick) : sellSignal ? "EXIT now at market; wait for next BUY" : trend == 1 ? "HOLD — only sell if a " + tfWord + " close breaks " + str.tostring(moneyLine, format.mintick) : trend == -1 and dailyTrend == 1 and scorePct <= scoutPct ? "optional scout: half size now, complete on " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) : "STAY OUT — wait for a " + tfWord + " close above " + str.tostring(moneyLine, format.mintick) + " (" + str.tostring((close - moneyLine) / moneyLine * 100, "#.#") + "% away)"
-        noteCol = trend == -1 and (dailyTrend == 1 and scorePct <= scoutPct or close > moneyLine) ? color.new(#00c853, 30) : color.new(color.gray, 55)
+        noteCol = trend == -1 and (dailyTrend == 1 and scorePct <= scoutPct or close > moneyLine) ? cP10 : cP7
         f_cellL(t, 0, 3, thinHist ? "⚠ HISTORY" : "NOTE", color.new(color.teal, 15))
         f_cellC(t, 1, 3, noteTxt, noteCol)
         // compact: long-term verdict (hold-vs-trade + structural health in one line)
         cLtTxt = (na(bhRet) or tradeCount < minTrades ? "fit: collecting data" : bhRet > sysRet * 1.3 and bhRet > 0 ? "HOLD-type (compounder)" : sysRet > bhRet ? "TRADE-type (signals win here)" : "either") + "  |  " + (above200 and bullStack and trend == 1 ? "healthy uptrend" : above200 and trend == 1 ? "uptrend rebuilding" : trend == 1 ? "recovery unproven" : above200 ? "pullback in uptrend" : "downtrend")
-        cLtCol = above200 and bullStack and trend == 1 ? color.new(#00c853, 30) : trend == 1 or above200 ? color.new(color.orange, 30) : color.new(#d50000, 30)
+        cLtCol = above200 and bullStack and trend == 1 ? cP10 : trend == 1 or above200 ? cP3 : cP20
         // Confirm score — five quality checks, shown as n/5 like the trend row
         // it sits under. This does NOT decide bullish/bearish; the flip line
         // does that. It says how much agreement is behind the current state.
         cfTxt = thinHist ? "⚠ only " + str.tostring(histDays, "#") + "d of history — score not meaningful" : (trend == 1 ? "Bullish " : "Bearish ") + str.tostring(score) + "/" + str.tostring(nChk) + "   Daily " + (c1 ? "✓" : "✗") + "  200d " + (c2 ? "✓" : "✗") + "  Stack " + (c3 ? "✓" : "✗") + "  Vol " + (c4 ? "✓" : "✗") + "  RSI " + (c5 ? "✓" : "✗") + "  ADX " + (c6 ? "✓" : "✗") + "  Mom " + (c7 ? "✓" : "✗") + "  Ext " + (c8 ? "✓" : "✗") + (wRedundant ? "" : "  Wkly " + (c9 ? "✓" : "✗"))
-        cfCol = thinHist ? color.new(#d50000, 15) : scorePct >= 0.88 ? color.new(#00c853, 25) : scorePct >= 0.66 ? color.new(color.orange, 25) : color.new(#d50000, 25)
+        cfCol = thinHist ? cP16 : scorePct >= 0.88 ? cP13 : scorePct >= 0.66 ? cP2 : cP11
         f_cellL(t, 0, 5, "CONFIRM", color.new(color.purple, 15))
         f_cellC(t, 1, 5, cfTxt, cfCol)
         cTrgTxt = na(moneyLine) ? "—" : (trend == 1 ? "SELL on a " + tfWord + " close below " : "BUY on a " + tfWord + " close above ") + str.tostring(moneyLine, format.mintick)
         f_cellL(t, 0, 6, trend == 1 ? "SELL TRIGGER" : "BUY TRIGGER", color.new(color.black, 15))
-        f_cellC(t, 1, 6, cTrgTxt, trend == 1 ? color.new(#d50000, 35) : color.new(#00c853, 35))
-        f_cellL(t, 0, 4, "LONG-TERM", color.new(color.blue, 20))
+        f_cellC(t, 1, 6, cTrgTxt, trend == 1 ? color.new(#d50000, 35) : cP23)
+        f_cellL(t, 0, 4, "LONG-TERM", cP19)
         f_cellC(t, 1, 4, cLtTxt, cLtCol)
 
 // ── TRENDLINES + MOMENTUM rows (placed after whichever panel is active) ──
@@ -1187,13 +1217,13 @@ if barstate.islast
         resTxt = na(proResNow) ? "res: none" : (proResSlope < 0 ? "↘ res " : "↗ res ") + str.tostring(proResNow, format.mintick) + " (" + str.tostring(proResT) + "x) " + (close > proResNow ? "price ABOVE" : str.tostring((proResNow - close) / close * 100, "#.#") + "% away")
         supTxt = na(proSupNow) ? "sup: none" : (proSupSlope < 0 ? "↘ sup " : "↗ sup ") + str.tostring(proSupNow, format.mintick) + " (" + str.tostring(proSupT) + "x) " + (close < proSupNow ? "price BELOW" : str.tostring((close - proSupNow) / close * 100, "#.#") + "% away")
         keyTxt = (na(proKR) ? "" : "   |   level R " + str.tostring(proKR, format.mintick)) + (na(proKS) ? "" : "   S " + str.tostring(proKS, format.mintick)) + (na(proResNow) or na(proSupNow) ? "   [" + proDbg + "]" : "")
-        proCol = not na(proResNow) and close > proResNow ? color.new(#00c853, 15) : not na(proSupNow) and close < proSupNow ? color.new(#d50000, 15) : color.new(color.gray, 55)
+        proCol = not na(proResNow) and close > proResNow ? cP14 : not na(proSupNow) and close < proSupNow ? cP16 : cP7
         f_cellL(t, 0, tlRow, "TRENDLINES", color.new(color.blue, 25))
         f_cellC(t, 1, tlRow, resTxt + "   |   " + supTxt + keyTxt + (na(proBrkUpAgo) ? "" : "   ▲ BREAKOUT " + f_age(proBrkUpAgo)) + (na(proBrkDnAgo) ? "" : "   ▼ BREAKDOWN " + f_age(proBrkDnAgo)), proCol)
     if showTL
         tlTxt = na(tlUpNow) and na(tlLoNow) ? "not enough swing points yet" : f_tl(hiA_px, hiB_px, tlUpNow, true) + "   |   " + f_tl(loA_px, loB_px, tlLoNow, false)
         tlTxt2 = tlTxt + (tlBreakUp ? "   ▲ BROKE OUT this bar" : tlBreakDn ? "   ▼ BROKE DOWN this bar" : "")
-        tlCol = tlBreakUp ? color.new(#00c853, 15) : tlBreakDn ? color.new(#d50000, 15) : color.new(color.gray, 55)
+        tlCol = tlBreakUp ? cP14 : tlBreakDn ? cP16 : cP7
         f_cellL(t, 0, tlsRow, "SHORT-TERM LINES", color.new(color.blue, 25))
         f_cellC(t, 1, tlsRow, tlTxt2, tlCol)
     if showMom
@@ -1201,7 +1231,7 @@ if barstate.islast
         rsiPart = na(rsiV) ? "RSI —" : "RSI " + str.tostring(rsiV, "#") + " (" + rsiZone + ")" + (na(rsiXAge) ? "" : ", crossed " + (rsiV >= 50 ? "up " : "down ") + "50 " + f_age(rsiXAge))
         macdPart = na(macdL) or na(macdS) ? "MACD —" : "MACD " + (macdL > macdS ? "above signal" : "below signal") + (macdL > 0 ? ", above zero" : ", below zero") + ", hist " + (macdH >= 0 ? "+" : "") + str.tostring(math.round(macdH, 2)) + (na(macdXAge) ? "" : ", crossed " + (macdL > macdS ? "up " : "down ") + f_age(macdXAge))
         momN = (not na(rsiV) and rsiV >= 50 ? 1 : 0) + (not na(macdL) and not na(macdS) and macdL > macdS ? 1 : 0)
-        momCol = momN == 2 ? color.new(#00c853, 30) : momN == 0 ? color.new(#d50000, 30) : color.new(color.orange, 30)
+        momCol = momN == 2 ? cP10 : momN == 0 ? cP20 : cP3
         f_cellL(t, 0, momRow, "MOMENTUM", color.new(color.purple, 20))
         f_cellC(t, 1, momRow, rsiPart + "   |   " + macdPart, momCol)
     // ── OUTLOOK: five votes, each +1 / 0 / -1. State of the evidence, not a forecast. ──
@@ -1215,8 +1245,8 @@ if barstate.islast
     olWord = olN >= 4 ? "STRONG BULLISH" : olN >= 2 ? "LEAN BULLISH" : olN <= -4 ? "STRONG BEARISH" : olN <= -2 ? "LEAN BEARISH" : "MIXED — no edge"
     olNote = not na(rsiV) and rsiV >= 70 ? "   |   RSI stretched — chasing risk" : not na(rsiV) and rsiV <= 30 ? "   |   RSI washed out — bounce risk" : ""
     olTxt  = thinHist ? "UNRATED — too little history" : olWord + "  (" + (olN > 0 ? "+" : "") + str.tostring(olN) + " of 5)   line " + f_dir(trendF) + "  D+W " + f_dir(mtfF) + "  trendline " + f_dir(tlF) + "  RSI " + f_dir(rsiF) + "  MACD " + f_dir(macdF) + olNote
-    olCol  = thinHist ? color.new(color.gray, 40) : olN >= 2 ? color.new(#00c853, 25) : olN <= -2 ? color.new(#d50000, 25) : color.new(color.orange, 30)
-    f_cellL(t, 0, olRow, "OUTLOOK", color.new(color.black, 0))
+    olCol  = thinHist ? cP9 : olN >= 2 ? cP13 : olN <= -2 ? cP11 : cP3
+    f_cellL(t, 0, olRow, "OUTLOOK", cP8)
     f_cellC(t, 1, olRow, olTxt, olCol)
 
 // ═══════════════════════════════════════════════════════════════
@@ -1331,7 +1361,7 @@ f_tag(_t, _d, _f) =>
     na(_t) or na(_d) ? "— no data" : _f == 1 and _t == 1 ? "★ NEW BUY" : _f == 1 and _t == -1 ? "★ NEW SELL" : _t == -1 and _d > -3 ? "◆ NEAR BUY " + str.tostring(_d, "#.#") + "%" : _t == 1 and _d < 3 ? "◆ NEAR SELL " + str.tostring(_d, "#.#") + "%" : _t == 1 ? str.tostring(_d, "#") + "% above exit" : str.tostring(math.abs(_d), "#") + "% below trigger"
 
 f_tagCol(_t, _d, _f) =>
-    na(_t) or na(_d) ? color.new(color.gray, 55) : _f == 1 and _t == 1 ? color.new(#00c853, 0) : _f == 1 and _t == -1 ? color.new(#d50000, 0) : (_t == -1 and not na(_d) and _d > -3) or (_t == 1 and not na(_d) and _d < 3) ? color.new(color.orange, 10) : _t == 1 ? color.new(#00c853, 60) : color.new(#d50000, 60)
+    na(_t) or na(_d) ? cP7 : _f == 1 and _t == 1 ? cP4 : _f == 1 and _t == -1 ? cP5 : (_t == -1 and not na(_d) and _d > -3) or (_t == 1 and not na(_d) and _d < 3) ? color.new(color.orange, 10) : _t == 1 ? color.new(#00c853, 60) : color.new(#d50000, 60)
 
 if showScanner and barstate.islast
     table.clear(sc, 0, 0, 1, 33)
@@ -1373,7 +1403,7 @@ if showScanner and barstate.islast
     // always present — the urgency sort would otherwise drop a settled trend
     // (e.g. TCS at +12% above its line) below the display cut.
     array.push(scores, addChartSym ? -1.0 : f_score(st32, sd32, sf32)), array.push(idxs, 32)
-    f_cellL(sc, 0, 0, "FOCUS LIST v62", color.new(color.blue, 20))
+    f_cellL(sc, 0, 0, "FOCUS LIST v62", cP19)
     // diagnostic: the bar each symbol was read at. Same date on two different
     // charts = the Focus List is genuinely aligned.
     // Every symbol should be read at the SAME bar. If they are not, the scan is
@@ -1393,7 +1423,7 @@ if showScanner and barstate.islast
     tolMs  = math.round(timeframe.in_seconds(scanTF) * 1000 * tolBars)
     mixed  = not na(asOfT) and not na(asOfMin) and (asOfT - asOfMin) > tolMs
     asOfTx = showAsOf and nz(asOfT, 0) > 0 ? "  ·  as of w/e " + str.format_time(asOfT, "dd MMM", syminfo.timezone) + (mixed ? "  ⚠ MIXED DATES" : "") + "  ⚡=live" : ""
-    hdrCol = mixed ? color.new(#d50000, 10) : color.new(color.blue, 20)
+    hdrCol = mixed ? color.new(#d50000, 10) : cP19
     f_cellC(sc, 1, 0, scanTF + "  " + chartMkt + "  (top " + str.tostring(maxShow) + ")" + asOfTx, hdrCol)
     shown = 0
     // names already rendered, so the chart symbol in slot 32 cannot appear twice
@@ -1591,7 +1621,7 @@ if showScanner and barstate.islast
             fvAge  = math.floor(fv / 4)    // bars in the current regime
             ageTxt = fvAge <= 0 ? "" : "  " + str.tostring(fvAge) + tfBar
             stale = not na(qv) and not na(asOfT) and (asOfT - qv) > tolMs
-            f_cellL(sc, 0, shown, (stale ? "⧗ " : "") + syminfo.ticker(sym), stale ? color.new(#d50000, 45) : color.new(color.black, 20))
+            f_cellL(sc, 0, shown, (stale ? "⧗ " : "") + syminfo.ticker(sym), stale ? color.new(#d50000, 45) : cP1)
             // ⚡ = the live bar has already crossed but the bar has not closed.
             // Early warning, and explicitly NOT a confirmed signal.
             f_cellC(sc, 1, shown, (pv == 1 ? "⚡ " : "") + f_tag(tv, dv, fvFlip) + ageTxt, pv == 1 ? color.new(#7c4dff, 15) : f_tagCol(tv, dv, fvFlip))
@@ -1617,13 +1647,6 @@ alertcondition(proBreakDn, title = "PRO LINE breakdown (closed below long suppor
 
 // ═══════════════════════════════════════════════════════════════════════════
 // v64 — BREAKOUT CONSOLE + SETUP QUALITY + STRUCTURE
-// Palette: colour constructions this block repeated 3+ times each.
-cP5 = color.new(#00e676, 0)
-cP0 = color.new(#d50000, 0)
-cP1 = color.new(#00c853, 0)
-cP2 = color.new(color.black, 0)
-cP3 = color.new(color.gray, 40)
-cP4 = color.new(#d50000, 25)
 // Formatting helpers. Three str.tostring forms account for 106 calls in this
 // block; at roughly five tokens each over a plain call they were most of the
 // 48 tokens the script was over CE10117's limit of 100,256.
@@ -1966,7 +1989,7 @@ f_boDraw(array<line> _l, array<label> _b, array<box> _x) =>
         array.push(_l, line.new(bar_index - 100, boRes, bar_index + 12, boRes, extend = extend.right, color = color.new(#ff5252, 0), width = 2))
         array.push(_b, label.new(bar_index + 12, boRes, "DEFENDED R " + f_px(boRes) + "  ·  " + f_n0(boResHit) + " touches", style = label.style_label_left, color = color.new(#ff5252, 25), textcolor = color.white, size = size.tiny))
     if boShowLvl and not na(boSup)
-        array.push(_l, line.new(bar_index - 100, boSup, bar_index + 12, boSup, extend = extend.right, color = cP5, width = 2))
+        array.push(_l, line.new(bar_index - 100, boSup, bar_index + 12, boSup, extend = extend.right, color = cP18, width = 2))
         array.push(_b, label.new(bar_index + 12, boSup, "DEFENDED S " + f_px(boSup) + "  ·  " + f_n0(boSupHit) + " touches", style = label.style_label_left, color = color.new(#00e676, 25), textcolor = color.white, size = size.tiny))
     if suOn and suShowBox and suIsBase and not na(suHi) and not na(suLo)
         array.push(_x, box.new(bar_index - suBars + 1, suHi, bar_index, suLo, border_color = color.new(#00bcd4, 20), border_width = 2, bgcolor = color.new(#00bcd4, 92), text = f_n0(suBars) + "-bar base  ·  " + str.tostring(f_suW(suHi, suLo), "#.#") + "% wide", text_color = color.new(#00bcd4, 0), text_size = size.small, text_halign = text.align_center, text_valign = text.align_top))
@@ -1981,9 +2004,9 @@ f_boDraw(array<line> _l, array<label> _b, array<box> _x) =>
     if wgOn and wgHave and wgApexOk
         wgApexBar = bar_index + int(math.round(wgApexN))
         wgApexPx  = tlUpNow + wgResSl * wgApexN
-        array.push(_l, line.new(hiB_bar, hiB_px, wgApexBar, wgApexPx, color = color.new(#2962ff, 0), width = 2))
-        array.push(_l, line.new(loB_bar, loB_px, wgApexBar, wgApexPx, color = color.new(#2962ff, 0), width = 2))
-        array.push(_b, label.new(wgApexBar, wgApexPx, wgType + "\napex in " + f_n0(wgApexN) + " bars", style = label.style_label_left, color = color.new(#2962ff, 20), textcolor = color.white, size = size.tiny))
+        array.push(_l, line.new(hiB_bar, hiB_px, wgApexBar, wgApexPx, color = cP17, width = 2))
+        array.push(_l, line.new(loB_bar, loB_px, wgApexBar, wgApexPx, color = cP17, width = 2))
+        array.push(_b, label.new(wgApexBar, wgApexPx, wgType + "\napex in " + f_n0(wgApexN) + " bars", style = label.style_label_left, color = cP22, textcolor = color.white, size = size.tiny))
     if wgOn and wgHave and wgIsChan
         array.push(_l, line.new(hiB_bar, hiB_px, bar_index + 15, tlUpNow + wgResSl * 15, color = color.new(#2962ff, 15), width = 2))
         array.push(_l, line.new(loB_bar, loB_px, bar_index + 15, tlLoNow + wgSupSl * 15, color = color.new(#2962ff, 15), width = 2))
@@ -1993,9 +2016,9 @@ f_boDraw(array<line> _l, array<label> _b, array<box> _x) =>
             array.push(_l, line.new(bar_index - 40, wgMidNw - wgMidSl * 40, bar_index + 15, wgMidNw + wgMidSl * 15, color = color.new(#2962ff, 45), style = line.style_dashed, width = 1))
     if boFlipOn and boShowLvl
         array.push(_l, line.new(bar_index - 60, boFlipLvl, bar_index + 12, boFlipLvl, extend = extend.right, color = color.new(#2962ff, 10), width = 2))
-        array.push(_b, label.new(bar_index + 12, boFlipLvl, "Resistance turned into support  " + f_px(boFlipLvl) + (boFlipRe ? "  ✓ retested" : "  · untested"), style = label.style_label_left, color = color.new(#2962ff, 25), textcolor = color.white, size = size.tiny))
+        array.push(_b, label.new(bar_index + 12, boFlipLvl, "Resistance turned into support  " + f_px(boFlipLvl) + (boFlipRe ? "  ✓ retested" : "  · untested"), style = label.style_label_left, color = cP24, textcolor = color.white, size = size.tiny))
     if boActing
-        array.push(_b, label.new(bar_index, boDir == 1 ? low : high, boVerdict + "  " + f_n0(boScore) + "/10", style = boDir == 1 ? label.style_label_up : label.style_label_down, color = boDir == 1 ? cP1 : cP0, textcolor = color.white, size = size.normal))
+        array.push(_b, label.new(bar_index, boDir == 1 ? low : high, boVerdict + "  " + f_n0(boScore) + "/10", style = boDir == 1 ? label.style_label_up : label.style_label_down, color = boDir == 1 ? cP4 : cP5, textcolor = color.white, size = size.normal))
     0
 
 f_boVert(array<line> _v) =>
@@ -2007,8 +2030,8 @@ f_boVert(array<line> _v) =>
 plot(profOn and profShow and not syncMode ? profEma : na, "Weekly 9 EMA", color = color.new(#ffd600, 0), linewidth = 3)
 plot(emaShow and not syncMode ? emaF : na, "Fast EMA", color = color.new(#ff5252, 10), linewidth = 2)
 plot(emaShow and not syncMode ? emaS : na, "Slow EMA", color = color.new(color.gray, 10), linewidth = 2)
-plotshape(boBrkHorzUp, "BO — defended level", style = shape.triangleup,   location = location.belowbar, color = cP5, size = size.small, text = "BO", textcolor = cP5)
-plotshape(boBrkHorzDn, "BD — defended level", style = shape.triangledown, location = location.abovebar, color = color.new(#ff1744, 0), size = size.small, text = "BD", textcolor = color.new(#ff1744, 0))
+plotshape(boBrkHorzUp, "BO — defended level", style = shape.triangleup,   location = location.belowbar, color = cP18, size = size.small, text = "BO", textcolor = cP18)
+plotshape(boBrkHorzDn, "BD — defended level", style = shape.triangledown, location = location.abovebar, color = cP21, size = size.small, text = "BD", textcolor = cP21)
 
 if boOn and boShowVert and (boBrkUp or boBrkDn) and barstate.isconfirmed
     f_boVert(boVt)
@@ -2205,9 +2228,9 @@ if not na(botSigLo) and low < botSigLo
     botFail := true
 botFailNew = botFail and not botFail[1]
 
-plotshape(botFailNew, title = "BOTTOM failed", style = shape.xcross, location = location.belowbar, color = cP0, size = size.tiny, text = "✗ bottom failed", textcolor = cP0)
+plotshape(botFailNew, title = "BOTTOM failed", style = shape.xcross, location = location.belowbar, color = cP5, size = size.tiny, text = "✗ bottom failed", textcolor = cP5)
 
-plotshape(botSig, title = "BOTTOM confirmed", style = shape.labelup, location = location.belowbar, color = cP1, text = "BOTTOM", textcolor = color.white, size = size.small)
+plotshape(botSig, title = "BOTTOM confirmed", style = shape.labelup, location = location.belowbar, color = cP4, text = "BOTTOM", textcolor = color.white, size = size.small)
 alertcondition(botSig, title = "Bottom confirmed", message = "BOTTOM confirmed on {{ticker}} — bottom score met on the {{interval}} chart")
 
 f_botTicks() =>
@@ -2426,27 +2449,27 @@ boWTD = f_whatToDo()
 f_boSummary(table _t) =>
     if barstate.islast and boOn
         table.clear(_t, 0, 0, 1, 25)
-        aCol = atrBull ? color.new(#00c853, 25) : cP4
-        lCol = lnBull ? color.new(#00c853, 25) : lnBear ? cP4 : color.new(color.orange, 30)
-        vCol = boTrapUp or boTrapDn ? cP0 : bothBuy ? cP1 : bothSell ? cP0 : color.new(color.orange, 15)
-        bCol = not botOn or na(botAV) ? cP3 : botConf ? color.new(#00c853, 20) : botAbove ? color.new(color.orange, 25) : cP4
+        aCol = atrBull ? cP13 : cP11
+        lCol = lnBull ? cP13 : lnBear ? cP11 : cP3
+        vCol = boTrapUp or boTrapDn ? cP5 : bothBuy ? cP4 : bothSell ? cP5 : color.new(color.orange, 15)
+        bCol = not botOn or na(botAV) ? cP9 : botConf ? cP12 : botAbove ? cP2 : cP11
         ltBad = exRoll or exBiz or exHot or (profOn and profLost)
-        ltCol = not bqHave and not ltBad ? cP3 : exRoll and exBiz ? color.new(#b71c1c, 0) : exRoll ? color.new(#d50000, 20) : exBiz or exHot ? color.new(color.orange, 20) : bigBuy ? color.new(#1b5e20, 0) : color.new(#1b5e20, 30)
+        ltCol = not bqHave and not ltBad ? cP9 : exRoll and exBiz ? color.new(#b71c1c, 0) : exRoll ? cP6 : exBiz or exHot ? cP15 : bigBuy ? color.new(#1b5e20, 0) : color.new(#1b5e20, 30)
         _r = 0
-        f_cellL(_t, 0, _r, "ATR MODEL", cP2)
+        f_cellL(_t, 0, _r, "ATR MODEL", cP8)
         f_cellL(_t, 1, _r, (atrBull ? "▲ BULLISH   —   STAY LONG above " + f_px(moneyLine) + "   ·   SELL on a " + tfWord + " close BELOW it" : "▼ BEARISH   —   STAY OUT below " + f_px(moneyLine) + "   ·   BUY on a " + tfWord + " close ABOVE it") + "   (" + str.tostring(math.abs(moneyLine - close) / close * 100, "#.#") + "% " + (moneyLine > close ? "above" : "below") + " price)", aCol)
         _r := _r + 1
-        f_cellL(_t, 0, _r, "LINES", cP2)
+        f_cellL(_t, 0, _r, "LINES", cP8)
         f_cellL(_t, 1, _r, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + f_n0(profWeeks) + "wEMA " + (lnV1 > 0 ? "▲ above" : "▼ below") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : "▼ below") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : "▼ below"), lCol)
         _r := _r + 1
-        f_cellL(_t, 0, _r, "VERDICT", cP2)
+        f_cellL(_t, 0, _r, "VERDICT", cP8)
         f_cellL(_t, 1, _r, (boTrapUp ? "⚠ FAILED BREAKOUT — the break was retaken" : boTrapDn ? "⚠ FAILED BREAKDOWN — shorts trapped" : agreeWord) + (boDir == 0 ? "   ·   nothing has broken recently" : "   ·   " + f_boKind(boKindAt) + " broke " + f_n0(boBrkAge) + " bar(s) ago, " + f_n0(boScore) + "/10" + (boBrkUnconf ? " ⧗ bar not closed" : boGate ? " ✓gate" : " ✗gate — " + (k1 ? "weak close" : k2 ? "no volume surge" : "no volume surge, weak close"))), vCol)
         _r := _r + 1
-        f_cellL(_t, 0, _r, "▶ DO THIS", cP2)
+        f_cellL(_t, 0, _r, "▶ DO THIS", cP8)
         f_cellL(_t, 1, _r, boWTD, color.new(#00695c, 10))
         _r := _r + 1
-        tCol = boDir != 1 or na(boTarget) ? cP3 : close >= boTarget ? cP1 : color.new(#00695c, 30)
-        f_cellL(_t, 0, _r, "AT TARGET", cP2)
+        tCol = boDir != 1 or na(boTarget) ? cP9 : close >= boTarget ? cP4 : color.new(#00695c, 30)
+        f_cellL(_t, 0, _r, "AT TARGET", cP8)
         f_cellL(_t, 1, _r, tgtPlan, tCol)
         _r := _r + 1
         // The evidence rows. They explain the verdict rather than carry it, so a
@@ -2466,13 +2489,13 @@ f_boSummary(table _t) =>
             f_cellL(_t, 0, _r, "LEVELS", color.new(color.olive, 20))
             f_cellL(_t, 1, _r, (na(lvlR) or lvlRfar ? "resistance — none within " + f_n0(lvlMaxATR) + " ATR" : "resistance " + f_px(lvlR) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + f_n0(lvlMaxATR) + " ATR" : "support " + f_px(lvlS) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + f_px(boFlipLvl) + (boFlipRe ? " ✓held" : " ·untested")), color.new(color.olive, 50))
             _r := _r + 1
-            f_cellL(_t, 0, _r, "STRUCTURE", color.new(#2962ff, 25))
+            f_cellL(_t, 0, _r, "STRUCTURE", cP24)
             f_cellL(_t, 1, _r, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? f_n0(suBars) + "-bar base " + f_px(suLo) + "-" + f_px(suHi) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + f_n0(wgApexN) + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + f_px(suTgt1)), color.new(#2962ff, 50))
             _r := _r + 1
         f_cellL(_t, 0, _r, "BOTTOM", color.new(#00bfa5, 15))
         f_cellL(_t, 1, _r, botSay, bCol)
         _r := _r + 1
-        cCol = botMature ? cP3 : botConf ? cP1 : botNeedN - botScr <= 1 ? color.new(color.orange, 10) : botScr >= 2 ? cP4 : color.new(#b71c1c, 10)
+        cCol = botMature ? cP9 : botConf ? cP4 : botNeedN - botScr <= 1 ? color.new(color.orange, 10) : botScr >= 2 ? cP11 : color.new(#b71c1c, 10)
         f_cellL(_t, 0, _r, "BOTTOM CALL", color.new(#00bfa5, 0))
         f_cellL(_t, 1, _r, botCall, cCol)
         _r := _r + 1
