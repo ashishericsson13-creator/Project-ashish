@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v65.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v65.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -1515,7 +1515,7 @@ wgApexOk = wgOn and not na(wgApexN) and wgApexN <= wgMaxBar
 wgTol    = na(atrV) ? na : wgFlat * atrV
 wgRFlat  = wgHave and not na(wgTol) and math.abs(wgResSl) <= wgTol
 wgSFlat  = wgHave and not na(wgTol) and math.abs(wgSupSl) <= wgTol
-wgType   = not wgOn or not wgHave ? "—" : wgApexOk ? (wgRFlat and wgSupSl > 0 ? "ASCENDING TRIANGLE" : wgSFlat and wgResSl < 0 ? "DESCENDING TRIANGLE" : wgResSl < 0 and wgSupSl > 0 ? "SYMMETRICAL TRIANGLE" : wgResSl < 0 and wgSupSl < 0 ? "FALLING WEDGE" : wgResSl > 0 and wgSupSl > 0 ? "RISING WEDGE" : "CONVERGING") : (not na(wgGap) and wgGap < 0 ? "APEX PASSED — lines crossed" : not na(wgConv) and wgConv < 0 ? "BROADENING" : "CHANNEL")
+wgType   = not wgOn or not wgHave ? "—" : wgApexOk ? (wgRFlat and wgSupSl > 0 ? "ASCENDING TRIANGLE" : wgSFlat and wgResSl < 0 ? "DESCENDING TRIANGLE" : wgResSl < 0 and wgSupSl > 0 ? "SYMMETRICAL TRIANGLE" : wgResSl < 0 and wgSupSl < 0 ? "FALLING WEDGE" : wgResSl > 0 and wgSupSl > 0 ? "RISING WEDGE" : "CONVERGING") : (wgRFlat and wgSFlat ? "RECTANGLE" : not na(wgGap) and wgGap < 0 ? "APEX PASSED — lines crossed" : not na(wgConv) and wgConv < 0 ? "BROADENING" : "CHANNEL")
 wgCrossed = wgHave and not na(wgGap) and wgGap < 0
 wgIsChan = not wgCrossed and (wgType == "CHANNEL" or wgType == "BROADENING")
 wgPct    = wgHave and close > 0 and not wgCrossed ? wgGap / close * 100 : na
@@ -1541,7 +1541,9 @@ flagBrkUp = flagBull[1] and not na(tlUpNow) and not na(tlUpNow[1]) and close > t
 flagBrkDn = flagBear[1] and not na(tlLoNow) and not na(tlLoNow[1]) and close < tlLoNow and close[1] >= tlLoNow[1]
 flagTgtUp = flagBull or flagBrkUp ? nz(tlUpNow, close) + (flagTop - flagPLo) : na
 flagTgtDn = flagBear or flagBrkDn ? nz(tlLoNow, close) - (flagPHi - flagLow) : na
-flagWord  = flagBull ? "BULL FLAG" : flagBear ? "BEAR FLAG" : ""
+pennUp = flagOn and flagPar and not na(wgResSl) and not na(wgSupSl) and wgResSl < 0 and wgSupSl > 0 and not na(flagPoleUp) and flagPoleUp >= flagPoleMin and not na(flagRetUp) and flagRetUp <= flagRetMax
+pennDn = flagOn and flagPar and not na(wgResSl) and not na(wgSupSl) and wgResSl > 0 and wgSupSl < 0 and not na(flagPoleDn) and flagPoleDn >= flagPoleMin and not na(flagRetDn) and flagRetDn <= flagRetMax
+flagWord  = flagBull ? "BULL FLAG" : flagBear ? "BEAR FLAG" : pennUp ? "BULLISH PENNANT" : pennDn ? "BEARISH PENNANT" : ""
 
 // ── THE EVENT: six sources, four of them already in this script ───
 boBrkUp = boOn and (flagBrkUp or suBaseBrk or suATHBrk or boBrkHorzUp or proBreakUp or tlBreakUp or buySignal)
@@ -2315,9 +2317,23 @@ cSE = close < open and close[1] > open[1] and close <= open[1] and open >= close
 cSml1 = not na(high[1]) and high[1] - low[1] > 0 and math.abs(close[1] - open[1]) / (high[1] - low[1]) * 100 <= 50
 cMS = close[2] < open[2] and cSml1 and close > open and close > (open[2] + close[2]) / 2
 cES = close[2] > open[2] and cSml1 and close < open and close < (open[2] + close[2]) / 2
-candName = not candOn ? "" : cMS ? "MORNING STAR" : cES ? "EVENING STAR" : cBE ? "BULLISH ENGULFING" : cSE ? "BEARISH ENGULFING" : cHam ? (cDown5 ? "HAMMER" : "hammer shape, but not after a decline") : cSS ? (cUp5 ? "SHOOTING STAR" : "shooting-star shape, but not after a rally") : cDoji ? "DOJI" : ""
-candBull = cMS or cBE or (cHam and cDown5)
-candBear = cES or cSE or (cSS and cUp5)
+cB1 = close[1] > open[1]
+cR1 = close[1] < open[1]
+cBod1 = math.abs(close[1] - open[1])
+cHar = cBod < cBod1 * 0.6 and math.max(close, open) <= math.max(close[1], open[1]) and math.min(close, open) >= math.min(close[1], open[1])
+cBullHar = cHar and cR1 and close > open
+cBearHar = cHar and cB1 and close < open
+cPierce = cR1 and close > open and open < low[1] and close > (open[1] + close[1]) / 2 and close < open[1]
+cDark = cB1 and close < open and open > high[1] and close < (open[1] + close[1]) / 2 and close > open[1]
+cTwzB = cR1 and close > open and cRng > 0 and math.abs(low - low[1]) <= cRng * 0.1
+cTwzT = cB1 and close < open and cRng > 0 and math.abs(high - high[1]) <= cRng * 0.1
+c3W = close > open and close[1] > open[1] and close[2] > open[2] and close > close[1] and close[1] > close[2]
+c3B = close < open and close[1] < open[1] and close[2] < open[2] and close < close[1] and close[1] < close[2]
+cInvH = cRng > 0 and not cDoji and cUpW >= cBod * candWick and cDnW <= cBod and cDown5
+cHang = cRng > 0 and not cDoji and cDnW >= cBod * candWick and cUpW <= cBod and cUp5
+candName = not candOn ? "" : cMS ? "MORNING STAR" : cES ? "EVENING STAR" : cBE ? "BULLISH ENGULFING" : cSE ? "BEARISH ENGULFING" : c3W ? "THREE WHITE SOLDIERS" : c3B ? "THREE BLACK CROWS" : cPierce ? "PIERCING LINE" : cDark ? "DARK CLOUD COVER" : cBullHar ? "BULLISH HARAMI" : cBearHar ? "BEARISH HARAMI" : cTwzB ? "TWEEZER BOTTOM" : cTwzT ? "TWEEZER TOP" : cInvH ? "INVERTED HAMMER" : cHang ? "HANGING MAN" : cHam ? (cDown5 ? "HAMMER" : "hammer shape, but not after a decline") : cSS ? (cUp5 ? "SHOOTING STAR" : "shooting-star shape, but not after a rally") : cDoji ? "DOJI" : ""
+candBull = cMS or cBE or c3W or cPierce or cBullHar or cTwzB or cInvH or (cHam and cDown5)
+candBear = cES or cSE or c3B or cDark or cBearHar or cTwzT or cHang or (cSS and cUp5)
 candSay = not candOn ? "" : candName == "" ? "last candle: nothing named" : "last candle: " + candName + (candBull ? " (bullish shape)" : candBear ? " (bearish shape)" : cDoji ? " (indecision)" : "")
 
 // ── daily and weekly, stated plainly ───
@@ -2374,8 +2390,8 @@ bizSay = not bqHave ? "NO FINANCIALS for this symbol — an index, metal or cryp
 // before; ADX, the 50/200 cross, the 200-bar line, the bottom engine and the
 // triangle/wedge/flag family were not, and patterns could only ever count
 // against a buy, never for one.
-stBull = flagBull or suIsBase or wgType == "FALLING WEDGE" or wgType == "ASCENDING TRIANGLE"
-stBear = flagBear or wgType == "RISING WEDGE" or wgType == "DESCENDING TRIANGLE"
+stBull = flagBull or pennUp or suIsBase or wgType == "FALLING WEDGE" or wgType == "ASCENDING TRIANGLE" or (wgType == "RECTANGLE" and atrBull)
+stBear = flagBear or pennDn or wgType == "RISING WEDGE" or wgType == "DESCENDING TRIANGLE" or (wgType == "RECTANGLE" and not atrBull)
 mcdUp = not na(macdL) and not na(macdS) and (macdL > macdS or macdXUp or (not na(macdH) and macdH > nz(macdH[1])))
 over200 = not na(ma200bar) and close > ma200bar
 patUp = (patConf and patDir == 1) or (patMemLive and patMemD == 1) or botConf
