@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v64.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v64.8", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2358,6 +2358,13 @@ fcSay = "★ " + fcWord + "   " + str.tostring(fcN) + "/" + str.tostring(fcMax) 
 
 if patLbl and patNew and not na(patTgt)
     label.new(bar_index, patDir == 1 ? low : high, patName + "\ntarget " + f_px(patTgt), style = patDir == 1 ? label.style_label_up : label.style_label_down, color = patDir == 1 ? cP12 : cP11, textcolor = color.white, size = size.small)
+// The label a confirmed pattern printed stays on the chart for good. When the
+// pattern later fails, that label is still advertising a target that is dead,
+// so the failure gets marked too - the same courtesy the bottom call already
+// gets with its "bottom failed" cross.
+patFailNew = patMemBack and not patMemX[1]
+if patLbl and patFailNew
+    label.new(bar_index, patMemD == -1 ? high : low, "✗ " + patMem + " failed", style = patMemD == -1 ? label.style_label_down : label.style_label_up, color = cP2, textcolor = color.white, size = size.tiny)
 if patLbl and (gcX or dcX)
     label.new(bar_index, gcX ? low : high, gcX ? "GOLDEN CROSS" : "DEATH CROSS", style = gcX ? label.style_label_up : label.style_label_down, color = gcX ? cP4 : cP5, textcolor = color.white, size = size.small)
 
