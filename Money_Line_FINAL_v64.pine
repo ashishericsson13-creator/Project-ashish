@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v65.2", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v65.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2408,7 +2408,13 @@ bI = (buy10 ? 1 : 0) + (buy11 ? 1 : 0) + (buy12 ? 1 : 0) + (buy13 ? 1 : 0) + (bu
 buyN = bA + bL + bT + bP + bI
 buyGrp = "ATR " + str.tostring(bA) + "/2 · lines " + str.tostring(bLn) + "/1 · long-term " + str.tostring(bLT) + "/2 · daily+weekly " + str.tostring(bT) + "/1 · patterns " + str.tostring(bP) + "/3 · indicators " + str.tostring(bI) + "/5"
 buyGo = buyN >= 10 and buy1 and buy2
-buySay = buyGo ? (ltDown ? "✅ YES, BUT COUNTER-TREND — " : "✅ YES — ") + f_n0(buyN) + "/14   " + buyGrp + "   Buy here, stop " + f_px(moneyLine) + " (the money line), grade " + grade + "." + f_ltWarn() : buyN >= 8 ? "⏳ ALMOST — " + f_n0(buyN) + "/14   " + buyGrp + "   Trigger: a " + tfWord + " close above " + f_px(moneyLine) + "." : "⛔ NO — " + f_n0(buyN) + "/14   " + buyGrp + "."
+// The money line is the regime boundary, not an entry stop. On TCS that is
+// 16.4% below price while the panel's own structural stop sits at 10.5% and
+// DO THIS is already using it. Take the tighter of the two and name which.
+buyTight = not na(boStop) and boDir == 1 and boStop < close and (na(moneyLine) or boStop > moneyLine)
+buyStop = buyTight ? boStop : moneyLine
+buyRiskPc = na(buyStop) or close <= 0 ? na : (close - buyStop) / close * 100
+buySay = buyGo ? (ltDown ? "✅ YES, BUT COUNTER-TREND — " : "✅ YES — ") + f_n0(buyN) + "/14   " + buyGrp + "   Buy here, stop " + f_px(buyStop) + (buyTight ? " (trade stop" : " (the money line") + (na(buyRiskPc) ? ")" : ", " + f_n1(buyRiskPc) + "% risk)") + ", grade " + grade + "." + f_ltWarn() : buyN >= 8 ? "⏳ ALMOST — " + f_n0(buyN) + "/14   " + buyGrp + "   Trigger: a " + tfWord + " close above " + f_px(moneyLine) + "." : "⛔ NO — " + f_n0(buyN) + "/14   " + buyGrp + "."
 
 sel1 = not atrBull
 sel2 = not na(moneyLine) and close < moneyLine
