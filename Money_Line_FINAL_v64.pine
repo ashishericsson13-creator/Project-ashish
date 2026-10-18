@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v64.8", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v64.9", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2178,6 +2178,7 @@ candDoji = input.float(10.0, "Doji: body under this % of the candle's range", mi
 candWick = input.float(2.0, "Hammer / shooting star: shadow this many times the body", minval = 1.0, maxval = 6.0, step = 0.5, group = "11. Patterns")
 gcOn     = input.bool(true, "Golden cross / death cross on the 50-bar vs 200-bar MA", group = "11. Patterns")
 gcNew    = input.int(26, "A cross counts as news for this many bars; older is background", minval = 4, maxval = 400, group = "11. Patterns")
+bqPEmax  = input.float(35.0, "P/E above this counts as expensive", minval = 5.0, maxval = 200.0, step = 1.0, group = "11. Patterns")
 
 // ── the last three swing highs and lows ───
 // Held as plain state and rewritten only when a pivot confirms, so there
@@ -2356,6 +2357,49 @@ fcPat = patConf and patDir == -1 ? "  Topping pattern live." : patConf and patDi
 fcCan = candBear ? "  Bearish candle." : candBull ? "  Bullish candle." : ""
 fcSay = "★ " + fcWord + "   " + str.tostring(fcN) + "/" + str.tostring(fcMax) + " bullish" + (fcN == fcMax ? " — everything agrees." : " — against: " + str.substring(fcMiss, 0, math.max(0, str.length(fcMiss) - 3))) + "   Flip " + f_px(moneyLine) + "." + fcPat + fcCan + f_ltWarn()
 
+// ══════════════════════════════════════════════════════════════
+// BUSINESS · BUY NOW? · SELL NOW?
+// P/E comes out of epsTTM, which is already fetched - the script is at
+// 40/40 request calls, so a ratio that can be derived is the only kind
+// that can still be added.
+// ══════════════════════════════════════════════════════════════
+peTTM = not na(epsTTM) and epsTTM > 0 ? close / epsTTM : na
+bqPE = not na(peTTM) and peTTM <= bqPEmax
+bizSay = not bqHave ? "NO FINANCIALS for this symbol — an index, metal or crypto is judged on the rows above, not here" : "Grade " + f_n0(bqN) + "/4   ·   P/E " + (na(peTTM) ? "n/a" : f_n1(peTTM) + (bqPE ? " ok" : " RICH")) + "   ·   profitable " + (bqProf ? "✓" : "✗") + "   ·   revenue " + (bqGrow ? "✓" : "✗") + (na(revGrowth) ? "" : " " + (revGrowth >= 0 ? "+" : "") + f_n1(revGrowth) + "%") + "   ·   ROE " + (na(roeFY) ? "n/a" : f_n0(roeFY) + "%" + (bqRoe ? " ✓" : " ✗")) + "   ·   debt/eq " + (na(deFY) ? "n/a" : f_n1(deFY) + (bqDebt ? " ✓" : " ✗"))
+
+// Eight entry conditions, drawn from the rows above so the answer cannot
+// disagree with the evidence the panel is already showing.
+buy1 = atrBull
+buy2 = lnBull
+buy3 = not (regD == -1 and regW == -1)
+buy4 = not na(rsiV) and rsiV >= 45 and rsiV <= 72
+buy5 = not na(macdL) and not na(macdS) and (macdL > macdS or macdXUp or (not na(macdH) and macdH > nz(macdH[1])))
+buy6 = na(volRatio) or volRatio >= 1.0
+buy7 = not (patDir == -1 and patConf) and not (patMemLive and patMemD == -1)
+buy8 = not emaOver
+buyN = (buy1 ? 1 : 0) + (buy2 ? 1 : 0) + (buy3 ? 1 : 0) + (buy4 ? 1 : 0) + (buy5 ? 1 : 0) + (buy6 ? 1 : 0) + (buy7 ? 1 : 0) + (buy8 ? 1 : 0)
+buyGo = buyN >= 7 and atrBull and not na(moneyLine) and close > moneyLine
+buyRaw = (buy1 ? "" : "ATR · ") + (buy2 ? "" : "lines · ") + (buy3 ? "" : "daily+weekly · ") + (buy4 ? "" : "RSI · ") + (buy5 ? "" : "MACD · ") + (buy6 ? "" : "volume · ") + (buy7 ? "" : "topping pattern · ") + (buy8 ? "" : "overextended · ")
+// With all eight passing but price still under the line the list is empty,
+// and "waiting on: ." tells the reader nothing. Name the real blocker.
+buyMiss = buyRaw == "" ? "price is still below the line" : str.substring(buyRaw, 0, math.max(0, str.length(buyRaw) - 3))
+buySay = buyGo ? "✅ YES — " + f_n0(buyN) + "/8 in place. Buy here, stop " + f_px(moneyLine) + ", setup grade " + grade + "." + f_ltWarn() : buyN >= 5 ? "⏳ ALMOST — " + f_n0(buyN) + "/8. Waiting on: " + buyMiss + ". Trigger: a " + tfWord + " close above " + f_px(moneyLine) + "." : "⛔ NO — " + f_n0(buyN) + "/8. Against: " + buyMiss + "."
+
+// The sell side asks the mirror question, and defers when the buy row has
+// already said yes, so the two can never contradict one another.
+sel1 = not atrBull
+sel2 = lnBear
+sel3 = regD == -1 and regW == -1
+sel4 = not na(rsiV) and (rsiV >= 78 or rsiV < 40)
+sel5 = not na(macdL) and not na(macdS) and macdL < macdS
+sel6 = (patDir == -1 and patConf) or (patMemLive and patMemD == -1)
+sel7 = emaOver
+sel8 = profOn and profLost
+selN = (sel1 ? 1 : 0) + (sel2 ? 1 : 0) + (sel3 ? 1 : 0) + (sel4 ? 1 : 0) + (sel5 ? 1 : 0) + (sel6 ? 1 : 0) + (sel7 ? 1 : 0) + (sel8 ? 1 : 0)
+selRaw = (sel1 ? "ATR turned · " : "") + (sel2 ? "lines bearish · " : "") + (sel3 ? "daily+weekly bearish · " : "") + (sel4 ? "RSI · " : "") + (sel5 ? "MACD down · " : "") + (sel6 ? "topping pattern · " : "") + (sel7 ? "overextended · " : "") + (sel8 ? "lost the weekly EMA · " : "")
+selHit = str.substring(selRaw, 0, math.max(0, str.length(selRaw) - 3))
+selSay = buyGo ? "✅ NO — this is the buy zone. The exit is a " + tfWord + " close below " + f_px(moneyLine) + "." : selN >= 5 ? "⛔ YES — SELL or REDUCE. " + f_n0(selN) + "/8 say get out: " + selHit + "." : selN >= 3 ? "⚠ TRIM — " + f_n0(selN) + "/8: " + selHit + ". Take some off, exit fully below " + f_px(moneyLine) + "." : "✅ NO — only " + f_n0(selN) + "/8 sell signs. Hold; exit on a close below " + f_px(moneyLine) + "."
+
 if patLbl and patNew and not na(patTgt)
     label.new(bar_index, patDir == 1 ? low : high, patName + "\ntarget " + f_px(patTgt), style = patDir == 1 ? label.style_label_up : label.style_label_down, color = patDir == 1 ? cP12 : cP11, textcolor = color.white, size = size.small)
 // The label a confirmed pattern printed stays on the chart for good. When the
@@ -2396,11 +2440,23 @@ f_boSummary(table _t) =>
             f_cellL(_t, 0, _r, "PATTERN", cP8)
             f_cellL(_t, 1, _r, patSay, patConf and patDir == 1 ? cP12 : patConf and patDir == -1 ? cP11 : patName == "" ? cP9 : cP3)
             _r := _r + 1
+        f_cellL(_t, 0, _r, "MOMENTUM", color.new(color.purple, 25))
+        f_cellL(_t, 1, _r, "RSI " + (na(rsiV) ? "—" : f_n0(rsiV) + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : f_n0(adxV) + " " + f_adxWord(adxV)) + "   ·   vol " + (na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light")))) + (candSay == "" ? "" : "   ·   " + candSay), color.new(color.purple, 50))
+        _r := _r + 1
+        f_cellL(_t, 0, _r, "BUSINESS", color.new(#4527a0, 10))
+        f_cellL(_t, 1, _r, bizSay, not bqHave ? cP9 : bqN >= 3 and bqPE ? cP12 : bqN >= 3 ? cP13 : bqN == 2 ? cP3 : cP11)
+        _r := _r + 1
         f_cellL(_t, 0, _r, "VERDICT", cP8)
         f_cellL(_t, 1, _r, (boTrapUp ? "⚠ FAILED BREAKOUT — the break was retaken" : boTrapDn ? "⚠ FAILED BREAKDOWN — shorts trapped" : agreeWord) + (boDir == 0 ? "   ·   nothing has broken recently" : "   ·   " + f_boKind(boKindAt) + " broke " + f_n0(boBrkAge) + " bar(s) ago, " + f_n0(boScore) + "/10" + (boBrkUnconf ? " ⧗ bar not closed" : boGate ? " ✓gate" : " ✗gate — " + (k1 ? "weak close" : k2 ? "no volume surge" : "no volume surge, weak close"))), vCol)
         _r := _r + 1
         f_cellL(_t, 0, _r, "▶ DO THIS", cP8)
         f_cellL(_t, 1, _r, boWTD, color.new(#00695c, 10))
+        _r := _r + 1
+        f_cellL(_t, 0, _r, "✅ BUY NOW?", cP8)
+        f_cellL(_t, 1, _r, buySay, buyGo ? color.new(#1b5e20, 0) : buyN >= 5 ? cP3 : cP11)
+        _r := _r + 1
+        f_cellL(_t, 0, _r, "⛔ SELL NOW?", cP8)
+        f_cellL(_t, 1, _r, selSay, buyGo or selN < 3 ? color.new(#1b5e20, 30) : selN >= 5 ? color.new(#b71c1c, 0) : cP15)
         _r := _r + 1
         tCol = boDir != 1 or na(boTarget) ? cP9 : close >= boTarget ? cP4 : color.new(#00695c, 30)
         f_cellL(_t, 0, _r, "AT TARGET", cP8)
@@ -2416,9 +2472,6 @@ f_boSummary(table _t) =>
             _r := _r + 1
             f_cellL(_t, 0, _r, "TREND", color.new(#ffd600, 30))
             f_cellL(_t, 1, _r, na(profEma) ? "—" : (profAbove ? "above" : "below") + " the " + f_n0(profWeeks) + "wEMA " + f_px(profEma) + (profAbove and not na(profBars) ? ", held " + f_n0(profBars) + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + f_n1(profGain) + "% since reclaim") + (na(emaX21) ? "" : "   ·   " + f_n1(emaX21) + "x ATR from the 21" + (emaOver ? " ⚠ extended" : "")), profAbove ? color.new(#00c853, 45) : color.new(#d50000, 45))
-            _r := _r + 1
-            f_cellL(_t, 0, _r, "MOMENTUM", color.new(color.purple, 25))
-            f_cellL(_t, 1, _r, "RSI " + (na(rsiV) ? "—" : f_n0(rsiV) + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : f_n0(adxV) + " " + f_adxWord(adxV)) + "   ·   vol " + (na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light")))) + (candSay == "" ? "" : "   ·   " + candSay), color.new(color.purple, 50))
             _r := _r + 1
             f_cellL(_t, 0, _r, "LEVELS", color.new(color.olive, 20))
             f_cellL(_t, 1, _r, (na(lvlR) or lvlRfar ? "resistance — none within " + f_n0(lvlMaxATR) + " ATR" : "resistance " + f_px(lvlR) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + f_n0(lvlMaxATR) + " ATR" : "support " + f_px(lvlS) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + f_px(boFlipLvl) + (boFlipRe ? " ✓held" : " ·untested")), color.new(color.olive, 50))
