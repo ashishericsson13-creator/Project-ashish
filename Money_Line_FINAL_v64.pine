@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v65.1", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v65.2", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2396,14 +2396,19 @@ buy12 = not na(adxV) and adxV >= 20
 buy13 = na(volRatio) or volRatio >= 1.0
 buy14 = not emaOver
 bA = (buy1 ? 1 : 0) + (buy2 ? 1 : 0)
-bL = (buy3 ? 1 : 0) + (buy4 ? 1 : 0) + (buy5 ? 1 : 0)
+// buy3 is the LINES row's own verdict; buy4 and buy5 are long-term MA
+// structure. Billing all three as "lines" put "lines 1/3" under a LINES row
+// reading "3 of 4 bullish", which reads as the panel contradicting itself.
+bLn = buy3 ? 1 : 0
+bLT = (buy4 ? 1 : 0) + (buy5 ? 1 : 0)
+bL = bLn + bLT
 bT = buy6 ? 1 : 0
 bP = (buy7 ? 1 : 0) + (buy8 ? 1 : 0) + (buy9 ? 1 : 0)
 bI = (buy10 ? 1 : 0) + (buy11 ? 1 : 0) + (buy12 ? 1 : 0) + (buy13 ? 1 : 0) + (buy14 ? 1 : 0)
 buyN = bA + bL + bT + bP + bI
-buyGrp = "ATR " + str.tostring(bA) + "/2 · lines " + str.tostring(bL) + "/3 · daily+weekly " + str.tostring(bT) + "/1 · patterns " + str.tostring(bP) + "/3 · indicators " + str.tostring(bI) + "/5"
+buyGrp = "ATR " + str.tostring(bA) + "/2 · lines " + str.tostring(bLn) + "/1 · long-term " + str.tostring(bLT) + "/2 · daily+weekly " + str.tostring(bT) + "/1 · patterns " + str.tostring(bP) + "/3 · indicators " + str.tostring(bI) + "/5"
 buyGo = buyN >= 10 and buy1 and buy2
-buySay = buyGo ? "✅ YES — " + f_n0(buyN) + "/14   " + buyGrp + "   Buy here, stop " + f_px(moneyLine) + ", grade " + grade + "." + f_ltWarn() : buyN >= 8 ? "⏳ ALMOST — " + f_n0(buyN) + "/14   " + buyGrp + "   Trigger: a " + tfWord + " close above " + f_px(moneyLine) + "." : "⛔ NO — " + f_n0(buyN) + "/14   " + buyGrp + "."
+buySay = buyGo ? (ltDown ? "✅ YES, BUT COUNTER-TREND — " : "✅ YES — ") + f_n0(buyN) + "/14   " + buyGrp + "   Buy here, stop " + f_px(moneyLine) + " (the money line), grade " + grade + "." + f_ltWarn() : buyN >= 8 ? "⏳ ALMOST — " + f_n0(buyN) + "/14   " + buyGrp + "   Trigger: a " + tfWord + " close above " + f_px(moneyLine) + "." : "⛔ NO — " + f_n0(buyN) + "/14   " + buyGrp + "."
 
 sel1 = not atrBull
 sel2 = not na(moneyLine) and close < moneyLine
@@ -2420,12 +2425,14 @@ sel12 = not na(adxV) and adxV >= 20 and not atrBull
 sel13 = profOn and profLost
 sel14 = emaOver
 sA = (sel1 ? 1 : 0) + (sel2 ? 1 : 0)
-sL = (sel3 ? 1 : 0) + (sel4 ? 1 : 0) + (sel5 ? 1 : 0)
+sLn = sel3 ? 1 : 0
+sLT = (sel4 ? 1 : 0) + (sel5 ? 1 : 0)
+sL = sLn + sLT
 sT = sel6 ? 1 : 0
 sP = (sel7 ? 1 : 0) + (sel8 ? 1 : 0) + (sel9 ? 1 : 0)
 sI = (sel10 ? 1 : 0) + (sel11 ? 1 : 0) + (sel12 ? 1 : 0) + (sel13 ? 1 : 0) + (sel14 ? 1 : 0)
 selN = sA + sL + sT + sP + sI
-selGrp = "ATR " + str.tostring(sA) + "/2 · lines " + str.tostring(sL) + "/3 · daily+weekly " + str.tostring(sT) + "/1 · patterns " + str.tostring(sP) + "/3 · indicators " + str.tostring(sI) + "/5"
+selGrp = "ATR " + str.tostring(sA) + "/2 · lines " + str.tostring(sLn) + "/1 · long-term " + str.tostring(sLT) + "/2 · daily+weekly " + str.tostring(sT) + "/1 · patterns " + str.tostring(sP) + "/3 · indicators " + str.tostring(sI) + "/5"
 // Telling a reader to "exit below" a line price has already broken is advice
 // for a position the regime closed long ago. Say which side they are on.
 selOut = na(moneyLine) ? "" : close > moneyLine ? "  Exit fully on a close below " + f_px(moneyLine) + "." : "  Price is already below the line, so the regime exit has fired."
