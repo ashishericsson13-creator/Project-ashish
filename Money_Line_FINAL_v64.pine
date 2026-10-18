@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v64.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v64.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2126,7 +2126,10 @@ f_whatToDo() =>
     else if boPending or boBrkUnconf
         _a := "WAIT for this bar to close. A level is giving way intrabar and it can still un-happen."
     else if profOn and profLost
-        _a := "EXIT. Close is below the " + f_n0(profWeeks) + "-week EMA (" + f_px(profEma) + "). Re-entry only on a close back above it."
+        // One close below the EMA is the swing rule firing, not the regime
+        // turning. A bare EXIT printed over a bullish ATR model and a BUY-SIDE
+        // verdict was the panel arguing with itself.
+        _a := atrBull ? "SWING EXIT — closed below the " + f_n0(profWeeks) + "-week EMA " + f_px(profEma) + ". Ends the TRADE, not the position: ATR still bullish above " + f_px(moneyLine) + ". Re-enter on a close above the EMA; long hold is the LONG TERM row." : "EXIT — closed below the " + f_n0(profWeeks) + "-week EMA " + f_px(profEma) + " and the ATR model is bearish too. Re-entry only on a close back above it."
     else if boDir == -1 and boGate and boScore >= 6
         _a := "EXIT / STAY OUT. Stop for a short " + f_px(boStop) + (na(boTarget) ? "" : ", target " + f_px(boTarget)) + ". Do not buy until a close back above " + f_px(boLvlAt) + "."
     else if boDir == 1 and boGate and boScore >= 6
@@ -2174,6 +2177,7 @@ candOn   = input.bool(true, "Read the last candle (hammer, engulfing, doji, star
 candDoji = input.float(10.0, "Doji: body under this % of the candle's range", minval = 1.0, maxval = 40.0, step = 1.0, group = "11. Patterns")
 candWick = input.float(2.0, "Hammer / shooting star: shadow this many times the body", minval = 1.0, maxval = 6.0, step = 0.5, group = "11. Patterns")
 gcOn     = input.bool(true, "Golden cross / death cross on the 50-bar vs 200-bar MA", group = "11. Patterns")
+gcNew    = input.int(26, "A cross counts as news for this many bars; older is background", minval = 4, maxval = 400, group = "11. Patterns")
 
 // ── the last three swing highs and lows ───
 // Held as plain state and rewritten only when a pivot confirms, so there
@@ -2260,8 +2264,19 @@ if patNew
     patMemD := patDir
     patMemB := bar_index
 patMemAge = na(patMemB) ? na : bar_index - patMemB
-patMemLive = patMem != "" and not na(patMemAge) and patMemAge <= patAge
-patMemHit = patMemLive and not na(patMemT) and (patMemD == -1 ? low <= patMemT : high >= patMemT)
+patMemOld = patMem != "" and not na(patMemAge) and patMemAge <= patAge
+// A remembered pattern is only still a pattern while price respects the side it
+// broke to. Close back through the neckline and it has failed: reporting a
+// triple top as live while price trades above its own neckline is worse than
+// saying nothing at all.
+patMemBack = patMemOld and not na(patMemN) and (patMemD == -1 ? close > patMemN : close < patMemN)
+var bool patMemX = false
+if patNew
+    patMemX := false
+if patMemBack
+    patMemX := true
+patMemHit = patMemOld and not na(patMemT) and (patMemD == -1 ? low <= patMemT : high >= patMemT)
+patMemLive = patMemOld and not patMemX and not patMemHit
 
 // ── the 50/200 cross ───
 // ta.* kept out of the ternary and off the `and`, so the call runs on every
@@ -2274,7 +2289,12 @@ gcBars = ta.barssince(gcRaw)
 dcBars = ta.barssince(dcRaw)
 gcAbove = not na(ma50bar) and not na(ma200bar) and ma50bar > ma200bar
 gcAge = gcAbove ? gcBars : dcBars
-gcShort = not gcOn or na(ma50bar) or na(ma200bar) ? "" : (gcAbove ? "▲ golden cross in force" : "▼ death cross in force") + (na(gcAge) ? "" : " " + f_n0(gcAge) + " bars")
+// A cross of two slow averages lags the price feeding it: it can read "golden"
+// during a fall from 345 to 128. And a cross 512 bars back is structure, not an
+// event. Both were being stated bare, which is what made the row misleading.
+gcStale = not na(ma200bar) and (gcAbove ? close < ma200bar : close > ma200bar)
+gcFresh = not na(gcAge) and gcAge <= gcNew
+gcShort = not gcOn or na(ma50bar) or na(ma200bar) ? "" : (gcFresh ? (gcAbove ? "▲ GOLDEN CROSS " : "▼ DEATH CROSS ") + f_n0(gcAge) + " bars ago" : (gcAbove ? "50-bar above the 200-bar" : "50-bar below the 200-bar") + (na(gcAge) ? "" : ", crossed " + f_n0(gcAge) + " back — background, not a signal")) + (not gcStale ? "" : gcAbove ? " — and price is BELOW the 200-bar, so it is stale" : " — and price is back ABOVE the 200-bar, so it is lagging")
 
 // ── the seven candles ───
 // A shape only means something where it sits, so the hammer and the shooting
@@ -2300,26 +2320,41 @@ candBear = cES or cSE or (cSS and cUp5)
 candSay = not candOn ? "" : candName == "" ? "last candle: nothing named" : "last candle: " + candName + (candBull ? " (bullish shape)" : candBear ? " (bearish shape)" : cDoji ? " (indecision)" : "")
 
 // ── daily and weekly, stated plainly ───
-tfNB = (regD == 1 ? 1 : 0) + (regW == 1 ? 1 : 0) + (trend == 1 ? 1 : 0)
-tfConf = na(regD) or na(regW) ? "partial data" : tfNB == 3 ? "ALL THREE BULLISH — the cleanest backdrop there is" : tfNB == 0 ? "ALL THREE BEARISH — stand aside" : "CONFLICT " + str.tostring(tfNB) + "/3 bullish — the small timeframe is fighting the big one"
-tfSay = "Daily " + f_arw(regD) + "   ·   Weekly " + f_arw(regW) + "   ·   This chart (" + tfWord + ") " + f_arw(trend) + "   —   " + tfConf
+// On a weekly chart "Weekly" and "This chart" are the same series. Listing both
+// read as two agreeing opinions and counted the same vote twice, which is how a
+// single bullish weekly became "2 of 3 bullish".
+tfSameD = timeframe.isdaily and timeframe.multiplier == 1
+tfSameW = timeframe.isweekly and timeframe.multiplier == 1
+tfCnt = 1 + (tfSameD ? 0 : 1) + (tfSameW ? 0 : 1)
+tfNB = (trend == 1 ? 1 : 0) + (not tfSameD and not na(regD) and regD == 1 ? 1 : 0) + (not tfSameW and not na(regW) and regW == 1 ? 1 : 0)
+tfAll = tfCnt == 3 ? "ALL THREE" : "BOTH"
+tfConf = (not tfSameD and na(regD)) or (not tfSameW and na(regW)) ? "partial data" : tfNB == tfCnt ? tfAll + " BULLISH — the cleanest backdrop there is" : tfNB == 0 ? tfAll + " BEARISH — stand aside" : "CONFLICT " + str.tostring(tfNB) + "/" + str.tostring(tfCnt) + " bullish — the small timeframe is fighting the big one"
+tfSay = (tfSameD ? "" : "Daily " + f_arw(regD) + "   ·   ") + (tfSameW ? "" : "Weekly " + f_arw(regW) + "   ·   ") + "This chart (" + tfWord + ") " + f_arw(trend) + "   —   " + tfConf
 
-patSay = not patOn ? gcShort : patName == "" ? ((patMemLive ? patMem + " confirmed " + f_n0(patMemAge) + " bars ago, neckline " + f_px(patMemN) + (na(patMemT) ? "" : ", target " + f_px(patMemT) + (patMemHit ? " ✓ REACHED" : "")) : "no double/triple top or bottom and no head and shoulders in the last " + f_n0(patAge) + " bars")) + (gcShort == "" ? "" : "   ·   " + gcShort) : patName + (patConf ? " CONFIRMED — closed " + (patDir == 1 ? "above " : "below ") + f_px(patNeck) : patDead ? " FAILED — price went back through " + f_px(patExt) : " FORMING — not a signal until a " + tfWord + " close " + (patDir == 1 ? "above " : "below ") + f_px(patNeck)) + (na(patTgt) ? "" : "   target " + f_px(patTgt)) + (na(patExt) ? "" : "   stop " + f_px(patExt)) + (gcShort == "" ? "" : "   ·   " + gcShort)
+patMemWord = patMem == "" or not patMemOld ? "" : patMemX ? patMem + " from " + f_n0(patMemAge) + " bars ago has FAILED — price closed back through " + f_px(patMemN) : patMemHit ? patMem + " from " + f_n0(patMemAge) + " bars ago — target " + f_px(patMemT) + " ✓ REACHED" : patMem + " confirmed " + f_n0(patMemAge) + " bars ago, neckline " + f_px(patMemN) + (na(patMemT) ? "" : ", target " + f_px(patMemT))
+patSay = not patOn ? gcShort : patName == "" ? (patMemWord == "" ? "no double/triple top or bottom and no head and shoulders in the last " + f_n0(patAge) + " bars" : patMemWord) + (gcShort == "" ? "" : "   ·   " + gcShort) : patName + (patConf ? " CONFIRMED — closed " + (patDir == 1 ? "above " : "below ") + f_px(patNeck) : patDead ? " FAILED — price went back through " + f_px(patExt) : " FORMING — not a signal until a " + tfWord + " close " + (patDir == 1 ? "above " : "below ") + f_px(patNeck)) + (na(patTgt) ? "" : "   target " + f_px(patTgt)) + (na(patExt) ? "" : "   stop " + f_px(patExt)) + (gcShort == "" ? "" : "   ·   " + gcShort)
 
 // ── the final call ───
 // Seven checks that are already on the panel, counted in one place so the
 // console ends with a verdict instead of leaving the reader to add up rows.
+// Five checks that each assert something bullish. This counted seven, and two
+// of them were "no topping pattern" and "no bearish candle" - absence of bad
+// news, which scored a stock in freefall at 2/7 and printed it as "leaning".
+// Those two now qualify the sentence instead of padding the count.
 fc1 = atrBull
 fc2 = lnBull
 fc3 = regD == 1
 fc4 = regW == 1
-fc5 = gcAbove
-fc6 = not (patDir == -1 and patConf) and not (patMemLive and patMemD == -1 and not patMemHit)
-fc7 = not candBear
-fcN = (fc1 ? 1 : 0) + (fc2 ? 1 : 0) + (fc3 ? 1 : 0) + (fc4 ? 1 : 0) + (fc5 ? 1 : 0) + (fc6 ? 1 : 0) + (fc7 ? 1 : 0)
-fcWord = fcN >= 6 ? "ALIGNED BULLISH" : fcN >= 4 ? "LEANING BULLISH" : fcN == 3 ? "MIXED — no edge" : fcN >= 1 ? "LEANING BEARISH" : "ALIGNED BEARISH"
-fcMiss = (fc1 ? "" : "ATR ") + (fc2 ? "" : "lines ") + (fc3 ? "" : "daily ") + (fc4 ? "" : "weekly ") + (fc5 ? "" : "50/200 ") + (fc6 ? "" : "top-pattern ") + (fc7 ? "" : "candle ")
-fcSay = "★ " + fcWord + "   " + str.tostring(fcN) + "/7 bullish" + (fcN == 7 ? " — everything agrees." : " — against: " + fcMiss) + "  Flip " + f_px(moneyLine) + "." + (patDir == 0 or na(patNeck) ? "" : "  Pattern trigger " + f_px(patNeck) + ".") + f_ltWarn()
+fc5 = gcAbove and not gcStale
+fcMax = 5
+fcN = (fc1 ? 1 : 0) + (fc2 ? 1 : 0) + (fc3 ? 1 : 0) + (fc4 ? 1 : 0) + (fc5 ? 1 : 0)
+fcRaw = fcN >= fcMax ? "ALIGNED BULLISH" : fcN == 4 ? "LEANING BULLISH" : fcN == 3 ? "MIXED — no edge" : fcN >= 1 ? "LEANING BEARISH" : "ALIGNED BEARISH"
+// Never print ALIGNED BULLISH above a LONG TERM row that says to get out.
+fcWord = ltDown and fcN >= 4 ? "BULLISH BUT COUNTER-TREND" : fcRaw
+fcMiss = (fc1 ? "" : "ATR · ") + (fc2 ? "" : "lines · ") + (fc3 ? "" : "daily · ") + (fc4 ? "" : "weekly · ") + (fc5 ? "" : "50/200 · ")
+fcPat = patConf and patDir == -1 ? "  Topping pattern live." : patConf and patDir == 1 ? "  Bottoming pattern live." : patMemLive and patMemD == -1 ? "  Topping pattern still live." : patMemLive and patMemD == 1 ? "  Bottoming pattern still live." : ""
+fcCan = candBear ? "  Bearish candle." : candBull ? "  Bullish candle." : ""
+fcSay = "★ " + fcWord + "   " + str.tostring(fcN) + "/" + str.tostring(fcMax) + " bullish" + (fcN == fcMax ? " — everything agrees." : " — against: " + str.substring(fcMiss, 0, math.max(0, str.length(fcMiss) - 3))) + "   Flip " + f_px(moneyLine) + "." + fcPat + fcCan + f_ltWarn()
 
 if patLbl and patNew and not na(patTgt)
     label.new(bar_index, patDir == 1 ? low : high, patName + "\ntarget " + f_px(patTgt), style = patDir == 1 ? label.style_label_up : label.style_label_down, color = patDir == 1 ? cP12 : cP11, textcolor = color.white, size = size.small)
@@ -2348,7 +2383,7 @@ f_boSummary(table _t) =>
         f_cellL(_t, 1, _r, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + f_n0(profWeeks) + "wEMA " + (lnV1 > 0 ? "▲ above" : "▼ below") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : "▼ below") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : "▼ below"), lCol)
         _r := _r + 1
         f_cellL(_t, 0, _r, "TIMEFRAMES", cP8)
-        f_cellL(_t, 1, _r, tfSay, tfNB == 3 ? cP12 : tfNB == 0 ? cP11 : cP3)
+        f_cellL(_t, 1, _r, tfSay, tfNB == tfCnt ? cP12 : tfNB == 0 ? cP11 : cP3)
         _r := _r + 1
         if patOn or gcOn
             f_cellL(_t, 0, _r, "PATTERN", cP8)
@@ -2396,7 +2431,7 @@ f_boSummary(table _t) =>
         f_cellL(_t, 1, _r, ltBad ? exitSay : bigSay, ltCol)
         _r := _r + 1
         f_cellL(_t, 0, _r, "★ FINAL CALL", cP8)
-        f_cellL(_t, 1, _r, fcSay, fcN >= 6 ? color.new(#1b5e20, 0) : fcN >= 4 ? cP13 : fcN == 3 ? cP3 : fcN >= 1 ? cP11 : color.new(#b71c1c, 0))
+        f_cellL(_t, 1, _r, fcSay, fcN >= fcMax and not ltDown ? color.new(#1b5e20, 0) : fcN >= 4 ? cP13 : fcN == 3 ? cP3 : fcN >= 1 ? cP11 : color.new(#b71c1c, 0))
     0
 
 boPosMap = boPos == "Top Right" ? position.top_right : boPos == "Top Left" ? position.top_left : boPos == "Middle Right" ? position.middle_right : boPos == "Bottom Left" ? position.bottom_left : position.bottom_right
