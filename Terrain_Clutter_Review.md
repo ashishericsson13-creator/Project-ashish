@@ -101,3 +101,80 @@ Same 36 keys, so rows line up one-for-one. Twelve columns instead of seven:
   column each input blocks.
 
 The six controls from the original Engineering Guidance sheet are all kept.
+
+---
+
+# Addendum — three-way comparison, after the Claude + Gemini file
+
+`Terrain_Clutter_RF_Recommendation_Claude_Gemini.xlsx` turned up after the review above
+was written. It is the strongest of the three files by a wide margin, and most of what I
+flagged against the ChatGPT sheet it had already solved. The merged deliverable is
+`Terrain_Clutter_RF_Recommendation_MERGED.xlsx` — that file verbatim, with eight columns
+and two sheets appended and nothing removed.
+
+## Where the Claude + Gemini file wins
+
+- **Numeric deltas, not prose.** `+4°`/`0°`/`−2°` per cell, with a target EDT range in
+  33/36 rows. A delta is a work order; a sentence is an opinion. It has only 8 distinct
+  source values against ChatGPT's 14 — and carries far more information.
+- **Clutter actually drives the answer, including sign flips.** Flat Dense Urban `+2°`
+  downtilt, Flat Rural `−2°` uptilt, Flat Special `+3°` downtilt. The ChatGPT sheet never
+  flips sign by clutter at all. This was my finding F2/F18 and it does not apply here.
+- **Both failure modes in all 36 rows** — a dominant-issue branch plus an "if the
+  opposite is observed instead" branch. This is the right structure: terrain and clutter
+  predict the *likely* problem, not the actual one. Neither of my other two files does
+  this, and it is the single best idea in any of the three.
+- **`Special / Open Areas` defined and distinct in all six terrains**, reasoned correctly
+  (no clutter loss → already overshooting → downtilt), which is the opposite of Gemini's
+  uptilt. My findings F1 and F18 do not apply.
+- **Concrete figures**: 0.7 × ISD beam-centre target, TA ≥90% within ~0.5 km, overlap
+  >30%, RSRP ≥ −100 dBm, mechanical tilt as the fallback when EDT range is exhausted.
+- **Site position handled** — Valley Suburban splits valley-floor from slope/rim sites
+  with different values. My findings F7 and F8 do not apply.
+- **An audit trail**: 28 conflicting cells colour-coded, a `Conflict Details` sheet
+  adjudicating each, and 3 cells corrected in Gemini's favour. Neither other file shows
+  its working.
+
+## What still had to be added (8 new columns, J–Q)
+
+Two gaps are in **both** files, including my own:
+
+- **MO units (`MO-1`).** `electricalAntennaTilt` is in tenths of a degree on
+  RetSubUnit / RetDeviceData — the `+4°` rows are `+40`. Neither file says so. Column J
+  converts every row.
+- **AAS gate (`AP-1`).** On massive-MIMO the attribute may be absent or inert; tilt is a
+  beam-set / digital-tilt choice. The only "massive" in the file is "massive
+  interference". Column M gates every row.
+
+One is a finding **against** the Claude + Gemini file:
+
+- **Step size contradicts its own Notes sheet (`ST-1`).** The Notes cap changes at 2° per
+  iteration, but 14 rows carry `+3°` or `+4°` and **11 of those never say "in steps"**.
+  A planner reading only the row would make a single move the Notes forbid. Column K
+  states the staging for each affected row.
+
+The rest complete what that file had started:
+
+- **`VB-1`** step sized against vertical beamwidth — `+4°` on a 6–8° panel is 50–67% of
+  the beamwidth. Mentioned once in the Ridge Dense Urban row, never applied as a rule.
+- **`VR-1`** numeric revert thresholds. The file names the right KPIs and a 24–72 h wait
+  but gives no threshold at which to undo the change. Uptilt rows are judged on what they
+  cost the neighbours, not on the served cell's own RSRP gain.
+- **`VR-2`** soak length by clutter — 24–72 h holds only where traffic is dense; rural
+  needs 14 days, venues a full occupancy cycle, and a forest cell must not soak across a
+  leaf-on/leaf-off transition.
+- **`PC-1`** per-carrier application. Both files treat low band as a remedy to mention
+  rather than the axis the table is applied along.
+- **`CB-1`** change batching. The file argues exactly this when rejecting Gemini's
+  cluster-wide change, but never promotes it to a rule the other 35 rows inherit.
+
+## Ranking
+
+1. **Claude + Gemini** — the only one of the three that is usable as a work instruction.
+2. **My review build** (`..._Claude.xlsx`) — better gating, units and rollback discipline,
+   but prose where the Claude + Gemini file has numbers.
+3. **ChatGPT** — 2 distinct values in the co-sector column across 36 rows, 2 in tier-1,
+   six rows duplicated verbatim, and 60% of the Remarks column one repeated sentence.
+
+Verified on the merged file: columns A–I identical to the original in all 37 rows
+including cell fills, `Legend` and `Conflict Details` untouched, `Notes` appended to only.
