@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v64.9", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v65.0", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2078,7 +2078,7 @@ f_botCall() =>
     else if exRoll and exBiz
         _c := "⛔ DO NOT BUY THIS LOW — the business is deteriorating as well as the trend. Companies in decline make lower lows, not bottoms. Whatever the score says, there is no floor under this one."
     else if botConf and trend == 1
-        _c := "✅ THE BOTTOM IS IN — and the ATR model has turned up with it. This is the best entry this chart offers. Stop on a close below " + f_px(botAnc) + "."
+        _c := "✅ THE BOTTOM IS IN — and the ATR model has turned up with it. This is the best entry this chart offers. Stop on a close below " + f_px(botAnc) + (na(botAnc) or close <= 0 ? "" : " — " + f_n1((close - botAnc) / close * 100) + "% risk from here") + "."
     else if botConf
         _c := "✅ BOTTOM LOOKS IN — start a first position, small. The ATR model has not turned yet, so add only on a " + tfWord + " close above " + f_px(moneyLine) + ". Stop below " + f_px(botAnc) + "."
     else if _gap <= 0 and botBlock != ""
@@ -2383,7 +2383,7 @@ buyRaw = (buy1 ? "" : "ATR · ") + (buy2 ? "" : "lines · ") + (buy3 ? "" : "dai
 // With all eight passing but price still under the line the list is empty,
 // and "waiting on: ." tells the reader nothing. Name the real blocker.
 buyMiss = buyRaw == "" ? "price is still below the line" : str.substring(buyRaw, 0, math.max(0, str.length(buyRaw) - 3))
-buySay = buyGo ? "✅ YES — " + f_n0(buyN) + "/8 in place. Buy here, stop " + f_px(moneyLine) + ", setup grade " + grade + "." + f_ltWarn() : buyN >= 5 ? "⏳ ALMOST — " + f_n0(buyN) + "/8. Waiting on: " + buyMiss + ". Trigger: a " + tfWord + " close above " + f_px(moneyLine) + "." : "⛔ NO — " + f_n0(buyN) + "/8. Against: " + buyMiss + "."
+buySay = buyGo ? "✅ YES — " + f_n0(buyN) + "/8 in place" + (buyRaw == "" ? "" : ", short of: " + buyMiss) + ". Buy here, stop " + f_px(moneyLine) + ", setup grade " + grade + "." + f_ltWarn() : buyN >= 5 ? "⏳ ALMOST — " + f_n0(buyN) + "/8. Waiting on: " + buyMiss + ". Trigger: a " + tfWord + " close above " + f_px(moneyLine) + "." : "⛔ NO — " + f_n0(buyN) + "/8. Against: " + buyMiss + "."
 
 // The sell side asks the mirror question, and defers when the buy row has
 // already said yes, so the two can never contradict one another.
@@ -2398,7 +2398,10 @@ sel8 = profOn and profLost
 selN = (sel1 ? 1 : 0) + (sel2 ? 1 : 0) + (sel3 ? 1 : 0) + (sel4 ? 1 : 0) + (sel5 ? 1 : 0) + (sel6 ? 1 : 0) + (sel7 ? 1 : 0) + (sel8 ? 1 : 0)
 selRaw = (sel1 ? "ATR turned · " : "") + (sel2 ? "lines bearish · " : "") + (sel3 ? "daily+weekly bearish · " : "") + (sel4 ? "RSI · " : "") + (sel5 ? "MACD down · " : "") + (sel6 ? "topping pattern · " : "") + (sel7 ? "overextended · " : "") + (sel8 ? "lost the weekly EMA · " : "")
 selHit = str.substring(selRaw, 0, math.max(0, str.length(selRaw) - 3))
-selSay = buyGo ? "✅ NO — this is the buy zone. The exit is a " + tfWord + " close below " + f_px(moneyLine) + "." : selN >= 5 ? "⛔ YES — SELL or REDUCE. " + f_n0(selN) + "/8 say get out: " + selHit + "." : selN >= 3 ? "⚠ TRIM — " + f_n0(selN) + "/8: " + selHit + ". Take some off, exit fully below " + f_px(moneyLine) + "." : "✅ NO — only " + f_n0(selN) + "/8 sell signs. Hold; exit on a close below " + f_px(moneyLine) + "."
+// Telling a reader to "exit below" a line price has already broken is advice
+// for a position the regime has long since closed. Say which side they are on.
+selOut = na(moneyLine) ? "" : close > moneyLine ? " Exit fully on a close below " + f_px(moneyLine) + "." : " Price is already below the line, so the regime exit has fired."
+selSay = buyGo ? "✅ NO — this is the buy zone." + selOut : selN >= 5 ? "⛔ YES — SELL or REDUCE. " + f_n0(selN) + "/8 say get out: " + selHit + "." + selOut : selN >= 3 ? "⚠ TRIM — " + f_n0(selN) + "/8: " + selHit + "." + selOut : "✅ NO — only " + f_n0(selN) + "/8 sell signs. Hold." + selOut
 
 if patLbl and patNew and not na(patTgt)
     label.new(bar_index, patDir == 1 ? low : high, patName + "\ntarget " + f_px(patTgt), style = patDir == 1 ? label.style_label_up : label.style_label_down, color = patDir == 1 ? cP12 : cP11, textcolor = color.white, size = size.small)
