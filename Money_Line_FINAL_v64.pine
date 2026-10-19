@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v65.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v65.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2458,7 +2458,10 @@ selGrp = "ATR " + str.tostring(sA) + "/2 · lines " + str.tostring(sLn) + "/1 ·
 // Telling a reader to "exit below" a line price has already broken is advice
 // for a position the regime closed long ago. Say which side they are on.
 selOut = na(moneyLine) ? "" : close > moneyLine ? "  Exit fully on a close below " + f_px(moneyLine) + "." : "  Price is already below the line, so the regime exit has fired."
-selSay = buyGo ? "✅ NO — this is the buy zone." + selOut : selN >= 9 ? "⛔ YES — SELL or REDUCE. " + f_n0(selN) + "/14   " + selGrp + "." + selOut : selN >= 6 ? "⚠ TRIM — " + f_n0(selN) + "/14   " + selGrp + "." + selOut : "✅ NO — only " + f_n0(selN) + "/14 sell signs.   " + selGrp + "." + selOut
+// In the buy zone there are two exits and they are not the same thing: the
+// trade stop is where THIS trade is wrong, the money line is where the whole
+// stance flips. Quoting only one of them left the reader guessing which.
+selSay = buyGo ? "✅ NO — this is the buy zone." + (buyTight ? "  Trade stop " + f_px(buyStop) + "; regime exit on a close below " + f_px(moneyLine) + "." : selOut) : selN >= 9 ? "⛔ YES — SELL or REDUCE. " + f_n0(selN) + "/14   " + selGrp + "." + selOut : selN >= 6 ? "⚠ TRIM — " + f_n0(selN) + "/14   " + selGrp + "." + selOut : "✅ NO — only " + f_n0(selN) + "/14 sell signs.   " + selGrp + "." + selOut
 
 if patLbl and patNew and not na(patTgt)
     label.new(bar_index, patDir == 1 ? low : high, patName + "\ntarget " + f_px(patTgt), style = patDir == 1 ? label.style_label_up : label.style_label_down, color = patDir == 1 ? cP12 : cP11, textcolor = color.white, size = size.small)
