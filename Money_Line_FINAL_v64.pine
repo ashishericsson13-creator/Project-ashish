@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v65.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v65.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2080,7 +2080,10 @@ f_botCall() =>
     else if exRoll and exBiz
         _c := "⛔ DO NOT BUY THIS LOW — the business is deteriorating as well as the trend. Companies in decline make lower lows, not bottoms. Whatever the score says, there is no floor under this one."
     else if botConf and trend == 1
-        _c := "✅ THE BOTTOM IS IN — and the ATR model has turned up with it. This is the best entry this chart offers. Stop on a close below " + f_px(botAnc) + (na(botAnc) or close <= 0 ? "" : " — " + f_n1((close - botAnc) / close * 100) + "% risk from here") + "."
+        // "Best entry this chart offers" is true at the low and false once price
+        // has run away from it. BRK.B sat 17% above its anchor and 1.9% off the
+        // all-time high while this row still called it the best entry going.
+        _c := "✅ THE BOTTOM IS IN — the ATR model has turned up with it." + (na(botAnc) or botAnc <= 0 ? "" : (close - botAnc) / botAnc * 100 >= 10 ? "  But price has already run " + f_n1((close - botAnc) / botAnc * 100) + "% off that low — you are buying the continuation, not the bottom." : "  This is the best entry this chart offers.") + " Stop on a close below " + f_px(botAnc) + " (the swing low)" + (na(botAnc) or close <= 0 ? "" : " — " + f_n1((close - botAnc) / close * 100) + "% risk") + "."
     else if botConf
         _c := "✅ BOTTOM LOOKS IN — start a first position, small. The ATR model has not turned yet, so add only on a " + tfWord + " close above " + f_px(moneyLine) + ". Stop below " + f_px(botAnc) + "."
     else if _gap <= 0 and botBlock != ""
