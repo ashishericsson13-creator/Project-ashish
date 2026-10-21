@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v65.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v65.8", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -1850,6 +1850,190 @@ botStr   = na(botAV) or na(atrV) or atrV <= 0 ? na : (close - botAV) / atrV
 botDistP = na(botAV) ? na : (close - botAV) / close * 100
 botMature = cycOld and not useCorr
 
+// ══════════════════════════════════════════════════════════════
+// REVERSAL PATTERNS · CANDLES · THE 50/200 CROSS
+// The triangles, wedges, flags, channels and bases are already read
+// further up (wgType, flagWord, suIsBase). What was missing is the
+// family built from matching swing points — double and triple tops
+// and bottoms, and head and shoulders — plus the seven candles and
+// the 50/200 cross. Daily and weekly come from regD / regW, which
+// are already fetched, so none of this adds a request.security call.
+// ══════════════════════════════════════════════════════════════
+patOn    = input.bool(true, "Reversal patterns: double/triple top & bottom, head and shoulders", group = "11. Patterns")
+patPiv   = input.int(5, "Pattern pivot strength (bars each side)", minval = 2, maxval = 30, group = "11. Patterns")
+patTol   = input.float(3.0, "Two highs (or lows) count as equal within this %", minval = 0.5, maxval = 15.0, step = 0.5, group = "11. Patterns")
+patHSpc  = input.float(3.0, "Head must clear both shoulders by this %", minval = 1.0, maxval = 25.0, step = 0.5, group = "11. Patterns")
+patAge   = input.int(60, "Forget a pattern once its last swing is this many bars old", minval = 10, maxval = 300, group = "11. Patterns")
+patLbl   = input.bool(true, "Mark confirmed patterns and crosses on the chart", group = "11. Patterns")
+candOn   = input.bool(true, "Read the last candle (hammer, engulfing, doji, star)", group = "11. Patterns")
+candDoji = input.float(10.0, "Doji: body under this % of the candle's range", minval = 1.0, maxval = 40.0, step = 1.0, group = "11. Patterns")
+candWick = input.float(2.0, "Hammer / shooting star: shadow this many times the body", minval = 1.0, maxval = 6.0, step = 0.5, group = "11. Patterns")
+gcOn     = input.bool(true, "Golden cross / death cross on the 50-bar vs 200-bar MA", group = "11. Patterns")
+gcNew    = input.int(26, "A cross counts as news for this many bars; older is background", minval = 4, maxval = 400, group = "11. Patterns")
+bqPEmax  = input.float(35.0, "P/E above this counts as expensive", minval = 5.0, maxval = 200.0, step = 1.0, group = "11. Patterns")
+
+// ── the last three swing highs and lows ───
+// Held as plain state and rewritten only when a pivot confirms, so there
+// is nothing to drift: every value is a real swing the chart printed.
+patPH = ta.pivothigh(high, patPiv, patPiv)
+patPL = ta.pivotlow(low, patPiv, patPiv)
+var float pH1 = na
+var float pH2 = na
+var float pH3 = na
+var int pH1b = na
+var int pH2b = na
+var int pH3b = na
+var float pL1 = na
+var float pL2 = na
+var float pL3 = na
+var int pL1b = na
+var int pL2b = na
+var int pL3b = na
+if not na(patPH)
+    pH3 := pH2
+    pH2 := pH1
+    pH1 := patPH
+    pH3b := pH2b
+    pH2b := pH1b
+    pH1b := bar_index - patPiv
+if not na(patPL)
+    pL3 := pL2
+    pL2 := pL1
+    pL1 := patPL
+    pL3b := pL2b
+    pL2b := pL1b
+    pL1b := bar_index - patPiv
+
+f_eqPct(float _a, float _b, float _tol) => not na(_a) and not na(_b) and _b != 0 and math.abs(_a - _b) / math.abs(_b) * 100 <= _tol
+
+patHaveH = not na(pH1) and not na(pH2)
+patHaveL = not na(pL1) and not na(pL2)
+patFresh = patOn and not na(pH1b) and not na(pL1b) and bar_index - math.max(pH1b, pL1b) <= patAge
+
+// The neckline is the swing between the matching extremes, found by bar index
+// rather than by "whichever pivot is newest". Picking the newest would work
+// until price broke the neckline and printed a fresh swing - at which point
+// the pattern would vanish from the panel at the exact moment it mattered.
+farOff = 1e20
+f_pick(float _v, int _b, int _lo, int _hi) => na(_b) or na(_lo) or na(_hi) or _b <= _lo or _b >= _hi ? na : _v
+f_lo3(int _lo, int _hi) => math.min(nz(f_pick(pL1, pL1b, _lo, _hi), farOff), math.min(nz(f_pick(pL2, pL2b, _lo, _hi), farOff), nz(f_pick(pL3, pL3b, _lo, _hi), farOff)))
+f_hi3(int _lo, int _hi) => math.max(nz(f_pick(pH1, pH1b, _lo, _hi), -farOff), math.max(nz(f_pick(pH2, pH2b, _lo, _hi), -farOff), nz(f_pick(pH3, pH3b, _lo, _hi), -farOff)))
+
+nk2T = f_lo3(pH2b, pH1b)
+nk3T = f_lo3(pH3b, pH1b)
+nk2B = f_hi3(pL2b, pL1b)
+nk3B = f_hi3(pL3b, pL1b)
+
+patDT = patFresh and patHaveH and f_eqPct(pH1, pH2, patTol) and nk2T < farOff
+patDB = patFresh and patHaveL and f_eqPct(pL1, pL2, patTol) and nk2B > -farOff
+patTT = patDT and not na(pH3) and f_eqPct(pH3, pH1, patTol) and nk3T < farOff
+patTB = patDB and not na(pL3) and f_eqPct(pL3, pL1, patTol) and nk3B > -farOff
+patHS = patFresh and patHaveH and not na(pH3) and pH2 > pH1 * (1 + patHSpc / 100) and pH2 > pH3 * (1 + patHSpc / 100) and f_eqPct(pH1, pH3, patTol) and nk3T < farOff
+patIH = patFresh and patHaveL and not na(pL3) and pL2 < pL1 * (1 - patHSpc / 100) and pL2 < pL3 * (1 - patHSpc / 100) and f_eqPct(pL1, pL3, patTol) and nk3B > -farOff
+
+patDir  = patHS or patTT or patDT ? -1 : patIH or patTB or patDB ? 1 : 0
+patName = patHS ? "HEAD AND SHOULDERS" : patIH ? "INVERSE HEAD AND SHOULDERS" : patTT ? "TRIPLE TOP" : patTB ? "TRIPLE BOTTOM" : patDT ? "DOUBLE TOP" : patDB ? "DOUBLE BOTTOM" : ""
+patNeck = patHS or patTT ? nk3T : patIH or patTB ? nk3B : patDT ? nk2T : patDB ? nk2B : na
+patExt  = patHS ? pH2 : patIH ? pL2 : patDir == -1 ? math.max(pH1, pH2) : patDir == 1 ? math.min(pL1, pL2) : na
+patHgt  = na(patNeck) or na(patExt) ? na : math.abs(patExt - patNeck)
+patTgt  = na(patHgt) ? na : patDir == -1 ? patNeck - patHgt : patDir == 1 ? patNeck + patHgt : na
+patConf = na(patNeck) ? false : patDir == -1 ? close < patNeck : patDir == 1 ? close > patNeck : false
+patNew  = patConf and not patConf[1]
+patDead = na(patExt) ? false : patDir == -1 ? close > patExt : patDir == 1 ? close < patExt : false
+
+// A confirmed pattern is remembered, because the swing that confirms it will
+// eventually roll the pivot store forward and erase the live read. The target
+// outlives the detection, so the panel keeps reporting it until it is hit or
+// the pattern ages out.
+var string patMem = ""
+var float patMemT = na
+var float patMemN = na
+var int patMemD = 0
+var int patMemB = na
+if patNew
+    patMem := patName
+    patMemT := patTgt
+    patMemN := patNeck
+    patMemD := patDir
+    patMemB := bar_index
+patMemAge = na(patMemB) ? na : bar_index - patMemB
+patMemOld = patMem != "" and not na(patMemAge) and patMemAge <= patAge
+// A remembered pattern is only still a pattern while price respects the side it
+// broke to. Close back through the neckline and it has failed: reporting a
+// triple top as live while price trades above its own neckline is worse than
+// saying nothing at all.
+patMemBack = patMemOld and not na(patMemN) and (patMemD == -1 ? close > patMemN : close < patMemN)
+var bool patMemX = false
+if patNew
+    patMemX := false
+if patMemBack
+    patMemX := true
+patMemHit = patMemOld and not na(patMemT) and (patMemD == -1 ? low <= patMemT : high >= patMemT)
+patMemLive = patMemOld and not patMemX and not patMemHit
+
+// ── the 50/200 cross ───
+// ta.* kept out of the ternary and off the `and`, so the call runs on every
+// bar whatever the input says (CW10002).
+gcRaw = ta.crossover(ma50bar, ma200bar)
+dcRaw = ta.crossunder(ma50bar, ma200bar)
+gcX = gcOn and gcRaw
+dcX = gcOn and dcRaw
+gcBars = ta.barssince(gcRaw)
+dcBars = ta.barssince(dcRaw)
+gcAbove = not na(ma50bar) and not na(ma200bar) and ma50bar > ma200bar
+gcAge = gcAbove ? gcBars : dcBars
+// A cross of two slow averages lags the price feeding it: it can read "golden"
+// during a fall from 345 to 128. And a cross 512 bars back is structure, not an
+// event. Both were being stated bare, which is what made the row misleading.
+gcStale = not na(ma200bar) and (gcAbove ? close < ma200bar : close > ma200bar)
+gcFresh = not na(gcAge) and gcAge <= gcNew
+gcShort = not gcOn or na(ma50bar) or na(ma200bar) ? "" : (gcFresh ? (gcAbove ? "▲ GOLDEN CROSS " : "▼ DEATH CROSS ") + f_n0(gcAge) + " bars ago" : (gcAbove ? "50-bar above the 200-bar" : "50-bar below the 200-bar") + (na(gcAge) ? "" : ", crossed " + f_n0(gcAge) + " back — background, not a signal")) + (not gcStale ? "" : gcAbove ? " — and price is BELOW the 200-bar, so it is stale" : " — and price is back ABOVE the 200-bar, so it is lagging")
+
+// ── the seven candles ───
+// A shape only means something where it sits, so the hammer and the shooting
+// star are named as signals only when they follow the move they are meant to
+// reverse; otherwise they are reported as shapes and nothing more.
+cRng = high - low
+cBod = math.abs(close - open)
+cUpW = high - math.max(close, open)
+cDnW = math.min(close, open) - low
+cDown5 = not na(close[5]) and close[1] < close[5]
+cUp5 = not na(close[5]) and close[1] > close[5]
+cDoji = cRng > 0 and cBod / cRng * 100 <= candDoji
+cHam = cRng > 0 and not cDoji and cDnW >= cBod * candWick and cUpW <= cBod
+cSS = cRng > 0 and not cDoji and cUpW >= cBod * candWick and cDnW <= cBod
+cBE = close > open and close[1] < open[1] and close >= open[1] and open <= close[1]
+cSE = close < open and close[1] > open[1] and close <= open[1] and open >= close[1]
+cSml1 = not na(high[1]) and high[1] - low[1] > 0 and math.abs(close[1] - open[1]) / (high[1] - low[1]) * 100 <= 50
+cMS = close[2] < open[2] and cSml1 and close > open and close > (open[2] + close[2]) / 2
+cES = close[2] > open[2] and cSml1 and close < open and close < (open[2] + close[2]) / 2
+cB1 = close[1] > open[1]
+cR1 = close[1] < open[1]
+cBod1 = math.abs(close[1] - open[1])
+cHar = cBod < cBod1 * 0.6 and math.max(close, open) <= math.max(close[1], open[1]) and math.min(close, open) >= math.min(close[1], open[1])
+cBullHar = cHar and cR1 and close > open
+cBearHar = cHar and cB1 and close < open
+cPierce = cR1 and close > open and open < low[1] and close > (open[1] + close[1]) / 2 and close < open[1]
+cDark = cB1 and close < open and open > high[1] and close < (open[1] + close[1]) / 2 and close > open[1]
+cTwzB = cR1 and close > open and cRng > 0 and math.abs(low - low[1]) <= cRng * 0.1
+cTwzT = cB1 and close < open and cRng > 0 and math.abs(high - high[1]) <= cRng * 0.1
+c3W = close > open and close[1] > open[1] and close[2] > open[2] and close > close[1] and close[1] > close[2]
+c3B = close < open and close[1] < open[1] and close[2] < open[2] and close < close[1] and close[1] < close[2]
+cInvH = cRng > 0 and not cDoji and cUpW >= cBod * candWick and cDnW <= cBod and cDown5
+cHang = cRng > 0 and not cDoji and cDnW >= cBod * candWick and cUpW <= cBod and cUp5
+candName = not candOn ? "" : cMS ? "MORNING STAR" : cES ? "EVENING STAR" : cBE ? "BULLISH ENGULFING" : cSE ? "BEARISH ENGULFING" : c3W ? "THREE WHITE SOLDIERS" : c3B ? "THREE BLACK CROWS" : cPierce ? "PIERCING LINE" : cDark ? "DARK CLOUD COVER" : cBullHar ? "BULLISH HARAMI" : cBearHar ? "BEARISH HARAMI" : cTwzB ? "TWEEZER BOTTOM" : cTwzT ? "TWEEZER TOP" : cInvH ? "INVERTED HAMMER" : cHang ? "HANGING MAN" : cHam ? (cDown5 ? "HAMMER" : "hammer shape, but not after a decline") : cSS ? (cUp5 ? "SHOOTING STAR" : "shooting-star shape, but not after a rally") : cDoji ? "DOJI" : ""
+candBull = cMS or cBE or c3W or cPierce or cBullHar or cTwzB or cInvH or (cHam and cDown5)
+candBear = cES or cSE or c3B or cDark or cBearHar or cTwzT or cHang or (cSS and cUp5)
+candSay = not candOn ? "" : candName == "" ? "last candle: nothing named" : "last candle: " + candName + (candBull ? " (bullish shape)" : candBear ? " (bearish shape)" : cDoji ? " (indecision)" : "")
+
+// ── daily and weekly, stated plainly ───
+// On a weekly chart "Weekly" and "This chart" are the same series. Listing both
+// read as two agreeing opinions and counted the same vote twice, which is how a
+// single bullish weekly became "2 of 3 bullish".
+tfSameD = timeframe.isdaily and timeframe.multiplier == 1
+tfSameW = timeframe.isweekly and timeframe.multiplier == 1
+tfCnt = 1 + (tfSameD ? 0 : 1) + (tfSameW ? 0 : 1)
+
 // ── BOTTOM SCORE ───
 botDeep  = input.float(20.0, "Washout: % off the high to qualify", minval = 5.0, maxval = 80.0, step = 1.0, group = "v64 · BOTTOM SCORE")
 botRsiOS = input.float(32.0, "Oversold: RSI must have reached this", minval = 10.0, maxval = 50.0, step = 1.0, group = "v64 · BOTTOM SCORE")
@@ -1861,7 +2045,7 @@ botRsiUp = input.float(45.0, "Oversold level for a PULLBACK in an uptrend", minv
 botRngX  = input.float(2.0, "Capitulation range (x ATR) when the symbol reports no volume", minval = 1.0, maxval = 8.0, step = 0.1, group = "v64 · BOTTOM SCORE")
 botHLatr = input.float(0.5, "A holding low must sit this many ATR above the anchor", minval = 0.1, maxval = 5.0, step = 0.1, group = "v64 · BOTTOM SCORE")
 botLvlATR = input.float(1.0, "The low must form within this many ATR of a real support level", minval = 0.2, maxval = 5.0, step = 0.1, group = "v64 · BOTTOM SCORE")
-botNeed  = input.int(5, "Checks required to call it a bottom (of 8)", minval = 3, maxval = 8, group = "v64 · BOTTOM SCORE")
+botNeed  = input.int(6, "Checks required to call it a bottom (of 10)", minval = 3, maxval = 10, group = "v64 · BOTTOM SCORE")
 botCool  = input.int(20, "Minimum bars between BOTTOM labels", minval = 1, maxval = 200, group = "v64 · BOTTOM SCORE")
 
 botDD   = botHi > 0 ? (botHi - close) / botHi * 100 : na
@@ -1899,10 +2083,15 @@ bv5 = not na(emaS) and close > emaS or profOn and profAbove
 bv6 = not na(macdH) and macdH > macdH[1] or macdXUp
 bv7 = botAbove and botRise
 bv8 = not na(lvlS) and not na(botAnc) and not na(atrV) and atrV > 0 and math.abs(botAnc - lvlS) <= botLvlATR * atrV and close > lvlS
-botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ? 1 : 0) + (bv6 ? 1 : 0) + (bv7 ? 1 : 0) + (bv8 ? 1 : 0)
+// The chart patterns and the candles were computed after this block and so
+// could never reach it. With the detection moved above, a bullish reversal
+// shape and a bullish candle become checks nine and ten.
+bv9 = (patConf and patDir == 1) or (patMemLive and patMemD == 1) or wgType == "FALLING WEDGE"
+bv10 = candBull
+botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ? 1 : 0) + (bv6 ? 1 : 0) + (bv7 ? 1 : 0) + (bv8 ? 1 : 0) + (bv9 ? 1 : 0) + (bv10 ? 1 : 0)
 // The row counted the missing signs without ever saying which, so "2 more
 // signs needed" gave the reader nothing to watch for. Each check gets a name.
-botMissR = (bv1 ? "" : "a deep enough fall · ") + (bv2 ? "" : "RSI oversold at the low · ") + (bv3 ? "" : "momentum divergence · ") + (bv4 ? "" : "capitulation volume · ") + (bv5 ? "" : "back above the fast EMA · ") + (bv6 ? "" : "MACD turning up · ") + (bv7 ? "" : "holding above the low · ") + (bv8 ? "" : "support at the low · ")
+botMissR = (bv9 ? "" : "a bullish reversal pattern · ") + (bv10 ? "" : "a bullish candle · ") + (bv1 ? "" : "a deep enough fall · ") + (bv2 ? "" : "RSI oversold at the low · ") + (bv3 ? "" : "momentum divergence · ") + (bv4 ? "" : "capitulation volume · ") + (bv5 ? "" : "back above the fast EMA · ") + (bv6 ? "" : "MACD turning up · ") + (bv7 ? "" : "holding above the low · ") + (bv8 ? "" : "support at the low · ")
 botMiss = botMissR == "" ? "" : str.substring(botMissR, 0, math.max(0, str.length(botMissR) - 3))
 
 // ─── THREE GATES, because the seven checks only detect a BOUNCE ───
@@ -1979,7 +2168,7 @@ f_botSay() =>
     else if not botReady
         _s := "TOO EARLY — only " + f_n0(botN) + " bar(s) since the " + botSrc + " at " + f_px(botAnc) + ". Let a base build before buying."
     else
-        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + f_n0(botScr) + " of 8 " + (botConf ? "✓ CONFIRMED — buy zone" : botBlock != "" ? "⚠ BOUNCE ONLY — " + botBlock : botScr >= botNeedN - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + (botRFail ? "  ·  a bottom here already failed at " + f_px(botSigLo) + ", bar raised" : "") + " (" + botSrc + " " + f_px(botAnc) + ").  " + f_botTicks() + (botAbove ? "  ·  " + f_n1(botDistP) + "% above avg cost " + f_px(botAV) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + f_px(botAV) + ", buyers off the low are offside")
+        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + f_n0(botScr) + " of 10 " + (botConf ? "✓ CONFIRMED — buy zone" : botBlock != "" ? "⚠ BOUNCE ONLY — " + botBlock : botScr >= botNeedN - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + (botRFail ? "  ·  a bottom here already failed at " + f_px(botSigLo) + ", bar raised" : "") + " (" + botSrc + " " + f_px(botAnc) + ").  " + f_botTicks() + (botAbove ? "  ·  " + f_n1(botDistP) + "% above avg cost " + f_px(botAV) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + f_px(botAV) + ", buyers off the low are offside")
     _s
 botSay = f_botSay()
 
@@ -2167,189 +2356,6 @@ f_whatToDo() =>
 
 boWTD = f_whatToDo()
 
-// ══════════════════════════════════════════════════════════════
-// REVERSAL PATTERNS · CANDLES · THE 50/200 CROSS
-// The triangles, wedges, flags, channels and bases are already read
-// further up (wgType, flagWord, suIsBase). What was missing is the
-// family built from matching swing points — double and triple tops
-// and bottoms, and head and shoulders — plus the seven candles and
-// the 50/200 cross. Daily and weekly come from regD / regW, which
-// are already fetched, so none of this adds a request.security call.
-// ══════════════════════════════════════════════════════════════
-patOn    = input.bool(true, "Reversal patterns: double/triple top & bottom, head and shoulders", group = "11. Patterns")
-patPiv   = input.int(5, "Pattern pivot strength (bars each side)", minval = 2, maxval = 30, group = "11. Patterns")
-patTol   = input.float(3.0, "Two highs (or lows) count as equal within this %", minval = 0.5, maxval = 15.0, step = 0.5, group = "11. Patterns")
-patHSpc  = input.float(3.0, "Head must clear both shoulders by this %", minval = 1.0, maxval = 25.0, step = 0.5, group = "11. Patterns")
-patAge   = input.int(60, "Forget a pattern once its last swing is this many bars old", minval = 10, maxval = 300, group = "11. Patterns")
-patLbl   = input.bool(true, "Mark confirmed patterns and crosses on the chart", group = "11. Patterns")
-candOn   = input.bool(true, "Read the last candle (hammer, engulfing, doji, star)", group = "11. Patterns")
-candDoji = input.float(10.0, "Doji: body under this % of the candle's range", minval = 1.0, maxval = 40.0, step = 1.0, group = "11. Patterns")
-candWick = input.float(2.0, "Hammer / shooting star: shadow this many times the body", minval = 1.0, maxval = 6.0, step = 0.5, group = "11. Patterns")
-gcOn     = input.bool(true, "Golden cross / death cross on the 50-bar vs 200-bar MA", group = "11. Patterns")
-gcNew    = input.int(26, "A cross counts as news for this many bars; older is background", minval = 4, maxval = 400, group = "11. Patterns")
-bqPEmax  = input.float(35.0, "P/E above this counts as expensive", minval = 5.0, maxval = 200.0, step = 1.0, group = "11. Patterns")
-
-// ── the last three swing highs and lows ───
-// Held as plain state and rewritten only when a pivot confirms, so there
-// is nothing to drift: every value is a real swing the chart printed.
-patPH = ta.pivothigh(high, patPiv, patPiv)
-patPL = ta.pivotlow(low, patPiv, patPiv)
-var float pH1 = na
-var float pH2 = na
-var float pH3 = na
-var int pH1b = na
-var int pH2b = na
-var int pH3b = na
-var float pL1 = na
-var float pL2 = na
-var float pL3 = na
-var int pL1b = na
-var int pL2b = na
-var int pL3b = na
-if not na(patPH)
-    pH3 := pH2
-    pH2 := pH1
-    pH1 := patPH
-    pH3b := pH2b
-    pH2b := pH1b
-    pH1b := bar_index - patPiv
-if not na(patPL)
-    pL3 := pL2
-    pL2 := pL1
-    pL1 := patPL
-    pL3b := pL2b
-    pL2b := pL1b
-    pL1b := bar_index - patPiv
-
-f_eqPct(float _a, float _b, float _tol) => not na(_a) and not na(_b) and _b != 0 and math.abs(_a - _b) / math.abs(_b) * 100 <= _tol
-
-patHaveH = not na(pH1) and not na(pH2)
-patHaveL = not na(pL1) and not na(pL2)
-patFresh = patOn and not na(pH1b) and not na(pL1b) and bar_index - math.max(pH1b, pL1b) <= patAge
-
-// The neckline is the swing between the matching extremes, found by bar index
-// rather than by "whichever pivot is newest". Picking the newest would work
-// until price broke the neckline and printed a fresh swing - at which point
-// the pattern would vanish from the panel at the exact moment it mattered.
-farOff = 1e20
-f_pick(float _v, int _b, int _lo, int _hi) => na(_b) or na(_lo) or na(_hi) or _b <= _lo or _b >= _hi ? na : _v
-f_lo3(int _lo, int _hi) => math.min(nz(f_pick(pL1, pL1b, _lo, _hi), farOff), math.min(nz(f_pick(pL2, pL2b, _lo, _hi), farOff), nz(f_pick(pL3, pL3b, _lo, _hi), farOff)))
-f_hi3(int _lo, int _hi) => math.max(nz(f_pick(pH1, pH1b, _lo, _hi), -farOff), math.max(nz(f_pick(pH2, pH2b, _lo, _hi), -farOff), nz(f_pick(pH3, pH3b, _lo, _hi), -farOff)))
-
-nk2T = f_lo3(pH2b, pH1b)
-nk3T = f_lo3(pH3b, pH1b)
-nk2B = f_hi3(pL2b, pL1b)
-nk3B = f_hi3(pL3b, pL1b)
-
-patDT = patFresh and patHaveH and f_eqPct(pH1, pH2, patTol) and nk2T < farOff
-patDB = patFresh and patHaveL and f_eqPct(pL1, pL2, patTol) and nk2B > -farOff
-patTT = patDT and not na(pH3) and f_eqPct(pH3, pH1, patTol) and nk3T < farOff
-patTB = patDB and not na(pL3) and f_eqPct(pL3, pL1, patTol) and nk3B > -farOff
-patHS = patFresh and patHaveH and not na(pH3) and pH2 > pH1 * (1 + patHSpc / 100) and pH2 > pH3 * (1 + patHSpc / 100) and f_eqPct(pH1, pH3, patTol) and nk3T < farOff
-patIH = patFresh and patHaveL and not na(pL3) and pL2 < pL1 * (1 - patHSpc / 100) and pL2 < pL3 * (1 - patHSpc / 100) and f_eqPct(pL1, pL3, patTol) and nk3B > -farOff
-
-patDir  = patHS or patTT or patDT ? -1 : patIH or patTB or patDB ? 1 : 0
-patName = patHS ? "HEAD AND SHOULDERS" : patIH ? "INVERSE HEAD AND SHOULDERS" : patTT ? "TRIPLE TOP" : patTB ? "TRIPLE BOTTOM" : patDT ? "DOUBLE TOP" : patDB ? "DOUBLE BOTTOM" : ""
-patNeck = patHS or patTT ? nk3T : patIH or patTB ? nk3B : patDT ? nk2T : patDB ? nk2B : na
-patExt  = patHS ? pH2 : patIH ? pL2 : patDir == -1 ? math.max(pH1, pH2) : patDir == 1 ? math.min(pL1, pL2) : na
-patHgt  = na(patNeck) or na(patExt) ? na : math.abs(patExt - patNeck)
-patTgt  = na(patHgt) ? na : patDir == -1 ? patNeck - patHgt : patDir == 1 ? patNeck + patHgt : na
-patConf = na(patNeck) ? false : patDir == -1 ? close < patNeck : patDir == 1 ? close > patNeck : false
-patNew  = patConf and not patConf[1]
-patDead = na(patExt) ? false : patDir == -1 ? close > patExt : patDir == 1 ? close < patExt : false
-
-// A confirmed pattern is remembered, because the swing that confirms it will
-// eventually roll the pivot store forward and erase the live read. The target
-// outlives the detection, so the panel keeps reporting it until it is hit or
-// the pattern ages out.
-var string patMem = ""
-var float patMemT = na
-var float patMemN = na
-var int patMemD = 0
-var int patMemB = na
-if patNew
-    patMem := patName
-    patMemT := patTgt
-    patMemN := patNeck
-    patMemD := patDir
-    patMemB := bar_index
-patMemAge = na(patMemB) ? na : bar_index - patMemB
-patMemOld = patMem != "" and not na(patMemAge) and patMemAge <= patAge
-// A remembered pattern is only still a pattern while price respects the side it
-// broke to. Close back through the neckline and it has failed: reporting a
-// triple top as live while price trades above its own neckline is worse than
-// saying nothing at all.
-patMemBack = patMemOld and not na(patMemN) and (patMemD == -1 ? close > patMemN : close < patMemN)
-var bool patMemX = false
-if patNew
-    patMemX := false
-if patMemBack
-    patMemX := true
-patMemHit = patMemOld and not na(patMemT) and (patMemD == -1 ? low <= patMemT : high >= patMemT)
-patMemLive = patMemOld and not patMemX and not patMemHit
-
-// ── the 50/200 cross ───
-// ta.* kept out of the ternary and off the `and`, so the call runs on every
-// bar whatever the input says (CW10002).
-gcRaw = ta.crossover(ma50bar, ma200bar)
-dcRaw = ta.crossunder(ma50bar, ma200bar)
-gcX = gcOn and gcRaw
-dcX = gcOn and dcRaw
-gcBars = ta.barssince(gcRaw)
-dcBars = ta.barssince(dcRaw)
-gcAbove = not na(ma50bar) and not na(ma200bar) and ma50bar > ma200bar
-gcAge = gcAbove ? gcBars : dcBars
-// A cross of two slow averages lags the price feeding it: it can read "golden"
-// during a fall from 345 to 128. And a cross 512 bars back is structure, not an
-// event. Both were being stated bare, which is what made the row misleading.
-gcStale = not na(ma200bar) and (gcAbove ? close < ma200bar : close > ma200bar)
-gcFresh = not na(gcAge) and gcAge <= gcNew
-gcShort = not gcOn or na(ma50bar) or na(ma200bar) ? "" : (gcFresh ? (gcAbove ? "▲ GOLDEN CROSS " : "▼ DEATH CROSS ") + f_n0(gcAge) + " bars ago" : (gcAbove ? "50-bar above the 200-bar" : "50-bar below the 200-bar") + (na(gcAge) ? "" : ", crossed " + f_n0(gcAge) + " back — background, not a signal")) + (not gcStale ? "" : gcAbove ? " — and price is BELOW the 200-bar, so it is stale" : " — and price is back ABOVE the 200-bar, so it is lagging")
-
-// ── the seven candles ───
-// A shape only means something where it sits, so the hammer and the shooting
-// star are named as signals only when they follow the move they are meant to
-// reverse; otherwise they are reported as shapes and nothing more.
-cRng = high - low
-cBod = math.abs(close - open)
-cUpW = high - math.max(close, open)
-cDnW = math.min(close, open) - low
-cDown5 = not na(close[5]) and close[1] < close[5]
-cUp5 = not na(close[5]) and close[1] > close[5]
-cDoji = cRng > 0 and cBod / cRng * 100 <= candDoji
-cHam = cRng > 0 and not cDoji and cDnW >= cBod * candWick and cUpW <= cBod
-cSS = cRng > 0 and not cDoji and cUpW >= cBod * candWick and cDnW <= cBod
-cBE = close > open and close[1] < open[1] and close >= open[1] and open <= close[1]
-cSE = close < open and close[1] > open[1] and close <= open[1] and open >= close[1]
-cSml1 = not na(high[1]) and high[1] - low[1] > 0 and math.abs(close[1] - open[1]) / (high[1] - low[1]) * 100 <= 50
-cMS = close[2] < open[2] and cSml1 and close > open and close > (open[2] + close[2]) / 2
-cES = close[2] > open[2] and cSml1 and close < open and close < (open[2] + close[2]) / 2
-cB1 = close[1] > open[1]
-cR1 = close[1] < open[1]
-cBod1 = math.abs(close[1] - open[1])
-cHar = cBod < cBod1 * 0.6 and math.max(close, open) <= math.max(close[1], open[1]) and math.min(close, open) >= math.min(close[1], open[1])
-cBullHar = cHar and cR1 and close > open
-cBearHar = cHar and cB1 and close < open
-cPierce = cR1 and close > open and open < low[1] and close > (open[1] + close[1]) / 2 and close < open[1]
-cDark = cB1 and close < open and open > high[1] and close < (open[1] + close[1]) / 2 and close > open[1]
-cTwzB = cR1 and close > open and cRng > 0 and math.abs(low - low[1]) <= cRng * 0.1
-cTwzT = cB1 and close < open and cRng > 0 and math.abs(high - high[1]) <= cRng * 0.1
-c3W = close > open and close[1] > open[1] and close[2] > open[2] and close > close[1] and close[1] > close[2]
-c3B = close < open and close[1] < open[1] and close[2] < open[2] and close < close[1] and close[1] < close[2]
-cInvH = cRng > 0 and not cDoji and cUpW >= cBod * candWick and cDnW <= cBod and cDown5
-cHang = cRng > 0 and not cDoji and cDnW >= cBod * candWick and cUpW <= cBod and cUp5
-candName = not candOn ? "" : cMS ? "MORNING STAR" : cES ? "EVENING STAR" : cBE ? "BULLISH ENGULFING" : cSE ? "BEARISH ENGULFING" : c3W ? "THREE WHITE SOLDIERS" : c3B ? "THREE BLACK CROWS" : cPierce ? "PIERCING LINE" : cDark ? "DARK CLOUD COVER" : cBullHar ? "BULLISH HARAMI" : cBearHar ? "BEARISH HARAMI" : cTwzB ? "TWEEZER BOTTOM" : cTwzT ? "TWEEZER TOP" : cInvH ? "INVERTED HAMMER" : cHang ? "HANGING MAN" : cHam ? (cDown5 ? "HAMMER" : "hammer shape, but not after a decline") : cSS ? (cUp5 ? "SHOOTING STAR" : "shooting-star shape, but not after a rally") : cDoji ? "DOJI" : ""
-candBull = cMS or cBE or c3W or cPierce or cBullHar or cTwzB or cInvH or (cHam and cDown5)
-candBear = cES or cSE or c3B or cDark or cBearHar or cTwzT or cHang or (cSS and cUp5)
-candSay = not candOn ? "" : candName == "" ? "last candle: nothing named" : "last candle: " + candName + (candBull ? " (bullish shape)" : candBear ? " (bearish shape)" : cDoji ? " (indecision)" : "")
-
-// ── daily and weekly, stated plainly ───
-// On a weekly chart "Weekly" and "This chart" are the same series. Listing both
-// read as two agreeing opinions and counted the same vote twice, which is how a
-// single bullish weekly became "2 of 3 bullish".
-tfSameD = timeframe.isdaily and timeframe.multiplier == 1
-tfSameW = timeframe.isweekly and timeframe.multiplier == 1
-tfCnt = 1 + (tfSameD ? 0 : 1) + (tfSameW ? 0 : 1)
 tfNB = (trend == 1 ? 1 : 0) + (not tfSameD and not na(regD) and regD == 1 ? 1 : 0) + (not tfSameW and not na(regW) and regW == 1 ? 1 : 0)
 tfAll = tfCnt == 3 ? "ALL THREE" : "BOTH"
 tfConf = (not tfSameD and na(regD)) or (not tfSameW and na(regW)) ? "partial data" : tfNB == tfCnt ? tfAll + " BULLISH — the cleanest backdrop there is" : tfNB == 0 ? tfAll + " BEARISH — stand aside" : "CONFLICT " + str.tostring(tfNB) + "/" + str.tostring(tfCnt) + " bullish — the small timeframe is fighting the big one"
