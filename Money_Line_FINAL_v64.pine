@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v65.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v65.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -1900,6 +1900,10 @@ bv6 = not na(macdH) and macdH > macdH[1] or macdXUp
 bv7 = botAbove and botRise
 bv8 = not na(lvlS) and not na(botAnc) and not na(atrV) and atrV > 0 and math.abs(botAnc - lvlS) <= botLvlATR * atrV and close > lvlS
 botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ? 1 : 0) + (bv6 ? 1 : 0) + (bv7 ? 1 : 0) + (bv8 ? 1 : 0)
+// The row counted the missing signs without ever saying which, so "2 more
+// signs needed" gave the reader nothing to watch for. Each check gets a name.
+botMissR = (bv1 ? "" : "a deep enough fall · ") + (bv2 ? "" : "RSI oversold at the low · ") + (bv3 ? "" : "momentum divergence · ") + (bv4 ? "" : "capitulation volume · ") + (bv5 ? "" : "back above the fast EMA · ") + (bv6 ? "" : "MACD turning up · ") + (bv7 ? "" : "holding above the low · ") + (bv8 ? "" : "support at the low · ")
+botMiss = botMissR == "" ? "" : str.substring(botMissR, 0, math.max(0, str.length(botMissR) - 3))
 
 // ─── THREE GATES, because the seven checks only detect a BOUNCE ───
 // TCS printed BOTTOM over and over from 4200 down to 2120. Every one of the
@@ -2089,9 +2093,9 @@ f_botCall() =>
     else if _gap <= 0 and botBlock != ""
         _c := "⏳ BOTTOM IS FORMING — enough checks have passed and only one thing is missing: " + botBlock + ". Set an alert." + _nb + _lapsed
     else if _gap <= 1
-        _c := "⏳ BOTTOM IS FORMING — one check short" + (botBlock == "" ? "" : ", and " + botBlock) + ". This is where real bottoms begin." + _nb + _lapsed
+        _c := "⏳ BOTTOM IS FORMING — one check short" + (botMiss == "" ? "" : " (" + botMiss + ")") + (botBlock == "" ? "" : ", and " + botBlock) + ". This is where real bottoms begin." + _nb + _lapsed
     else if botScr >= 2
-        _c := "⚠ BOTTOM IS STILL AWAY — " + f_n0(_gap) + " more signs needed" + (botRFail ? ", and a bottom here already failed" : "") + ". A bounce from here is a trade at best, not an entry."
+        _c := "⚠ BOTTOM IS STILL AWAY — " + f_n0(_gap) + " more signs needed" + (botMiss == "" ? "" : ", still missing: " + botMiss) + (botRFail ? ". A bottom here already failed" : "") + ". A bounce from here is a trade at best, not an entry."
     else
         _c := "⛔ STILL FALLING — almost no sign of a low. Stay out; there is nothing to catch yet."
     _c
