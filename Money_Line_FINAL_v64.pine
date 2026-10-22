@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v66.0", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v66.1", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2403,8 +2403,15 @@ fcSay = "★ " + fcWord + "   " + str.tostring(fcN) + "/" + str.tostring(fcMax) 
 // that can still be added.
 // ══════════════════════════════════════════════════════════════
 peTTM = not na(epsTTM) and epsTTM > 0 ? close / epsTTM : na
+// Market cap with no new request: the script is at 40/40, so shares have to be
+// derived. Net income over EPS gives the share count, and price does the rest.
+// Both are TTM so they are the same period. It needs positive EPS, so a
+// lossmaking company reports n/a rather than a negative market cap.
+mcShares = not na(niTTM) and not na(epsTTM) and epsTTM > 0 ? niTTM / epsTTM : na
+mcapV = na(mcShares) ? na : mcShares * close
+f_cap(float _v) => na(_v) or _v <= 0 ? "n/a" : _v >= 1e12 ? str.tostring(_v / 1e12, "#.##") + "T" : _v >= 1e9 ? str.tostring(_v / 1e9, "#.#") + "B" : _v >= 1e6 ? str.tostring(_v / 1e6, "#") + "M" : str.tostring(_v, "#")
 bqPE = not na(peTTM) and peTTM <= bqPEmax
-bizSay = not bqHave ? "NO FINANCIALS for this symbol — an index, metal or crypto is judged on the rows above, not here" : "Grade " + f_n0(bqN) + "/4   ·   P/E " + (na(peTTM) ? "n/a" : f_n1(peTTM) + (bqPE ? " ok" : " RICH")) + "   ·   profitable " + (bqProf ? "✓" : "✗") + "   ·   revenue " + (bqGrow ? "✓" : "✗") + (na(revGrowth) ? "" : " " + (revGrowth >= 0 ? "+" : "") + f_n1(revGrowth) + "%") + "   ·   ROE " + (na(roeFY) ? "n/a" : f_n0(roeFY) + "%" + (bqRoe ? " ✓" : " ✗")) + "   ·   debt/eq " + (na(deFY) ? "n/a" : f_n1(deFY) + (bqDebt ? " ✓" : " ✗"))
+bizSay = not bqHave ? "NO FINANCIALS for this symbol — an index, metal or crypto is judged on the rows above, not here" : "Grade " + f_n0(bqN) + "/4   ·   cap " + f_cap(mcapV) + " " + syminfo.currency + "   ·   P/E " + (na(peTTM) ? "n/a" : f_n1(peTTM) + (bqPE ? " ok" : " RICH")) + "   ·   profitable " + (bqProf ? "✓" : "✗") + "   ·   revenue " + (bqGrow ? "✓" : "✗") + (na(revGrowth) ? "" : " " + (revGrowth >= 0 ? "+" : "") + f_n1(revGrowth) + "%") + "   ·   ROE " + (na(roeFY) ? "n/a" : f_n0(roeFY) + "%" + (bqRoe ? " ✓" : " ✗")) + "   ·   debt/eq " + (na(deFY) ? "n/a" : f_n1(deFY) + (bqDebt ? " ✓" : " ✗"))
 
 // Eight entry conditions, drawn from the rows above so the answer cannot
 // disagree with the evidence the panel is already showing.
