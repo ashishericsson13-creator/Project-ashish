@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v66.1", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v66.2", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2243,7 +2243,11 @@ f_exitSay() =>
     else if exRoll
         _x := "EXIT THE LONG-TERM HOLD — the 200-bar MA has rolled over, so the multi-year trend is finished" + (bqHave ? " even though the business still grades " + f_n0(bqN) + "/4" : "") + ". Close the investment; trade it on the rows above if you still want exposure."
     else if exBiz
-        _x := "WARNING — the business is deteriorating: " + bizWhy + " (grade " + f_n0(bqN) + "/4). The trend still holds, but this is how long-term holds die. Stop adding. Exit if the 200-bar MA rolls over."
+        // exRoll is false when there is no 200-bar MA to roll over, so this
+        // branch was asserting "the trend still holds" on a symbol too young to
+        // have a long-term trend at all - SPCX, 132 days old, bearish on every
+        // other row. Absence of the test is not a pass.
+        _x := "WARNING — the business is deteriorating: " + bizWhy + " (grade " + f_n0(bqN) + "/4). " + (na(ma200bar) ? "No 200-bar MA yet — too little history to judge the long-term trend. Trade only." : atrBull ? "The trend still holds, but this is how long-term holds die. Stop adding; exit if the 200-bar MA rolls over." : "The trend has turned too. Stop adding.")
     else if exHot
         _x := "TRIM — " + f_n1(exStr) + " ATR above the 200-bar MA and momentum is fading. Take something off, keep the core, add back nearer " + f_px(ma200bar) + "."
     else if profOn and profLost
