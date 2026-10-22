@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v65.9", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v66.0", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2219,7 +2219,14 @@ exTrim = input.float(8.0, "Trim when this many ATR above the 200-bar MA", minval
 
 exRoll = ltDown
 exStr  = na(ma200bar) or na(atrV) or atrV <= 0 ? na : (close - ma200bar) / atrV
-exBiz  = bqHave and (not bqProf or (not na(revGrowth) and revGrowth < 0) or bqN <= 1)
+// Any negative number counted as deterioration, so LULU - profitable, ROE 34%,
+// debt/equity 0.4, graded 3/4 - was called deteriorating on revenue of -0.1%
+// and told to SELL EVERYTHING. A decline has to be big enough to be a decline.
+bizRevMin = input.float(-5.0, "Revenue growth below this counts as deteriorating (%)", minval = -50.0, maxval = 0.0, step = 0.5, group = "v64 · EXIT")
+exBizRev = not na(revGrowth) and revGrowth < bizRevMin
+exBiz  = bqHave and (not bqProf or exBizRev or bqN <= 1)
+// Name the reason rather than printing a grade that may look healthy.
+bizWhy = not bqProf ? "it is lossmaking" : exBizRev ? "revenue is " + f_n1(revGrowth) + "%" : "it grades " + f_n0(bqN) + "/4"
 exFade = not na(macdH) and macdH < macdH[1]
 exHot  = not na(exStr) and exStr >= exTrim and exFade
 exSig  = botOn and exRoll and not exRoll[1]
@@ -2232,11 +2239,11 @@ f_exitSay() =>
     if not botOn
         _x := "—"
     else if exRoll and exBiz
-        _x := "⛔ SELL EVERYTHING — the 200-bar MA is FALLING and the business is deteriorating (" + f_n0(bqN) + "/4). Both reasons to own this are gone. This is not a dip to buy."
+        _x := "⛔ SELL EVERYTHING — the 200-bar MA is FALLING and the business is deteriorating: " + bizWhy + ". Both reasons to own this are gone. This is not a dip to buy."
     else if exRoll
         _x := "EXIT THE LONG-TERM HOLD — the 200-bar MA has rolled over, so the multi-year trend is finished" + (bqHave ? " even though the business still grades " + f_n0(bqN) + "/4" : "") + ". Close the investment; trade it on the rows above if you still want exposure."
     else if exBiz
-        _x := "WARNING — the business is deteriorating (" + f_n0(bqN) + "/4)" + (na(revGrowth) or revGrowth >= 0 ? "" : ", revenue " + f_n1(revGrowth) + "%") + ". The trend still holds, but this is how long-term holds die. Stop adding. Exit if the 200-bar MA rolls over."
+        _x := "WARNING — the business is deteriorating: " + bizWhy + " (grade " + f_n0(bqN) + "/4). The trend still holds, but this is how long-term holds die. Stop adding. Exit if the 200-bar MA rolls over."
     else if exHot
         _x := "TRIM — " + f_n1(exStr) + " ATR above the 200-bar MA and momentum is fading. Take something off, keep the core, add back nearer " + f_px(ma200bar) + "."
     else if profOn and profLost
@@ -2274,7 +2281,7 @@ f_botCall() =>
     else if botMature
         _c := "NOT A BOTTOM QUESTION — price is a long way above its low. Judge this as a trend, on the rows above."
     else if exRoll and exBiz
-        _c := "⛔ DO NOT BUY THIS LOW — the business is deteriorating as well as the trend. Companies in decline make lower lows, not bottoms. Whatever the score says, there is no floor under this one."
+        _c := "⛔ DO NOT BUY THIS LOW — the trend is falling and " + bizWhy + ". Companies in decline make lower lows, not bottoms. Whatever the score says, there is no floor under this one."
     else if botConf and trend == 1
         // "Best entry this chart offers" is true at the low and false once price
         // has run away from it. BRK.B sat 17% above its anchor and 1.9% off the
