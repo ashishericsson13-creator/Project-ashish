@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v66.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v66.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2024,7 +2024,7 @@ cHang = cRng > 0 and not cDoji and cDnW >= cBod * candWick and cUpW <= cBod and 
 candName = not candOn ? "" : cMS ? "MORNING STAR" : cES ? "EVENING STAR" : cBE ? "BULLISH ENGULFING" : cSE ? "BEARISH ENGULFING" : c3W ? "THREE WHITE SOLDIERS" : c3B ? "THREE BLACK CROWS" : cPierce ? "PIERCING LINE" : cDark ? "DARK CLOUD COVER" : cBullHar ? "BULLISH HARAMI" : cBearHar ? "BEARISH HARAMI" : cTwzB ? "TWEEZER BOTTOM" : cTwzT ? "TWEEZER TOP" : cInvH ? "INVERTED HAMMER" : cHang ? "HANGING MAN" : cHam ? (cDown5 ? "HAMMER" : "hammer shape, but not after a decline") : cSS ? (cUp5 ? "SHOOTING STAR" : "shooting-star shape, but not after a rally") : cDoji ? "DOJI" : ""
 candBull = cMS or cBE or c3W or cPierce or cBullHar or cTwzB or cInvH or (cHam and cDown5)
 candBear = cES or cSE or c3B or cDark or cBearHar or cTwzT or cHang or (cSS and cUp5)
-candSay = not candOn ? "" : candName == "" ? "last candle: nothing named" : "last candle: " + candName + (candBull ? " (bullish shape)" : candBear ? " (bearish shape)" : cDoji ? " (indecision)" : "")
+candSay = not candOn ? "" : candName == "" ? "last candle ► none named" : "last candle " + (candBull ? "▲ BULLISH" : candBear ? "▼ BEARISH" : cDoji ? "► indecision" : "► neutral") + ": " + candName
 
 // ── daily and weekly, stated plainly ───
 // On a weekly chart "Weekly" and "This chart" are the same series. Listing both
@@ -2438,6 +2438,16 @@ over200 = not na(ma200bar) and close > ma200bar
 patUp = (patConf and patDir == 1) or (patMemLive and patMemD == 1) or botConf
 patDn = (patConf and patDir == -1) or (patMemLive and patMemD == -1)
 
+// A verdict per row, in that row's own terms, so each can be read on its own
+// instead of only through the FINAL CALL. These live in their own variables
+// so the row lines they prefix do not get any wider.
+patVote = ((patConf and patDir == 1) or (patMemLive and patMemD == 1) ? 1 : 0) - ((patConf and patDir == -1) or (patMemLive and patMemD == -1) ? 1 : 0) + (stBull ? 1 : 0) - (stBear ? 1 : 0) + (gcStale ? 0 : gcAbove ? 1 : -1)
+patWord = (patVote > 0 ? "▲ BULLISH" : patVote < 0 ? "▼ BEARISH" : "► NEUTRAL") + " per patterns   ·   "
+// RSI and MACD give direction. ADX and volume give force, not side, so they
+// describe the move in the row rather than voting on it.
+momVote = (na(rsiV) ? 0 : rsiV >= 55 ? 1 : rsiV <= 45 ? -1 : 0) + (mcdUp ? 1 : not na(macdL) and not na(macdS) and macdL < macdS ? -1 : 0)
+momWord = (momVote > 0 ? "▲ BULLISH" : momVote < 0 ? "▼ BEARISH" : "► NEUTRAL") + " per indicators   ·   "
+
 buy1 = atrBull
 buy2 = not na(moneyLine) and close > moneyLine
 buy3 = lnBull
@@ -2542,10 +2552,10 @@ f_boSummary(table _t) =>
         _r := _r + 1
         if patOn or gcOn
             f_cellL(_t, 0, _r, "PATTERN", cP8)
-            f_cellL(_t, 1, _r, patSay, patConf and patDir == 1 ? cP12 : patConf and patDir == -1 ? cP11 : patName == "" ? cP9 : cP3)
+            f_cellL(_t, 1, _r, patWord + patSay, patConf and patDir == 1 ? cP12 : patConf and patDir == -1 ? cP11 : patName == "" ? cP9 : cP3)
             _r := _r + 1
         f_cellL(_t, 0, _r, "MOMENTUM", color.new(color.purple, 25))
-        f_cellL(_t, 1, _r, "RSI " + (na(rsiV) ? "—" : f_n0(rsiV) + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : f_n0(adxV) + " " + f_adxWord(adxV)) + "   ·   vol " + (na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light")))) + (candSay == "" ? "" : "   ·   " + candSay), color.new(color.purple, 50))
+        f_cellL(_t, 1, _r, momWord + "RSI " + (na(rsiV) ? "—" : f_n0(rsiV) + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : f_n0(adxV) + " " + f_adxWord(adxV)) + "   ·   vol " + (na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light")))) + (candSay == "" ? "" : "   ·   " + candSay), color.new(color.purple, 50))
         _r := _r + 1
         f_cellL(_t, 0, _r, "BUSINESS", color.new(#4527a0, 10))
         f_cellL(_t, 1, _r, bizSay, not bqHave ? cP9 : bqN >= 3 and bqPE ? cP12 : bqN >= 3 ? cP13 : bqN == 2 ? cP3 : cP11)
