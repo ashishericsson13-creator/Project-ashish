@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v66.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v66.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2442,11 +2442,11 @@ patDn = (patConf and patDir == -1) or (patMemLive and patMemD == -1)
 // instead of only through the FINAL CALL. These live in their own variables
 // so the row lines they prefix do not get any wider.
 patVote = ((patConf and patDir == 1) or (patMemLive and patMemD == 1) ? 1 : 0) - ((patConf and patDir == -1) or (patMemLive and patMemD == -1) ? 1 : 0) + (stBull ? 1 : 0) - (stBear ? 1 : 0) + (gcStale ? 0 : gcAbove ? 1 : -1)
-patWord = (patVote > 0 ? "▲ BULLISH" : patVote < 0 ? "▼ BEARISH" : "► NEUTRAL") + " per patterns   ·   "
+patWord = (patVote >= 2 ? "▲ BULLISH" : patVote <= -2 ? "▼ BEARISH" : patVote == 1 ? "► leaning bullish" : patVote == -1 ? "► leaning bearish" : "► NEUTRAL") + " per patterns   ·   "
 // RSI and MACD give direction. ADX and volume give force, not side, so they
 // describe the move in the row rather than voting on it.
 momVote = (na(rsiV) ? 0 : rsiV >= 55 ? 1 : rsiV <= 45 ? -1 : 0) + (mcdUp ? 1 : not na(macdL) and not na(macdS) and macdL < macdS ? -1 : 0)
-momWord = (momVote > 0 ? "▲ BULLISH" : momVote < 0 ? "▼ BEARISH" : "► NEUTRAL") + " per indicators   ·   "
+momWord = (momVote >= 2 ? "▲ BULLISH" : momVote <= -2 ? "▼ BEARISH" : momVote == 1 ? "► leaning bullish" : momVote == -1 ? "► leaning bearish" : "► NEUTRAL") + " per indicators   ·   "
 
 buy1 = atrBull
 buy2 = not na(moneyLine) and close > moneyLine
