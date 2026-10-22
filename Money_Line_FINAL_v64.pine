@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v66.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v66.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2422,7 +2422,7 @@ mcShares = not na(niTTM) and not na(epsTTM) and epsTTM > 0 ? niTTM / epsTTM : na
 mcapV = na(mcShares) ? na : mcShares * close
 f_cap(float _v) => na(_v) or _v <= 0 ? "n/a" : _v >= 1e12 ? str.tostring(_v / 1e12, "#.##") + "T" : _v >= 1e9 ? str.tostring(_v / 1e9, "#.#") + "B" : _v >= 1e6 ? str.tostring(_v / 1e6, "#") + "M" : str.tostring(_v, "#")
 bqPE = not na(peTTM) and peTTM <= bqPEmax
-bizSay = not bqHave ? "NO FINANCIALS for this symbol — an index, metal or crypto is judged on the rows above, not here" : "Grade " + f_n0(bqN) + "/4   ·   cap " + f_cap(mcapV) + " " + syminfo.currency + "   ·   P/E " + (na(peTTM) ? "n/a" : f_n1(peTTM) + (bqPE ? " ok" : " RICH")) + "   ·   profitable " + (bqProf ? "✓" : "✗") + "   ·   revenue " + (bqGrow ? "✓" : "✗") + (na(revGrowth) ? "" : " " + (revGrowth >= 0 ? "+" : "") + f_n1(revGrowth) + "%") + "   ·   ROE " + (na(roeFY) ? "n/a" : f_n0(roeFY) + "%" + (bqRoe ? " ✓" : " ✗")) + "   ·   debt/eq " + (na(deFY) ? "n/a" : f_n1(deFY) + (bqDebt ? " ✓" : " ✗"))
+bizSay = not bqHave ? "NO FINANCIALS for this symbol — an index, metal or crypto is judged on the rows above, not here" : "Grade " + f_n0(bqN) + "/4   ·   cap " + f_cap(mcapV) + " " + syminfo.currency + "   ·   P/E " + (na(peTTM) ? "n/a" : f_n1(peTTM) + (bqPE ? " ok" : " RICH")) + "   ·   profitable " + (bqProf ? "✓" : "✗") + "   ·   revenue " + (bqGrow ? "✓" : "✗") + (na(revGrowth) ? "" : " " + (revGrowth >= 0 ? "+" : "") + f_n1(revGrowth) + "%") + "   ·   ROE " + (na(roeFY) ? "n/a" : f_n1(roeFY) + "%" + (bqRoe ? " ✓" : " ✗")) + "   ·   debt/eq " + (na(deFY) ? "n/a" : f_n1(deFY) + (bqDebt ? " ✓" : " ✗"))
 
 // Eight entry conditions, drawn from the rows above so the answer cannot
 // disagree with the evidence the panel is already showing.
@@ -2535,7 +2535,7 @@ f_boSummary(table _t) =>
         f_cellL(_t, 1, _r, (atrBull ? "▲ BULLISH   —   STAY LONG above " + f_px(moneyLine) + "   ·   SELL on a " + tfWord + " close BELOW it" : "▼ BEARISH   —   STAY OUT below " + f_px(moneyLine) + "   ·   BUY on a " + tfWord + " close ABOVE it") + "   (" + str.tostring(math.abs(moneyLine - close) / close * 100, "#.#") + "% " + (moneyLine > close ? "above" : "below") + " price)", aCol)
         _r := _r + 1
         f_cellL(_t, 0, _r, "LINES", cP8)
-        f_cellL(_t, 1, _r, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + f_n0(profWeeks) + "wEMA " + (lnV1 > 0 ? "▲ above" : "▼ below") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : "▼ below") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : "▼ below"), lCol)
+        f_cellL(_t, 1, _r, (lnBull ? "▲ BULLISH" : lnBear ? "▼ BEARISH" : "► MIXED") + "  " + str.tostring((lnV1 > 0 ? 1 : 0) + (lnV2 > 0 ? 1 : 0) + (lnV3 > 0 ? 1 : 0) + (lnV4 > 0 ? 1 : 0), "#") + " of 4 lines bullish   —   " + f_n0(profWeeks) + "wEMA " + (lnV1 > 0 ? "▲ above" : lnV1 < 0 ? "▼ below" : "· n/a") + "   ·   21EMA " + (lnV2 > 0 ? "▲ above" : lnV2 < 0 ? "▼ below" : "· n/a") + "   ·   last break " + (lnV3 > 0 ? "▲ up" : lnV3 < 0 ? "▼ down" : "· none") + "   ·   200-bar " + (lnV4 > 0 ? "▲ above" : lnV4 < 0 ? "▼ below" : "· n/a"), lCol)
         _r := _r + 1
         f_cellL(_t, 0, _r, "TIMEFRAMES", cP8)
         f_cellL(_t, 1, _r, tfSay, tfNB == tfCnt ? cP12 : tfNB == 0 ? cP11 : cP3)
