@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v66.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v66.8", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2024,7 +2024,12 @@ cHang = cRng > 0 and not cDoji and cDnW >= cBod * candWick and cUpW <= cBod and 
 candName = not candOn ? "" : cMS ? "MORNING STAR" : cES ? "EVENING STAR" : cBE ? "BULLISH ENGULFING" : cSE ? "BEARISH ENGULFING" : c3W ? "THREE WHITE SOLDIERS" : c3B ? "THREE BLACK CROWS" : cPierce ? "PIERCING LINE" : cDark ? "DARK CLOUD COVER" : cBullHar ? "BULLISH HARAMI" : cBearHar ? "BEARISH HARAMI" : cTwzB ? "TWEEZER BOTTOM" : cTwzT ? "TWEEZER TOP" : cInvH ? "INVERTED HAMMER" : cHang ? "HANGING MAN" : cHam ? (cDown5 ? "HAMMER" : "hammer shape, but not after a decline") : cSS ? (cUp5 ? "SHOOTING STAR" : "shooting-star shape, but not after a rally") : cDoji ? "DOJI" : ""
 candBull = cMS or cBE or c3W or cPierce or cBullHar or cTwzB or cInvH or (cHam and cDown5)
 candBear = cES or cSE or c3B or cDark or cBearHar or cTwzT or cHang or (cSS and cUp5)
-candSay = not candOn ? "" : candName == "" ? "last candle ► none named" : "last candle " + (candBull ? "▲ BULLISH" : candBear ? "▼ BEARISH" : cDoji ? "► indecision" : "► neutral") + ": " + candName
+// Most bars match no textbook shape. Saying only "none named" threw away what
+// the bar did: RELIANCE closed +4.6% near its high on a long lower tail and the
+// row reported nothing. An unnamed candle still gets described - but it does
+// not become candBull, so it never votes in the bottom score.
+candPlain = (close > open ? "▲ up bar" : close < open ? "▼ down bar" : "► flat bar") + (cRng <= 0 ? "" : cDnW >= cRng * 0.35 ? ", long lower tail" : cUpW >= cRng * 0.35 ? ", long upper tail" : cBod / cRng >= 0.6 ? ", strong body" : "")
+candSay = not candOn ? "" : candName == "" ? "last candle " + candPlain : "last candle " + (candBull ? "▲ BULLISH" : candBear ? "▼ BEARISH" : cDoji ? "► indecision" : "► neutral") + ": " + candName
 
 // ── daily and weekly, stated plainly ───
 // On a weekly chart "Weekly" and "This chart" are the same series. Listing both
