@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v66.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v66.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2086,7 +2086,7 @@ bv8 = not na(lvlS) and not na(botAnc) and not na(atrV) and atrV > 0 and math.abs
 // The chart patterns and the candles were computed after this block and so
 // could never reach it. With the detection moved above, a bullish reversal
 // shape and a bullish candle become checks nine and ten.
-bv9 = (patConf and patDir == 1) or (patMemLive and patMemD == 1) or wgType == "FALLING WEDGE"
+bv9 = (patConf and patDir == 1) or (patMemLive and patMemD == 1) or (wgType == "FALLING WEDGE" and not na(tlUpNow) and close > tlUpNow)
 bv10 = candBull
 // The two indicators on the panel that never reached this score. ADX cooling
 // says the decline is losing force, which is what a low is made of. The daily
@@ -2431,8 +2431,10 @@ bizSay = not bqHave ? "NO FINANCIALS for this symbol — an index, metal or cryp
 // before; ADX, the 50/200 cross, the 200-bar line, the bottom engine and the
 // triangle/wedge/flag family were not, and patterns could only ever count
 // against a buy, never for one.
-stBull = flagBull or pennUp or suIsBase or wgType == "FALLING WEDGE" or wgType == "ASCENDING TRIANGLE" or (wgType == "RECTANGLE" and atrBull)
-stBear = flagBear or pennDn or wgType == "RISING WEDGE" or wgType == "DESCENDING TRIANGLE" or (wgType == "RECTANGLE" and not atrBull)
+wgUpBrk = not na(tlUpNow) and close > tlUpNow
+wgDnBrk = not na(tlLoNow) and close < tlLoNow
+stBull = flagBull or pennUp or suIsBase or ((wgType == "FALLING WEDGE" or wgType == "ASCENDING TRIANGLE") and wgUpBrk) or (wgType == "RECTANGLE" and atrBull)
+stBear = flagBear or pennDn or ((wgType == "RISING WEDGE" or wgType == "DESCENDING TRIANGLE") and wgDnBrk) or (wgType == "RECTANGLE" and not atrBull)
 mcdUp = not na(macdL) and not na(macdS) and (macdL > macdS or macdXUp or (not na(macdH) and macdH > nz(macdH[1])))
 over200 = not na(ma200bar) and close > ma200bar
 patUp = (patConf and patDir == 1) or (patMemLive and patMemD == 1) or botConf
