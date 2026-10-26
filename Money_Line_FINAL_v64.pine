@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v66.9", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v67.0", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2346,7 +2346,10 @@ f_whatToDo() =>
     else if boTrapUp
         _a := "FAILED BREAKOUT" + (boFailATH ? " AT ALL-TIME HIGHS" : "") + " — price broke " + f_px(boLvlAt) + " and has closed back UNDER it. If you bought that break you are offside: get out. Do not re-buy until a close back above " + f_px(boLvlAt) + "."
     else if boTrapDn
-        _a := "FAILED BREAKDOWN — price broke " + f_px(boLvlAt) + " and has closed back ABOVE it. Shorts are trapped; cover. The level has to fail again to mean anything."
+        // Written for a short seller, it left a long reader with "wait" while
+        // BUY NOW? said buy here on 10 of 14. In an uptrend a failed breakdown
+        // is support holding, which is the long case, not a reason to stand by.
+        _a := "FAILED BREAKDOWN — price broke " + f_px(boLvlAt) + " and has closed back ABOVE it. Shorts are trapped; cover." + (atrBull ? " Support held and the uptrend stands — the long case is in BUY NOW?." : " The level has to fail again to mean anything.")
     else if boPending or boBrkUnconf
         _a := "WAIT for this bar to close. A level is giving way intrabar and it can still un-happen."
     else if profOn and profLost
