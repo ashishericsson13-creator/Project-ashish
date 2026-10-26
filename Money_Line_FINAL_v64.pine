@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v67.1", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v67.2", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2050,7 +2050,7 @@ botRsiUp = input.float(45.0, "Oversold level for a PULLBACK in an uptrend", minv
 botRngX  = input.float(2.0, "Capitulation range (x ATR) when the symbol reports no volume", minval = 1.0, maxval = 8.0, step = 0.1, group = "v64 · BOTTOM SCORE")
 botHLatr = input.float(0.5, "A holding low must sit this many ATR above the anchor", minval = 0.1, maxval = 5.0, step = 0.1, group = "v64 · BOTTOM SCORE")
 botLvlATR = input.float(1.0, "The low must form within this many ATR of a real support level", minval = 0.2, maxval = 5.0, step = 0.1, group = "v64 · BOTTOM SCORE")
-botNeed  = input.int(7, "Checks required to call it a bottom (of 12)", minval = 3, maxval = 12, group = "v64 · BOTTOM SCORE")
+botNeed  = input.int(7, "Checks required to call it a bottom (of 13)", minval = 3, maxval = 13, group = "v64 · BOTTOM SCORE")
 botCool  = input.int(20, "Minimum bars between BOTTOM labels", minval = 1, maxval = 200, group = "v64 · BOTTOM SCORE")
 
 botDD   = botHi > 0 ? (botHi - close) / botHi * 100 : na
@@ -2098,16 +2098,20 @@ bv10 = candBull
 // turning up before the chart timeframe is the classic early tell.
 // The 50/200 cross is deliberately NOT here: real bottoms form in death-cross
 // territory, so requiring it would guarantee missing them.
+// A bottom is not in until the swing structure turns: the last pivot low
+// above the one before it AND the last pivot high above the one before it.
+// Everything else here is a reason to expect a turn; this is the turn.
+bv13 = not na(pL1) and not na(pL2) and not na(pH1) and not na(pH2) and pL1 > pL2 and pH1 > pH2
 bv11 = not na(adxV) and not na(adxV[3]) and adxV < adxV[3]
 bv12 = regD == 1
-botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ? 1 : 0) + (bv6 ? 1 : 0) + (bv7 ? 1 : 0) + (bv8 ? 1 : 0) + (bv9 ? 1 : 0) + (bv10 ? 1 : 0) + (bv11 ? 1 : 0) + (bv12 ? 1 : 0)
+botScr  = (bv1 ? 1 : 0) + (bv2 ? 1 : 0) + (bv3 ? 1 : 0) + (bv4 ? 1 : 0) + (bv5 ? 1 : 0) + (bv6 ? 1 : 0) + (bv7 ? 1 : 0) + (bv8 ? 1 : 0) + (bv9 ? 1 : 0) + (bv10 ? 1 : 0) + (bv11 ? 1 : 0) + (bv12 ? 1 : 0) + (bv13 ? 1 : 0)
 // The row counted the missing signs without ever saying which, so "2 more
 // signs needed" gave the reader nothing to watch for. Each check gets a name.
 // Short names on purpose: with seven of the ten missing, the long form ran
 // past the right edge of the panel and the sentence was cut mid-word.
-botMissR = (bv9 ? "" : "reversal pattern · ") + (bv10 ? "" : "bullish candle · ") + (bv1 ? "" : "deep fall · ") + (bv2 ? "" : "RSI oversold · ") + (bv3 ? "" : "divergence · ") + (bv4 ? "" : "volume spike · ") + (bv5 ? "" : "above fast EMA · ") + (bv6 ? "" : "MACD up · ") + (bv7 ? "" : "holding the low · ") + (bv8 ? "" : "support · ") + (bv11 ? "" : "ADX cooling · ") + (bv12 ? "" : "daily turned up · ")
+botMissR = (bv13 ? "" : "higher low + higher high · ") + (bv9 ? "" : "reversal pattern · ") + (bv10 ? "" : "bullish candle · ") + (bv1 ? "" : "deep fall · ") + (bv2 ? "" : "RSI oversold · ") + (bv3 ? "" : "divergence · ") + (bv4 ? "" : "volume spike · ") + (bv5 ? "" : "above fast EMA · ") + (bv6 ? "" : "MACD up · ") + (bv7 ? "" : "holding the low · ") + (bv8 ? "" : "support · ") + (bv11 ? "" : "ADX cooling · ") + (bv12 ? "" : "daily turned up · ")
 botMiss = botMissR == "" ? "" : str.substring(botMissR, 0, math.max(0, str.length(botMissR) - 3))
-botMissN = 12 - botScr
+botMissN = 13 - botScr
 
 // ─── THREE GATES, because the seven checks only detect a BOUNCE ───
 // TCS printed BOTTOM over and over from 4200 down to 2120. Every one of the
@@ -2183,7 +2187,7 @@ f_botSay() =>
     else if not botReady
         _s := "TOO EARLY — only " + f_n0(botN) + " bar(s) since the " + botSrc + " at " + f_px(botAnc) + ". Let a base build before buying."
     else
-        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + f_n0(botScr) + " of 12 " + (botConf ? "✓ CONFIRMED — buy zone" : botBlock != "" ? "⚠ BOUNCE ONLY — " + botBlock : botScr >= botNeedN - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + (botRFail ? "  ·  a bottom here already failed at " + f_px(botSigLo) + ", bar raised" : "") + " (" + botSrc + " " + f_px(botAnc) + ").  " + f_botTicks() + (botAbove ? "  ·  " + f_n1(botDistP) + "% above avg cost " + f_px(botAV) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + f_px(botAV) + ", buyers off the low are offside")
+        _s := (useCorr ? "PULLBACK " : "BOTTOM ") + f_n0(botScr) + " of 13 " + (botConf ? (bv13 ? "✓ CONFIRMED — buy zone" : "⚠ scored, but no higher low + higher high yet") : botBlock != "" ? "⚠ BOUNCE ONLY — " + botBlock : botScr >= botNeedN - 1 ? "— ONE CHECK SHORT, get ready" : "— not a bottom yet") + (botRFail ? "  ·  a bottom here already failed at " + f_px(botSigLo) + ", bar raised" : "") + " (" + botSrc + " " + f_px(botAnc) + ").  " + f_botTicks() + (botAbove ? "  ·  " + f_n1(botDistP) + "% above avg cost " + f_px(botAV) : "  ·  " + str.tostring(math.abs(botDistP), "#.#") + "% UNDER avg cost " + f_px(botAV) + ", buyers off the low are offside")
     _s
 botSay = f_botSay()
 
