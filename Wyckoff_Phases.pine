@@ -30,11 +30,12 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v1.0", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v1.1", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
-rngMaxW  = input.float(25.0, "A range is this wide at most (%)", minval = 3.0, maxval = 80.0, step = 1.0, tooltip = "High to low across the lookback, as a percentage of the low. Above this the market is trending, not ranging, and no phase is reported.", group = "1. Range")
+rngMaxW  = input.float(70.0, "Sanity cap on range width (%)", minval = 10.0, maxval = 200.0, step = 5.0, tooltip = "A backstop only. Width is a poor test of sideways: seven months of weekly bars on a liquid large-cap routinely spans 40% while going nowhere. What actually defines the range is the touch count below.", group = "1. Range")
+minTouch = input.int(2, "Visits to each edge before it counts as a range", minval = 1, maxval = 6, tooltip = "This is the real test. A range is a range because price went to both boundaries more than once. A V-shaped reversal touches each extreme once and is not a range, however flat its net move looks.", group = "1. Range")
 rngMinB  = input.int(10, "Minimum bars before a range counts", minval = 5, maxval = 100, group = "1. Range")
 edgeTol  = input.float(1.5, "Edge tolerance (% of range width)", minval = 0.2, maxval = 10.0, step = 0.1, tooltip = "How close to a boundary a bar must come to count as a test of it.", group = "1. Range")
 
@@ -65,6 +66,14 @@ panelSz  = input.string("Small", "Panel text size", options = ["Tiny", "Small", 
 atrV   = ta.atr(14)
 volAvg = ta.sma(volume, volLen)
 volX   = volAvg > 0 ? volume / volAvg : na
+// A forming bar carries partial volume, so every climax and SOS/SOW test reads
+// light. BE showed 0.2x, AMZN 0.1x, CRM 0x - all of them mid-week.
+barLive = time_close > timenow
+
+// Formatting helpers, kept above every row that uses them.
+f_px(float _v) => str.tostring(_v, format.mintick)
+f_n0(float _v) => str.tostring(_v, "#")
+f_n1(float _v) => str.tostring(_v, "#.#")
 barRng = high - low
 wideBar = not na(atrV) and atrV > 0 and barRng >= atrV * wideX
 
@@ -74,8 +83,24 @@ wideBar = not na(atrV) and atrV > 0 and barRng >= atrV * wideX
 rngHi = ta.highest(high, rngLen)[1]
 rngLo = ta.lowest(low, rngLen)[1]
 rngW  = not na(rngHi) and not na(rngLo) and rngLo > 0 ? (rngHi - rngLo) / rngLo * 100 : na
-rngOk = not na(rngW) and rngW <= rngMaxW and bar_index >= rngMinB + rngLen
 tol   = na(rngHi) or na(rngLo) ? na : (rngHi - rngLo) * edgeTol / 100
+
+// Distinct visits to a boundary: the count rises when price arrives, not for
+// every bar it loiters there.
+f_visits(float _lvl, float _tol, int _n, bool _up) =>
+    _c = 0
+    _prev = false
+    for _i = _n to 1
+        _now = _up ? high[_i] >= _lvl - _tol : low[_i] <= _lvl + _tol
+        if _now and not _prev
+            _c += 1
+        _prev := _now
+    _c
+
+hiVisits = na(rngHi) or na(tol) ? 0 : f_visits(rngHi, tol, rngLen, true)
+loVisits = na(rngLo) or na(tol) ? 0 : f_visits(rngLo, tol, rngLen, false)
+touchOk = hiVisits >= minTouch and loVisits >= minTouch
+rngOk = not na(rngW) and rngW <= rngMaxW and bar_index >= rngMinB + rngLen and touchOk
 
 // Prior trend, measured from before the range so the range itself cannot
 // colour the verdict.
@@ -190,7 +215,7 @@ brokeDn = rngOk and close < rngLo
 
 phase = not rngOk ? "—" : bias == 0 ? "—" : f_live(lpsyBar) or (f_live(sowBar) and brokeDn and not na(stBar)) ? "E" : f_live(lpsBar) or (f_live(sosBar) and brokeUp and not na(stBar)) ? "E" : f_live(sowBar) or f_live(sosBar) ? "D" : f_live(utadBar) or f_live(sprBar) ? "C" : not na(stBar) ? "B" : not na(arBar) ? "A" : not na(bcBar) or not na(scBar) ? "A" : "B"
 
-phWord = phase == "—" ? "no range, or no prior trend to judge it against" : phase == "A" ? "A — the prior trend is being stopped" : phase == "B" ? "B — building the cause inside the range" : phase == "C" ? "C — the test" : phase == "D" ? "D — moving to the edge of the range" : "E — the trend out of the range"
+phWord = phase == "—" ? (not rngOk ? "no range — " + f_n0(hiVisits) + " visit(s) to the high and " + f_n0(loVisits) + " to the low; " + f_n0(minTouch) + " of each are needed" : "a range, but the move into it was too small to classify")  : phase == "A" ? "A — the prior trend is being stopped" : phase == "B" ? "B — building the cause inside the range" : phase == "C" ? "C — the test" : phase == "D" ? "D — moving to the edge of the range" : "E — the trend out of the range"
 
 schem = bias == 1 ? "DISTRIBUTION" : bias == -1 ? "ACCUMULATION" : "UNCLASSIFIED"
 // The bias is the whole interpretation. A spring in accumulation is the buy;
@@ -200,15 +225,12 @@ schemCol = bias == 1 ? color.new(#d50000, 20) : bias == -1 ? color.new(#00c853, 
 // ═══════════════════════════════════════════════════════════════
 // READ-OUT
 // ═══════════════════════════════════════════════════════════════
-f_px(float _v) => str.tostring(_v, format.mintick)
-f_n0(float _v) => str.tostring(_v, "#")
-f_n1(float _v) => str.tostring(_v, "#.#")
 f_ev(string _n, int _b) => f_live(_b) ? _n + " " + f_n0(f_age(_b)) + "b · " : ""
 
 evList = (f_ev(bias == 1 ? "BC" : "SC", bias == 1 ? bcBar : scBar)) + f_ev("AR", arBar) + f_ev("ST", stBar) + f_ev(bias == 1 ? "UT" : "spring", bias == 1 ? utBar : sprBar) + f_ev("UTAD", utadBar) + f_ev(bias == 1 ? "SOW" : "SOS", bias == 1 ? sowBar : sosBar) + f_ev(bias == 1 ? "LPSY" : "LPS", bias == 1 ? lpsyBar : lpsBar)
-evSay = evList == "" ? "none yet in the last " + f_n0(evAge) + " bars" : str.substring(evList, 0, math.max(0, str.length(evList) - 3))
+evSay = bias == 0 ? "no schematic to name events against" : evList == "" ? "none yet in the last " + f_n0(evAge) + " bars" : str.substring(evList, 0, math.max(0, str.length(evList) - 3))
 
-rngSay = not rngOk ? (na(rngW) ? "not enough history" : "no range — " + f_n1(rngW) + "% wide over " + f_n0(rngLen) + " bars, above the " + f_n0(rngMaxW) + "% limit") : f_px(rngLo) + " to " + f_px(rngHi) + "   ·   " + f_n1(rngW) + "% wide   ·   price " + (brokeUp ? "ABOVE it" : brokeDn ? "BELOW it" : "inside, " + f_n1((close - rngLo) / (rngHi - rngLo) * 100) + "% up the range")
+rngSay = not rngOk ? (na(rngW) ? "not enough history" : "no range — " + f_n1(rngW) + "% wide, " + f_n0(hiVisits) + " visit(s) to the high and " + f_n0(loVisits) + " to the low over " + f_n0(rngLen) + " bars" + (rngW > rngMaxW ? ", and past the width cap" : "")) : f_px(rngLo) + " to " + f_px(rngHi) + "   ·   " + f_n1(rngW) + "% wide   ·   price " + (brokeUp ? "ABOVE it" : brokeDn ? "BELOW it" : "inside, " + f_n1((close - rngLo) / (rngHi - rngLo) * 100) + "% up the range")
 
 priorSay = na(pMove) ? "not enough history to judge the prior trend" : (pMove >= 0 ? "+" : "") + f_n1(pMove) + "% into the range over " + f_n0(priorLen) + " bars" + (bias == 0 ? " — too small to call, so no schematic applies" : bias == 1 ? " — an advance, so a range here is distribution" : " — a decline, so a range here is accumulation")
 
@@ -262,7 +284,7 @@ if barstate.islast
     f_row(wp, 3, "EVENTS", evSay, color.new(color.purple, 35))
     f_row(wp, 4, "▶ WHAT IT MEANS", meanSay, color.new(#00695c, 10))
     f_row(wp, 5, "NEXT TRIGGER", trigSay, color.new(color.black, 25))
-    f_row(wp, 6, "VOLUME", na(volX) ? "not reported for this symbol" : f_n1(volX) + "x the " + f_n0(volLen) + "-bar average" + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : " — light"), color.new(color.navy, 35))
+    f_row(wp, 6, "VOLUME", (barLive ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_n1(volX) + "x the " + f_n0(volLen) + "-bar average" + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
     f_row(wp, 7, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Every event here is reported after its bar closed.", color.new(color.gray, 55))
 
 alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
