@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v67.2", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v67.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2219,6 +2219,8 @@ f_bigSay() =>
         _b := "NO FINANCIALS for this symbol — this row only grades individual stocks. Judge indices, metals and crypto on the rows above."
     else if bigBuy
         _b := "★ BUY BIG AND HOLD — bottom confirmed, business qualifies " + f_n0(bqN) + "/4, " + f_n1(botDD) + "% off the high, 200-bar MA still rising. Size up and hold; this is the compounding entry."
+    else if botMature
+        _b := "NOT THIS SETUP — price is a long way above its low, so there is no discount to buy. Business grades " + f_n0(bqN) + "/4 and the long-term trend is " + (bqTrend ? "intact" : "broken") + ". This row waits for a real selloff; it is not a verdict on the stock."
     else if not botConf
         _b := "NOT YET — the bottom is not confirmed on the chart (see BOTTOM). Business grade " + f_n0(bqN) + "/4" + (bqN >= bigNeed ? ", which is fine — it is the chart that is not ready." : ", so it would not qualify anyway.")
     else if not bqTrend
@@ -2368,7 +2370,7 @@ f_whatToDo() =>
     else if profOn and (profReclaim or profRespect or profAtLine) and not emaOver
         _a := (ltDown ? "COUNTER-TREND TRADE ONLY near " : trend == -1 ? "HALF SIZE AT MOST near " : "BUY near ") + f_px(profEma) + " — the " + f_n0(profWeeks) + "-week EMA. Stop on a CLOSE below it." + (ltDown ? " The 200-bar MA is falling, so this is a bounce to trade, not a position to build. Keep it small." : trend == -1 ? "" : " Size up here because the stop is close.") + f_emaCaveat()
     else if boFlipLive and boFlipRe and not emaOver
-        _a := (bothSell ? "COUNTER-TREND BOUNCE ONLY at " : trend == -1 ? "HALF SIZE AT MOST at " : "BUY the retest of ") + f_px(boFlipLvl) + ". Stop just under it — tightest stop available on this chart." + (bothSell ? " Both models read sell side, so this is a trade against the trend, not an entry." : "") + f_ltWarn()
+        _a := (bothSell ? "COUNTER-TREND BOUNCE ONLY at " : trend == -1 ? "HALF SIZE AT MOST at " : not bothBuy ? "MODELS SPLIT (see VERDICT) — half size at most on the retest of " : "BUY the retest of ") + f_px(boFlipLvl) + ". Stop just under it — tightest stop available on this chart." + (bothSell ? " Both models read sell side, so this is a trade against the trend, not an entry." : "") + f_ltWarn()
     else if emaOver
         _a := "DO NOT START HERE. " + f_n1(emaX21) + " ATR above the " + f_n0(emaSlowLen) + " EMA. Hold what you have; add only back near " + f_px(emaS) + "."
     else if profOn and profAbove and not na(profBars) and profBars >= 3 and trend == 1
