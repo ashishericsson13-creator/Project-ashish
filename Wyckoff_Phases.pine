@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v1.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v1.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -287,7 +287,7 @@ rAll = r2 and r3 and r4
 rBroke = (upImp or dnImp) and not rAll
 
 wWord = not wHave ? "► NOT ENOUGH SWINGS" : wUp and rAll ? "▲ BULLISH" : wDn and rAll ? "▼ BEARISH" : wUp ? "▲ bullish, but not a clean impulse" : wDn ? "▼ bearish, but not a clean impulse" : "► CORRECTIVE"
-wSay = not wHave ? "Fewer than four confirmed swings so far." : (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "the swings overlap — a correction or a range, not an impulse") + (not (upImp or dnImp) ? "   ·   the last six swings are not shaped like an impulse, so the wave rules do not apply" : rAll ? "   ·   the last five legs satisfy all three impulse rules" : "   ·   impulse rules: wave 2 " + (r2 ? "✓" : "✗") + "  wave 3 " + (r3 ? "✓" : "✗") + "  wave 4 " + (r4 ? "✓" : "✗") + " — so these legs are NOT a valid impulse") + "   ·   read from the last four swings, so it describes the current leg, not the whole chart"
+wSay = not wHave ? "Fewer than four confirmed swings so far." : (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "swings overlap — a correction, not an impulse") + (not (upImp or dnImp) ? "   ·   not impulse-shaped, so the rules do not apply" : rAll ? "   ·   all three impulse rules satisfied" : "   ·   wave 2 " + (r2 ? "✓" : "✗") + "  wave 3 " + (r3 ? "✓" : "✗") + "  wave 4 " + (r4 ? "✓" : "✗") + " — NOT a valid impulse") + "   ·   last 4 swings — the current leg, not the whole chart"
 
 f_age(int _b) => na(_b) ? na : bar_index - _b
 f_live(int _b) => not na(_b) and bar_index - _b <= evAge
@@ -315,10 +315,14 @@ tgtUp  = na(rngH) ? na : rngHi + rngH
 tgtDn  = na(rngH) ? na : rngLo - rngH
 late   = phase == "C" or phase == "D" or phase == "E"
 
-schem = bias == 1 ? "DISTRIBUTION" : bias == -1 ? "ACCUMULATION" : "UNCLASSIFIED"
+// Without a range there is nothing to classify yet, so the schematic answers
+// the conditional question - if a range forms here, which kind would it be -
+// rather than reporting accumulation as a finding two rows above RANGE saying
+// there is no range.
+schem = (bias == 1 ? "DISTRIBUTION" : bias == -1 ? "ACCUMULATION" : "UNCLASSIFIED") + (rngOk or bias == 0 ? "" : " — ONLY IF A RANGE FORMS")
 // The bias is the whole interpretation. A spring in accumulation is the buy;
 // the identical bar in distribution is a failed break inside a topping range.
-schemCol = bias == 1 ? color.new(#d50000, 20) : bias == -1 ? color.new(#00c853, 20) : color.new(color.gray, 45)
+schemCol = not rngOk ? color.new(color.gray, 45) : bias == 1 ? color.new(#d50000, 20) : bias == -1 ? color.new(#00c853, 20) : color.new(color.gray, 45)
 
 // ═══════════════════════════════════════════════════════════════
 // READ-OUT
@@ -405,7 +409,7 @@ if barstate.islast
     f_row(wp, 7, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
     f_row(wp, 8, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
     f_row(wp, 9, "VOLUME — BOTH", (barLive ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_n1(volX) + "x the " + f_n0(volLen) + "-bar average" + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
-    f_row(wp, 10, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Every event here is reported after its bar closed. Wave structure is read from the last six swings and changes as new swings form — it is not a wave count and carries no labels.", color.new(color.gray, 55))
+    f_row(wp, 10, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
 
 alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
 alertcondition(utNow, title = "Wyckoff UPTHRUST / UTAD", message = "{{ticker}} {{interval}}: upthrust — the range high gave way and was taken back at {{close}}")
