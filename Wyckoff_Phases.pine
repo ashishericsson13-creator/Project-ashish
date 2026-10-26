@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v1.8", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v1.9", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -298,7 +298,7 @@ rAll = r2 and r3 and r4
 rBroke = (upImp or dnImp) and not rAll
 
 wWord = not wHave ? "► NOT ENOUGH SWINGS" : wUp and rAll ? "▲ BULLISH" : wDn and rAll ? "▼ BEARISH" : wUp ? "▲ bullish, but not a clean impulse" : wDn ? "▼ bearish, but not a clean impulse" : "► CORRECTIVE"
-wSay = not wHave ? "Fewer than four confirmed swings so far." : (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "swings overlap — a correction, not an impulse") + (not (upImp or dnImp) ? "   ·   not impulse-shaped, so the rules do not apply" : rAll ? "   ·   all three impulse rules satisfied" : "   ·   wave 2 " + (r2 ? "✓" : "✗") + "  wave 3 " + (r3 ? "✓" : "✗") + "  wave 4 " + (r4 ? "✓" : "✗") + " — NOT a valid impulse") + "   ·   last 4 swings — the current leg, not the whole chart"
+wSay = not wHave ? "Fewer than four confirmed swings so far." : (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "swings overlap — a correction, not an impulse") + (not (wUp or wDn) ? "" : not (upImp or dnImp) ? "   ·   not impulse-shaped, so the rules do not apply" : rAll ? "   ·   all three impulse rules satisfied" : "   ·   wave 2 " + (r2 ? "✓" : "✗") + "  wave 3 " + (r3 ? "✓" : "✗") + "  wave 4 " + (r4 ? "✓" : "✗") + " — NOT a valid impulse") + "   ·   last 4 swings — the current leg, not the whole chart"
 
 f_age(int _b) => na(_b) ? na : bar_index - _b
 f_live(int _b) => not na(_b) and bar_index - _b <= evAge
@@ -350,7 +350,10 @@ priorSay = na(pMove) ? "not enough history to judge the prior trend" : (pMove >=
 // What the phase means for someone deciding what to do. Wyckoff is a map of
 // where you are, not a signal, so this says what would confirm the next step
 // rather than issuing an order.
-meanSay = phase == "—" ? "Nothing to read. Either price is trending rather than ranging, or the move into it was too small to classify." : bias == 1 and phase == "C" ? "The upthrust is the tell. If price cannot regain " + f_px(rngHi) + ", supply has won and Phase D markdown follows." : bias == -1 and phase == "C" ? "The spring is the tell. If price holds above " + f_px(rngLo) + " and tests it successfully, Phase D markup follows." : phase == "D" and bias == 1 ? "Supply is in control. Rallies to " + f_px(rngLo) + " are last points of supply, not entries." : phase == "D" and bias == -1 ? "Demand is in control. Pullbacks to " + f_px(rngHi) + " are last points of support." : phase == "E" and bias == 1 ? "Markdown. The range is behind; " + f_px(rngLo) + " is resistance now." : phase == "E" and bias == -1 ? "Markup. The range is behind; " + f_px(rngHi) + " is support now." : phase == "A" ? "The prior trend is being stopped. Too early to position — wait for the range to form and be tested." : "Cause is being built. Nothing here is actionable until the range is tested at one edge and breaks at the other."
+// It said "either price is trending, or the move was too small to classify"
+// while holding the number that decides which - on a chart up 65% into the
+// area, the prior-trend test has already answered it.
+meanSay = phase == "—" ? (bias == 0 ? "Nothing to read — the move into this area was too small to class it as accumulation or distribution." : "Price is trending, not ranging. There is no cause being built here, so there is nothing for this method to trade.") : bias == 1 and phase == "C" ? "The upthrust is the tell. If price cannot regain " + f_px(rngHi) + ", supply has won and Phase D markdown follows." : bias == -1 and phase == "C" ? "The spring is the tell. If price holds above " + f_px(rngLo) + " and tests it successfully, Phase D markup follows." : phase == "D" and bias == 1 ? "Supply is in control. Rallies to " + f_px(rngLo) + " are last points of supply, not entries." : phase == "D" and bias == -1 ? "Demand is in control. Pullbacks to " + f_px(rngHi) + " are last points of support." : phase == "E" and bias == 1 ? "Markdown. The range is behind; " + f_px(rngLo) + " is resistance now." : phase == "E" and bias == -1 ? "Markup. The range is behind; " + f_px(rngHi) + " is support now." : phase == "A" ? "The prior trend is being stopped. Too early to position — wait for the range to form and be tested." : "Cause is being built. Nothing here is actionable until the range is tested at one edge and breaks at the other."
 
 // Phases A and B are the cause being built - there is nothing to act on there,
 // whichever schematic it turns out to be. The bias only becomes a direction
@@ -383,7 +386,7 @@ bTgtDn = na(bH) ? na : bLo - bH * baseRR
 // actually turns, and until then it is as likely to go on falling
 bsSide = not bOk ? 0 : bBrkUp ? 1 : bBrkDn ? -1 : bUpIn ? 1 : 0
 bsWord = not bOk ? "► NO BASE" : bBrkUp ? "▲ BULLISH — the base has broken up" : bBrkDn ? "▼ BEARISH — the base has broken down" : bUpIn ? "▲ CONTINUATION BASE" : bDnIn ? "► REVERSAL BASE — unproven" : "► BASE — no move into it to classify"
-bsSay = not bOk ? "No tight box in the last " + f_n0(baseLen) + " bars" + (na(bW) ? "" : " — " + f_n1(bW) + "% wide against a " + f_n1(baseMaxW) + "% cap") : bBrkUp ? "Confirmation entry is live. Stop below " + f_px(bLo) + "   ·   target " + f_px(bTgtUp) : bBrkDn ? "Short confirmation is live. Stop above " + f_px(bHi) + "   ·   target " + f_px(bTgtDn) : "RISK ENTRY " + f_px(bLo) + "–" + f_px(bRiskHi) + " inside the base   ·   CONFIRMATION on a close above " + f_px(bHi) + "   ·   stop " + f_px(bLo) + "   ·   target " + f_px(bTgtUp)
+bsSay = not bOk ? "No tight box in the last " + f_n0(baseLen) + " bars" + (na(bW) ? "" : " — " + f_n1(bW) + "% wide, against a cap of " + f_n1(baseMaxW) + "%") : bBrkUp ? "Confirmation entry is live. Stop below " + f_px(bLo) + "   ·   target " + f_px(bTgtUp) : bBrkDn ? "Short confirmation is live. Stop above " + f_px(bHi) + "   ·   target " + f_px(bTgtDn) : "RISK ENTRY " + f_px(bLo) + "–" + f_px(bRiskHi) + " inside the base   ·   CONFIRMATION on a close above " + f_px(bHi) + "   ·   stop " + f_px(bLo) + "   ·   target " + f_px(bTgtUp)
 
 // ── the three methods, each reduced to one word, and whether they agree ──
 // Wyckoff reads a trading range; Elliott reads the swing sequence. They are
@@ -399,7 +402,7 @@ nBear = (wySide == -1 ? 1 : 0) + (ewSide == -1 ? 1 : 0) + (bsSide == -1 ? 1 : 0)
 nRead = nBull + nBear
 bothUp = nBear == 0 and nBull >= 2
 bothDn = nBull == 0 and nBear >= 2
-bothSay = nRead == 0 ? "no method has a read on this chart yet" : nRead == 1 ? "only one method has a read — treat it as half a signal" : nBear == 0 ? f_n0(nBull) + " of 3 agree — BULLISH, and none disagree" : nBull == 0 ? f_n0(nBear) + " of 3 agree — BEARISH, and none disagree" : "THEY DISAGREE — " + f_n0(nBull) + " bullish against " + f_n0(nBear) + " bearish, so wait for one to give way"
+bothSay = nRead == 0 ? "no method has a directional read yet" : nRead == 1 ? "only one method has a read — treat it as half a signal" : nBear == 0 ? f_n0(nBull) + " of 3 agree — BULLISH, and none disagree" : nBull == 0 ? f_n0(nBear) + " of 3 agree — BEARISH, and none disagree" : "THEY DISAGREE — " + f_n0(nBull) + " bullish against " + f_n0(nBear) + " bearish, so wait for one to give way"
 
 actWord = not rngOk ? "► NO SETUP" : bias == 0 ? "► UNCLASSIFIED" : not late ? "► NEUTRAL — cause still building" : bias == -1 ? "▲ BULLISH" : "▼ BEARISH"
 actSay = not rngOk ? "No Wyckoff setup: there is no range here. Nothing to enter against until price visits both edges " + f_n0(minTouch) + " times." : bias == 0 ? "A range, but the move into it was too flat to say whether this is accumulation or distribution. No entry either way." : not late ? "Phase " + phase + ". The cause is still being built — no entry until the range is tested at one edge and breaks at the other." : bias == -1 and phase == "C" ? "BUY ZONE " + f_px(rngLo) + " to " + f_px(buyHi) + ". Stop below " + f_px(rngLo) + ". First target " + f_px(rngHi) + ", measured move " + f_px(tgtUp) + "." : bias == -1 ? "Buy pullbacks toward " + f_px(rngHi) + ", support now. Stop below " + f_px(rngLo) + ". Measured move " + f_px(tgtUp) + "." : phase == "C" ? "SELL / EXIT ZONE " + f_px(sellLo) + " to " + f_px(rngHi) + ". Stop above " + f_px(rngHi) + ". First target " + f_px(rngLo) + ", measured move " + f_px(tgtDn) + "." : "Sell rallies toward " + f_px(rngLo) + ", resistance now. Stop above " + f_px(rngHi) + ". Measured move " + f_px(tgtDn) + "."
@@ -468,7 +471,7 @@ if barstate.islast
     f_row(wp, 4, "WYCKOFF ▸ EVENTS", evSay, color.new(color.purple, 35))
     f_row(wp, 5, "WYCKOFF ▸ MEANS", meanSay, color.new(#00695c, 10))
     f_row(wp, 6, "WYCKOFF ▸ DO THIS", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
-    f_row(wp, 7, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
+    f_row(wp, 7, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : (wUp or wDn) and rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
     f_row(wp, 8, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
     f_row(wp, 9, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay, not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
     f_row(wp, 10, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
