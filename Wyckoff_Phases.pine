@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v1.1", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v1.2", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -217,6 +217,16 @@ phase = not rngOk ? "—" : bias == 0 ? "—" : f_live(lpsyBar) or (f_live(sowBa
 
 phWord = phase == "—" ? (not rngOk ? "no range — " + f_n0(hiVisits) + " visit(s) to the high and " + f_n0(loVisits) + " to the low; " + f_n0(minTouch) + " of each are needed" : "a range, but the move into it was too small to classify")  : phase == "A" ? "A — the prior trend is being stopped" : phase == "B" ? "B — building the cause inside the range" : phase == "C" ? "C — the test" : phase == "D" ? "D — moving to the edge of the range" : "E — the trend out of the range"
 
+// Zones and targets. The measured move is the range height projected from the
+// edge it breaks - the standard Wyckoff objective, and the reason the cause
+// built in Phase B sets the size of the effect in Phase E.
+rngH   = na(rngHi) or na(rngLo) ? na : rngHi - rngLo
+buyHi  = na(rngH) ? na : rngLo + rngH * 0.25
+sellLo = na(rngH) ? na : rngHi - rngH * 0.25
+tgtUp  = na(rngH) ? na : rngHi + rngH
+tgtDn  = na(rngH) ? na : rngLo - rngH
+late   = phase == "C" or phase == "D" or phase == "E"
+
 schem = bias == 1 ? "DISTRIBUTION" : bias == -1 ? "ACCUMULATION" : "UNCLASSIFIED"
 // The bias is the whole interpretation. A spring in accumulation is the buy;
 // the identical bar in distribution is a failed break inside a topping range.
@@ -238,6 +248,12 @@ priorSay = na(pMove) ? "not enough history to judge the prior trend" : (pMove >=
 // where you are, not a signal, so this says what would confirm the next step
 // rather than issuing an order.
 meanSay = phase == "—" ? "Nothing to read. Either price is trending rather than ranging, or the move into it was too small to classify." : bias == 1 and phase == "C" ? "The upthrust is the tell. If price cannot regain " + f_px(rngHi) + ", supply has won and Phase D markdown follows." : bias == -1 and phase == "C" ? "The spring is the tell. If price holds above " + f_px(rngLo) + " and tests it successfully, Phase D markup follows." : phase == "D" and bias == 1 ? "Supply is in control. Rallies to " + f_px(rngLo) + " are last points of supply, not entries." : phase == "D" and bias == -1 ? "Demand is in control. Pullbacks to " + f_px(rngHi) + " are last points of support." : phase == "E" and bias == 1 ? "Markdown. The range is behind; " + f_px(rngLo) + " is resistance now." : phase == "E" and bias == -1 ? "Markup. The range is behind; " + f_px(rngHi) + " is support now." : phase == "A" ? "The prior trend is being stopped. Too early to position — wait for the range to form and be tested." : "Cause is being built. Nothing here is actionable until the range is tested at one edge and breaks at the other."
+
+// Phases A and B are the cause being built - there is nothing to act on there,
+// whichever schematic it turns out to be. The bias only becomes a direction
+// once the test in Phase C has happened.
+actWord = not rngOk ? "► NO SETUP" : bias == 0 ? "► UNCLASSIFIED" : not late ? "► NEUTRAL — cause still building" : bias == -1 ? "▲ BULLISH" : "▼ BEARISH"
+actSay = not rngOk ? "No Wyckoff setup: there is no range here. Nothing to enter against until price visits both edges " + f_n0(minTouch) + " times." : bias == 0 ? "A range, but the move into it was too flat to say whether this is accumulation or distribution. No entry either way." : not late ? "Phase " + phase + ". The cause is still being built — no entry until the range is tested at one edge and breaks at the other." : bias == -1 and phase == "C" ? "BUY ZONE " + f_px(rngLo) + " to " + f_px(buyHi) + ". Stop below " + f_px(rngLo) + ". First target " + f_px(rngHi) + ", measured move " + f_px(tgtUp) + "." : bias == -1 ? "Buy pullbacks toward " + f_px(rngHi) + ", support now. Stop below " + f_px(rngLo) + ". Measured move " + f_px(tgtUp) + "." : phase == "C" ? "SELL / EXIT ZONE " + f_px(sellLo) + " to " + f_px(rngHi) + ". Stop above " + f_px(rngHi) + ". First target " + f_px(rngLo) + ", measured move " + f_px(tgtDn) + "." : "Sell rallies toward " + f_px(rngLo) + ", resistance now. Stop above " + f_px(rngHi) + ". Measured move " + f_px(tgtDn) + "."
 
 trigSay = not rngOk ? "—" : bias == 1 ? "A close below " + f_px(rngLo) + " on volume is the sign of weakness. A close back above " + f_px(rngHi) + " would break the distribution read." : bias == -1 ? "A close above " + f_px(rngHi) + " on volume is the sign of strength. A close below " + f_px(rngLo) + " would break the accumulation read." : "—"
 
@@ -270,22 +286,23 @@ if showEv and sowNow
 // ═══════════════════════════════════════════════════════════════
 pPos = panelPos == "Top Left" ? position.top_left : panelPos == "Top Right" ? position.top_right : panelPos == "Middle Left" ? position.middle_left : panelPos == "Bottom Right" ? position.bottom_right : position.bottom_left
 pSz  = panelSz == "Tiny" ? size.tiny : panelSz == "Normal" ? size.normal : size.small
-var table wp = table.new(pPos, 2, 8, border_width = 2)
+var table wp = table.new(pPos, 2, 9, border_width = 2)
 
 f_row(table _t, int _r, string _k, string _v, color _c) =>
     table.cell(_t, 0, _r, _k, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = pSz)
     table.cell(_t, 1, _r, _v, text_color = color.white, bgcolor = _c, text_halign = text.align_left, text_size = pSz)
 
 if barstate.islast
-    table.clear(wp, 0, 0, 1, 7)
+    table.clear(wp, 0, 0, 1, 8)
     f_row(wp, 0, "SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
     f_row(wp, 1, "PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
     f_row(wp, 2, "RANGE", rngSay, color.new(#2962ff, 40))
     f_row(wp, 3, "EVENTS", evSay, color.new(color.purple, 35))
     f_row(wp, 4, "▶ WHAT IT MEANS", meanSay, color.new(#00695c, 10))
-    f_row(wp, 5, "NEXT TRIGGER", trigSay, color.new(color.black, 25))
-    f_row(wp, 6, "VOLUME", (barLive ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_n1(volX) + "x the " + f_n0(volLen) + "-bar average" + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
-    f_row(wp, 7, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Every event here is reported after its bar closed.", color.new(color.gray, 55))
+    f_row(wp, 5, "▶ WHAT TO DO", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
+    f_row(wp, 6, "NEXT TRIGGER", trigSay, color.new(color.black, 25))
+    f_row(wp, 7, "VOLUME", (barLive ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_n1(volX) + "x the " + f_n0(volLen) + "-bar average" + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
+    f_row(wp, 8, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Every event here is reported after its bar closed.", color.new(color.gray, 55))
 
 alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
 alertcondition(utNow, title = "Wyckoff UPTHRUST / UTAD", message = "{{ticker}} {{interval}}: upthrust — the range high gave way and was taken back at {{close}}")
