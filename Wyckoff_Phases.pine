@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v1.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v1.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -59,6 +59,8 @@ showBox  = input.bool(true, "Draw the range boundaries", group = "4. Display")
 showEv   = input.bool(true, "Label events on the chart", group = "4. Display")
 panelPos = input.string("Bottom Left", "Panel position", options = ["Bottom Left", "Top Left", "Top Right", "Middle Left", "Bottom Right"], group = "4. Display")
 panelSz  = input.string("Small", "Panel text size", options = ["Tiny", "Small", "Normal"], group = "4. Display")
+show200  = input.bool(true, "Draw the 200-week moving average", group = "5. 200-week average")
+col200   = input.color(#ff6d00, "Line colour", group = "5. 200-week average")
 
 // ═══════════════════════════════════════════════════════════════
 // MEASUREMENTS — every ta.* call runs unconditionally, on every bar
@@ -394,14 +396,27 @@ if showEv and sowNow
 // ═══════════════════════════════════════════════════════════════
 pPos = panelPos == "Top Left" ? position.top_left : panelPos == "Top Right" ? position.top_right : panelPos == "Middle Left" ? position.middle_left : panelPos == "Bottom Right" ? position.bottom_right : position.bottom_left
 pSz  = panelSz == "Tiny" ? size.tiny : panelSz == "Normal" ? size.normal : size.small
-var table wp = table.new(pPos, 2, 11, border_width = 2)
+// ═══════════════════════════════════════════════════════════════
+// 200-WEEK MOVING AVERAGE
+// ═══════════════════════════════════════════════════════════════
+// Requested from weekly data rather than taken as 200 bars of the chart, so
+// it is the same line whether you are on a daily, weekly or monthly chart.
+// On anything but a weekly chart, 200 bars would be a different average
+// entirely and the reading below would mean nothing.
+ma200w = request.security(syminfo.tickerid, "W", ta.sma(close, 200), gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
+plot(show200 ? ma200w : na, "200-week average", color = col200, linewidth = 2)
+ma200Gap = na(ma200w) or ma200w <= 0 ? na : (close - ma200w) / ma200w * 100
+ma200Up = not na(ma200Gap) and ma200Gap >= 0
+ma200Say = na(ma200Gap) ? "not enough history — a 200-week average needs 200 weeks of data behind it" : (ma200Up ? "▲ BULLISH — price is " + f_n1(ma200Gap) + "% ABOVE the 200-week average " : "▼ BEARISH — price is " + f_n1(-ma200Gap) + "% BELOW the 200-week average ") + f_px(ma200w) + ", so the long-term trend is " + (ma200Up ? "up" : "down")
+
+var table wp = table.new(pPos, 2, 12, border_width = 2)
 
 f_row(table _t, int _r, string _k, string _v, color _c) =>
     table.cell(_t, 0, _r, _k, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = pSz)
     table.cell(_t, 1, _r, _v, text_color = color.white, bgcolor = _c, text_halign = text.align_left, text_size = pSz)
 
 if barstate.islast
-    table.clear(wp, 0, 0, 1, 10)
+    table.clear(wp, 0, 0, 1, 11)
     f_row(wp, 0, "★ BOTH METHODS", "WYCKOFF  " + wyShort + "      ·      ELLIOTT  " + ewShort + "      ·      " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : wySide != 0 and ewSide != 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
     f_row(wp, 1, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
     f_row(wp, 2, "WYCKOFF ▸ PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
@@ -411,8 +426,9 @@ if barstate.islast
     f_row(wp, 6, "WYCKOFF ▸ DO THIS", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
     f_row(wp, 7, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
     f_row(wp, 8, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
-    f_row(wp, 9, "VOLUME — BOTH", (barLive ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
-    f_row(wp, 10, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
+    f_row(wp, 9, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
+    f_row(wp, 10, "VOLUME — BOTH", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
+    f_row(wp, 11, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
 
 alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
 alertcondition(utNow, title = "Wyckoff UPTHRUST / UTAD", message = "{{ticker}} {{interval}}: upthrust — the range high gave way and was taken back at {{close}}")
