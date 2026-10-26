@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v1.9", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v2.0", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -82,6 +82,7 @@ barLive = time_close > timenow
 f_px(float _v) => str.tostring(_v, format.mintick)
 f_n0(float _v) => str.tostring(_v, "#")
 f_n1(float _v) => str.tostring(_v, "#.#")
+f_vis(int _n) => str.tostring(_n) + (_n == 1 ? " visit" : " visits")
 // "#.#" drops the decimal below 0.05 and prints a bare "0", so the volume
 // multiple gets a format that always keeps one.
 f_nx(float _v) => str.tostring(_v, "0.0")
@@ -314,7 +315,7 @@ brokeDn = rngOk and close < rngLo
 
 phase = not rngOk ? "—" : bias == 0 ? "—" : f_live(lpsyBar) or (f_live(sowBar) and brokeDn and not na(stBar)) ? "E" : f_live(lpsBar) or (f_live(sosBar) and brokeUp and not na(stBar)) ? "E" : f_live(sowBar) or f_live(sosBar) ? "D" : f_live(utadBar) or f_live(sprBar) ? "C" : not na(stBar) ? "B" : not na(arBar) ? "A" : not na(bcBar) or not na(scBar) ? "A" : "B"
 
-phWord = phase == "—" ? (not rngOk ? "no range — " + f_n0(hiVisits) + " visit(s) to the high and " + f_n0(loVisits) + " to the low; " + f_n0(minTouch) + " of each are needed" : "a range, but the move into it was too small to classify")  : phase == "A" ? "A — the prior trend is being stopped" : phase == "B" ? "B — building the cause inside the range" : phase == "C" ? "C — the test" : phase == "D" ? "D — moving to the edge of the range" : "E — the trend out of the range"
+phWord = phase == "—" ? (not rngOk ? "no phase — phases exist only inside a range, and there is none here yet; RANGE below says what is missing" : "a range, but the move into it was too small to classify")  : phase == "A" ? "A — the prior trend is being stopped" : phase == "B" ? "B — building the cause inside the range" : phase == "C" ? "C — the test" : phase == "D" ? "D — moving to the edge of the range" : "E — the trend out of the range"
 
 // Zones and targets. The measured move is the range height projected from the
 // edge it breaks - the standard Wyckoff objective, and the reason the cause
@@ -343,7 +344,7 @@ f_ev(string _n, int _b) => f_live(_b) ? _n + " " + f_n0(f_age(_b)) + "b · " : "
 evList = (f_ev(bias == 1 ? "BC" : "SC", bias == 1 ? bcBar : scBar)) + f_ev("AR", arBar) + f_ev("ST", stBar) + f_ev(bias == 1 ? "UT" : "spring", bias == 1 ? utBar : sprBar) + f_ev("UTAD", utadBar) + f_ev(bias == 1 ? "SOW" : "SOS", bias == 1 ? sowBar : sosBar) + f_ev(bias == 1 ? "LPSY" : "LPS", bias == 1 ? lpsyBar : lpsBar)
 evSay = bias == 0 ? "no schematic to name events against" : evList == "" ? "none yet in the last " + f_n0(evAge) + " bars" : str.substring(evList, 0, math.max(0, str.length(evList) - 3))
 
-rngSay = not rngOk ? (na(rngW) ? "not enough history" : "no range — " + f_n1(rngW) + "% wide, " + f_n0(hiVisits) + " visit(s) to the high and " + f_n0(loVisits) + " to the low over " + f_n0(rngLen) + " bars" + (rngW > rngMaxW ? ", and past the width cap" : "")) : f_px(rngLo) + " to " + f_px(rngHi) + "   ·   " + f_n1(rngW) + "% wide   ·   price " + (brokeUp ? "ABOVE it" : brokeDn ? "BELOW it" : "inside, " + f_n1((close - rngLo) / (rngHi - rngLo) * 100) + "% up the range")
+rngSay = not rngOk ? (na(rngW) ? "not enough history" : "no range — " + f_n1(rngW) + "% wide, " + f_vis(hiVisits) + " to the high and " + f_vis(loVisits) + " to the low over " + f_n0(rngLen) + " bars, where " + f_n0(minTouch) + " of each are needed" + (rngW > rngMaxW ? ", and past the width cap" : "")) : f_px(rngLo) + " to " + f_px(rngHi) + "   ·   " + f_n1(rngW) + "% wide   ·   price " + (brokeUp ? "ABOVE it" : brokeDn ? "BELOW it" : "inside, " + f_n1((close - rngLo) / (rngHi - rngLo) * 100) + "% up the range")
 
 priorSay = na(pMove) ? "not enough history to judge the prior trend" : (pMove >= 0 ? "+" : "") + f_n1(pMove) + "% " + (rngOk ? "into the range" : "into this area") + " over " + f_n0(priorLen) + " bars" + (bias == 0 ? " — too small to call, so no schematic applies" : bias == 1 ? " — an advance, so a range here is distribution" : " — a decline, so a range here is accumulation")
 
