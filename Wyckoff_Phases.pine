@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v1.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v1.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -287,7 +287,7 @@ rAll = r2 and r3 and r4
 rBroke = (upImp or dnImp) and not rAll
 
 wWord = not wHave ? "► NOT ENOUGH SWINGS" : wUp and rAll ? "▲ BULLISH" : wDn and rAll ? "▼ BEARISH" : wUp ? "▲ bullish, but not a clean impulse" : wDn ? "▼ bearish, but not a clean impulse" : "► CORRECTIVE"
-wSay = not wHave ? "Fewer than four confirmed swings so far." : (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "the swings overlap — a correction or a range, not an impulse") + (not (upImp or dnImp) ? "   ·   the last six swings are not shaped like an impulse, so the wave rules do not apply" : rAll ? "   ·   the last five legs satisfy all three impulse rules" : "   ·   impulse rules: wave 2 " + (r2 ? "✓" : "✗") + "  wave 3 " + (r3 ? "✓" : "✗") + "  wave 4 " + (r4 ? "✓" : "✗") + " — so these legs are NOT a valid impulse")
+wSay = not wHave ? "Fewer than four confirmed swings so far." : (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "the swings overlap — a correction or a range, not an impulse") + (not (upImp or dnImp) ? "   ·   the last six swings are not shaped like an impulse, so the wave rules do not apply" : rAll ? "   ·   the last five legs satisfy all three impulse rules" : "   ·   impulse rules: wave 2 " + (r2 ? "✓" : "✗") + "  wave 3 " + (r3 ? "✓" : "✗") + "  wave 4 " + (r4 ? "✓" : "✗") + " — so these legs are NOT a valid impulse") + "   ·   read from the last four swings, so it describes the current leg, not the whole chart"
 
 f_age(int _b) => na(_b) ? na : bar_index - _b
 f_live(int _b) => not na(_b) and bar_index - _b <= evAge
@@ -340,6 +340,19 @@ meanSay = phase == "—" ? "Nothing to read. Either price is trending rather tha
 // Phases A and B are the cause being built - there is nothing to act on there,
 // whichever schematic it turns out to be. The bias only becomes a direction
 // once the test in Phase C has happened.
+// ── the two methods, each reduced to one word, and whether they agree ──
+// Wyckoff reads a trading range; Elliott reads the swing sequence. They are
+// independent, so when both point the same way that is two methods agreeing,
+// and when they split that is information too - it says the structure is in
+// transition and neither read is worth acting on yet.
+wySide = not rngOk or bias == 0 or not late ? 0 : bias == -1 ? 1 : -1
+ewSide = not wHave ? 0 : wUp and rAll ? 1 : wDn and rAll ? -1 : wUp ? 1 : wDn ? -1 : 0
+wyShort = not rngOk ? "► NO SETUP" : bias == 0 ? "► UNCLASSIFIED" : not late ? "► NEUTRAL" : bias == -1 ? "▲ BULLISH" : "▼ BEARISH"
+ewShort = not wHave ? "► NOT ENOUGH SWINGS" : wUp and rAll ? "▲ BULLISH" : wDn and rAll ? "▼ BEARISH" : wUp ? "▲ leaning bullish" : wDn ? "▼ leaning bearish" : "► CORRECTIVE"
+bothUp = wySide == 1 and ewSide == 1
+bothDn = wySide == -1 and ewSide == -1
+bothSay = wySide == 0 and ewSide == 0 ? "neither method has a read on this chart yet" : wySide == 0 or ewSide == 0 ? "only one method has a read — treat it as half a signal" : bothUp ? "BOTH AGREE — BULLISH" : bothDn ? "BOTH AGREE — BEARISH" : "THEY DISAGREE — the structure is in transition, so wait for one to give way"
+
 actWord = not rngOk ? "► NO SETUP" : bias == 0 ? "► UNCLASSIFIED" : not late ? "► NEUTRAL — cause still building" : bias == -1 ? "▲ BULLISH" : "▼ BEARISH"
 actSay = not rngOk ? "No Wyckoff setup: there is no range here. Nothing to enter against until price visits both edges " + f_n0(minTouch) + " times." : bias == 0 ? "A range, but the move into it was too flat to say whether this is accumulation or distribution. No entry either way." : not late ? "Phase " + phase + ". The cause is still being built — no entry until the range is tested at one edge and breaks at the other." : bias == -1 and phase == "C" ? "BUY ZONE " + f_px(rngLo) + " to " + f_px(buyHi) + ". Stop below " + f_px(rngLo) + ". First target " + f_px(rngHi) + ", measured move " + f_px(tgtUp) + "." : bias == -1 ? "Buy pullbacks toward " + f_px(rngHi) + ", support now. Stop below " + f_px(rngLo) + ". Measured move " + f_px(tgtUp) + "." : phase == "C" ? "SELL / EXIT ZONE " + f_px(sellLo) + " to " + f_px(rngHi) + ". Stop above " + f_px(rngHi) + ". First target " + f_px(rngLo) + ", measured move " + f_px(tgtDn) + "." : "Sell rallies toward " + f_px(rngLo) + ", resistance now. Stop above " + f_px(rngHi) + ". Measured move " + f_px(tgtDn) + "."
 
@@ -374,24 +387,25 @@ if showEv and sowNow
 // ═══════════════════════════════════════════════════════════════
 pPos = panelPos == "Top Left" ? position.top_left : panelPos == "Top Right" ? position.top_right : panelPos == "Middle Left" ? position.middle_left : panelPos == "Bottom Right" ? position.bottom_right : position.bottom_left
 pSz  = panelSz == "Tiny" ? size.tiny : panelSz == "Normal" ? size.normal : size.small
-var table wp = table.new(pPos, 2, 10, border_width = 2)
+var table wp = table.new(pPos, 2, 11, border_width = 2)
 
 f_row(table _t, int _r, string _k, string _v, color _c) =>
     table.cell(_t, 0, _r, _k, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = pSz)
     table.cell(_t, 1, _r, _v, text_color = color.white, bgcolor = _c, text_halign = text.align_left, text_size = pSz)
 
 if barstate.islast
-    table.clear(wp, 0, 0, 1, 9)
-    f_row(wp, 0, "SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
-    f_row(wp, 1, "PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
-    f_row(wp, 2, "RANGE", rngSay, color.new(#2962ff, 40))
-    f_row(wp, 3, "EVENTS", evSay, color.new(color.purple, 35))
-    f_row(wp, 4, "▶ WHAT IT MEANS", meanSay, color.new(#00695c, 10))
-    f_row(wp, 5, "▶ WHAT TO DO", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
-    f_row(wp, 6, "WAVE STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
-    f_row(wp, 7, "NEXT TRIGGER", trigSay, color.new(color.black, 25))
-    f_row(wp, 8, "VOLUME", (barLive ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_n1(volX) + "x the " + f_n0(volLen) + "-bar average" + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
-    f_row(wp, 9, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Every event here is reported after its bar closed. Wave structure is read from the last six swings and changes as new swings form — it is not a wave count and carries no labels.", color.new(color.gray, 55))
+    table.clear(wp, 0, 0, 1, 10)
+    f_row(wp, 0, "★ BOTH METHODS", "WYCKOFF  " + wyShort + "      ·      ELLIOTT  " + ewShort + "      ·      " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : wySide != 0 and ewSide != 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
+    f_row(wp, 1, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
+    f_row(wp, 2, "WYCKOFF ▸ PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
+    f_row(wp, 3, "WYCKOFF ▸ RANGE", rngSay, color.new(#2962ff, 40))
+    f_row(wp, 4, "WYCKOFF ▸ EVENTS", evSay, color.new(color.purple, 35))
+    f_row(wp, 5, "WYCKOFF ▸ MEANS", meanSay, color.new(#00695c, 10))
+    f_row(wp, 6, "WYCKOFF ▸ DO THIS", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
+    f_row(wp, 7, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
+    f_row(wp, 8, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
+    f_row(wp, 9, "VOLUME — BOTH", (barLive ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_n1(volX) + "x the " + f_n0(volLen) + "-bar average" + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
+    f_row(wp, 10, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Every event here is reported after its bar closed. Wave structure is read from the last six swings and changes as new swings form — it is not a wave count and carries no labels.", color.new(color.gray, 55))
 
 alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
 alertcondition(utNow, title = "Wyckoff UPTHRUST / UTAD", message = "{{ticker}} {{interval}}: upthrust — the range high gave way and was taken back at {{close}}")
