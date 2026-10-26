@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v1.2", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v1.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -201,6 +201,94 @@ if not na(swLo)
         lpsBar := bar_index - 3
     lastSwLo := swLo
 
+// ═══════════════════════════════════════════════════════════════
+// WAVE STRUCTURE — the Elliott rules, without the counting
+// ═══════════════════════════════════════════════════════════════
+// A labelled count repaints by nature: a swing called wave 3 becomes wave 1 of
+// a larger degree once price extends, so the count rewrites its own history.
+// These two readings do not. The first is the swing sequence, which is a fact
+// about six specific pivots. The second tests whether those pivots COULD be a
+// valid impulse - a violation rules a count out, which is hard information,
+// where a label would only be one of several readings the data allows.
+var float w1 = na
+var float w2 = na
+var float w3 = na
+var float w4 = na
+var float w5 = na
+var float w6 = na
+var int w1t = 0
+var int w2t = 0
+var int w3t = 0
+var int w4t = 0
+var int w5t = 0
+var int w6t = 0
+
+// A new pivot of the same type as the last one extends it rather than being
+// recorded separately, so the store always alternates high, low, high, low.
+if not na(swHi)
+    if w1t == 1
+        if swHi > w1
+            w1 := swHi
+    else
+        w6 := w5
+        w6t := w5t
+        w5 := w4
+        w5t := w4t
+        w4 := w3
+        w4t := w3t
+        w3 := w2
+        w3t := w2t
+        w2 := w1
+        w2t := w1t
+        w1 := swHi
+        w1t := 1
+if not na(swLo)
+    if w1t == -1
+        if swLo < w1
+            w1 := swLo
+    else
+        w6 := w5
+        w6t := w5t
+        w5 := w4
+        w5t := w4t
+        w4 := w3
+        w4t := w3t
+        w3 := w2
+        w3t := w2t
+        w2 := w1
+        w2t := w1t
+        w1 := swLo
+        w1t := -1
+
+wHave = not na(w1) and not na(w2) and not na(w3) and not na(w4)
+wFull = wHave and not na(w5) and not na(w6)
+// the two most recent highs and the two most recent lows, whichever way the
+// store happens to be oriented
+hA = w1t == 1 ? w1 : w2
+hB = w1t == 1 ? w3 : w4
+lA = w1t == 1 ? w2 : w1
+lB = w1t == 1 ? w4 : w3
+wUp = wHave and hA > hB and lA > lB
+wDn = wHave and hA < hB and lA < lB
+
+// THE THREE IMPULSE RULES, read over w6 to w1 as waves 1 to 5.
+upImp = wFull and w6t == -1 and w1t == 1
+dnImp = wFull and w6t == 1 and w1t == -1
+len1 = wFull ? math.abs(w5 - w6) : na
+len3 = wFull ? math.abs(w3 - w4) : na
+len5 = wFull ? math.abs(w1 - w2) : na
+// rule 2: wave 2 never retraces past the start of wave 1
+r2 = upImp ? w4 > w6 : dnImp ? w4 < w6 : false
+// rule 3: wave 3 is never the shortest of the three impulse legs
+r3 = (upImp or dnImp) and not na(len3) and not (len3 < len1 and len3 < len5)
+// rule 4: wave 4 never enters the price territory of wave 1
+r4 = upImp ? w2 > w5 : dnImp ? w2 < w5 : false
+rAll = r2 and r3 and r4
+rBroke = (upImp or dnImp) and not rAll
+
+wWord = not wHave ? "► NOT ENOUGH SWINGS" : wUp and rAll ? "▲ BULLISH" : wDn and rAll ? "▼ BEARISH" : wUp ? "▲ bullish, but not a clean impulse" : wDn ? "▼ bearish, but not a clean impulse" : "► CORRECTIVE"
+wSay = not wHave ? "Fewer than four confirmed swings so far." : (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "the swings overlap — a correction or a range, not an impulse") + (not (upImp or dnImp) ? "   ·   the last six swings are not shaped like an impulse, so the wave rules do not apply" : rAll ? "   ·   the last five legs satisfy all three impulse rules" : "   ·   impulse rules: wave 2 " + (r2 ? "✓" : "✗") + "  wave 3 " + (r3 ? "✓" : "✗") + "  wave 4 " + (r4 ? "✓" : "✗") + " — so these legs are NOT a valid impulse")
+
 f_age(int _b) => na(_b) ? na : bar_index - _b
 f_live(int _b) => not na(_b) and bar_index - _b <= evAge
 
@@ -286,23 +374,24 @@ if showEv and sowNow
 // ═══════════════════════════════════════════════════════════════
 pPos = panelPos == "Top Left" ? position.top_left : panelPos == "Top Right" ? position.top_right : panelPos == "Middle Left" ? position.middle_left : panelPos == "Bottom Right" ? position.bottom_right : position.bottom_left
 pSz  = panelSz == "Tiny" ? size.tiny : panelSz == "Normal" ? size.normal : size.small
-var table wp = table.new(pPos, 2, 9, border_width = 2)
+var table wp = table.new(pPos, 2, 10, border_width = 2)
 
 f_row(table _t, int _r, string _k, string _v, color _c) =>
     table.cell(_t, 0, _r, _k, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = pSz)
     table.cell(_t, 1, _r, _v, text_color = color.white, bgcolor = _c, text_halign = text.align_left, text_size = pSz)
 
 if barstate.islast
-    table.clear(wp, 0, 0, 1, 8)
+    table.clear(wp, 0, 0, 1, 9)
     f_row(wp, 0, "SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
     f_row(wp, 1, "PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
     f_row(wp, 2, "RANGE", rngSay, color.new(#2962ff, 40))
     f_row(wp, 3, "EVENTS", evSay, color.new(color.purple, 35))
     f_row(wp, 4, "▶ WHAT IT MEANS", meanSay, color.new(#00695c, 10))
     f_row(wp, 5, "▶ WHAT TO DO", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
-    f_row(wp, 6, "NEXT TRIGGER", trigSay, color.new(color.black, 25))
-    f_row(wp, 7, "VOLUME", (barLive ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_n1(volX) + "x the " + f_n0(volLen) + "-bar average" + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
-    f_row(wp, 8, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Every event here is reported after its bar closed.", color.new(color.gray, 55))
+    f_row(wp, 6, "WAVE STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
+    f_row(wp, 7, "NEXT TRIGGER", trigSay, color.new(color.black, 25))
+    f_row(wp, 8, "VOLUME", (barLive ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_n1(volX) + "x the " + f_n0(volLen) + "-bar average" + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
+    f_row(wp, 9, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Every event here is reported after its bar closed. Wave structure is read from the last six swings and changes as new swings form — it is not a wave count and carries no labels.", color.new(color.gray, 55))
 
 alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
 alertcondition(utNow, title = "Wyckoff UPTHRUST / UTAD", message = "{{ticker}} {{interval}}: upthrust — the range high gave way and was taken back at {{close}}")
