@@ -1,0 +1,271 @@
+//@version=6
+// ═══════════════════════════════════════════════════════════════════════════
+// WYCKOFF PHASES v1.0
+//
+// WHAT IT IS
+//   A reader for the Wyckoff accumulation and distribution schematics. It
+//   finds a trading range, works out whether that range sits after an advance
+//   (distribution) or after a decline (accumulation), then names the events
+//   inside it and the phase they add up to.
+//
+// WHAT IT WILL NOT DO
+//   It does not predict the phase that comes next. A range is only a range
+//   until it breaks, and Phase B can run far longer than anyone's patience.
+//   Every event below is reported after its bar has closed.
+//
+// WHY IT IS A SEPARATE SCRIPT
+//   Money Line already detects the spring and the upthrust - it calls them
+//   failed breakdown and failed breakout - but it is at its token limit and
+//   the phase logic needs room. Run both; this one answers "where in the
+//   structure are we", that one answers "what do I do".
+//
+// THE EVENTS
+//   accumulation   PS · SC · AR · ST · Spring · Test · SOS · LPS
+//   distribution   PSY · BC · AR · ST · UT · UTAD · SOW · LPSY
+//
+// THE PHASES
+//   A  the prior trend is stopped          climax, then the automatic reaction
+//   B  the cause is built                  the range, tests of both edges
+//   C  the test                            spring (accum) or UTAD (dist)
+//   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
+//   E  the trend out of the range          markup or markdown
+// ═══════════════════════════════════════════════════════════════════════════
+indicator("Wyckoff Phases v1.0", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+
+// ── 1. The range ───
+rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
+rngMaxW  = input.float(25.0, "A range is this wide at most (%)", minval = 3.0, maxval = 80.0, step = 1.0, tooltip = "High to low across the lookback, as a percentage of the low. Above this the market is trending, not ranging, and no phase is reported.", group = "1. Range")
+rngMinB  = input.int(10, "Minimum bars before a range counts", minval = 5, maxval = 100, group = "1. Range")
+edgeTol  = input.float(1.5, "Edge tolerance (% of range width)", minval = 0.2, maxval = 10.0, step = 0.1, tooltip = "How close to a boundary a bar must come to count as a test of it.", group = "1. Range")
+
+// ── 2. The prior trend ───
+// A range after an advance is distribution. The same range after a decline is
+// accumulation. Nothing else about the range tells you which, so this is the
+// single most important input in the script.
+priorLen = input.int(40, "Bars before the range used to judge the prior trend", minval = 10, maxval = 300, group = "2. Prior trend")
+priorMin = input.float(15.0, "Prior move must be at least this big (%)", minval = 3.0, maxval = 100.0, step = 1.0, group = "2. Prior trend")
+
+// ── 3. Events ───
+volLen   = input.int(20, "Volume average length", minval = 5, maxval = 100, group = "3. Events")
+climX    = input.float(1.8, "Climax: volume this many times the average", minval = 1.1, maxval = 6.0, step = 0.1, tooltip = "The buying or selling climax is the bar that ends the prior trend on extreme participation. Below about 1.5 ordinary bars start qualifying.", group = "3. Events")
+wideX    = input.float(1.3, "Climax: bar range this many times ATR", minval = 0.8, maxval = 4.0, step = 0.1, group = "3. Events")
+sprBack  = input.int(3, "Spring / upthrust must be retaken within this many bars", minval = 1, maxval = 10, group = "3. Events")
+sosVolX  = input.float(1.2, "SOS / SOW needs volume this many times the average", minval = 0.8, maxval = 4.0, step = 0.1, group = "3. Events")
+evAge    = input.int(60, "Forget an event after this many bars", minval = 10, maxval = 300, group = "3. Events")
+
+// ── 4. Display ───
+showBox  = input.bool(true, "Draw the range boundaries", group = "4. Display")
+showEv   = input.bool(true, "Label events on the chart", group = "4. Display")
+panelPos = input.string("Bottom Left", "Panel position", options = ["Bottom Left", "Top Left", "Top Right", "Middle Left", "Bottom Right"], group = "4. Display")
+panelSz  = input.string("Small", "Panel text size", options = ["Tiny", "Small", "Normal"], group = "4. Display")
+
+// ═══════════════════════════════════════════════════════════════
+// MEASUREMENTS — every ta.* call runs unconditionally, on every bar
+// ═══════════════════════════════════════════════════════════════
+atrV   = ta.atr(14)
+volAvg = ta.sma(volume, volLen)
+volX   = volAvg > 0 ? volume / volAvg : na
+barRng = high - low
+wideBar = not na(atrV) and atrV > 0 and barRng >= atrV * wideX
+
+// The range is measured to the PREVIOUS bar, so the bar being judged is never
+// part of the boundary it is being tested against. Without the offset a spring
+// can never happen: the low that breaks the range also redefines it.
+rngHi = ta.highest(high, rngLen)[1]
+rngLo = ta.lowest(low, rngLen)[1]
+rngW  = not na(rngHi) and not na(rngLo) and rngLo > 0 ? (rngHi - rngLo) / rngLo * 100 : na
+rngOk = not na(rngW) and rngW <= rngMaxW and bar_index >= rngMinB + rngLen
+tol   = na(rngHi) or na(rngLo) ? na : (rngHi - rngLo) * edgeTol / 100
+
+// Prior trend, measured from before the range so the range itself cannot
+// colour the verdict.
+pStart = close[rngLen + priorLen]
+pEnd   = close[rngLen]
+pMove  = not na(pStart) and not na(pEnd) and pStart > 0 ? (pEnd - pStart) / pStart * 100 : na
+priorUp = not na(pMove) and pMove >= priorMin
+priorDn = not na(pMove) and pMove <= -priorMin
+
+// bias: +1 distribution (range after an advance), -1 accumulation, 0 unknown
+bias = priorUp ? 1 : priorDn ? -1 : 0
+
+// ═══════════════════════════════════════════════════════════════
+// EVENTS
+// ═══════════════════════════════════════════════════════════════
+hiTest = not na(rngHi) and not na(tol) and high >= rngHi - tol
+loTest = not na(rngLo) and not na(tol) and low <= rngLo + tol
+
+// CLIMAX — the bar that ends the prior trend on extreme participation.
+climVol = not na(volX) and volX >= climX
+bcNow = rngOk and bias == 1 and climVol and wideBar and hiTest
+scNow = rngOk and bias == -1 and climVol and wideBar and loTest
+
+// SPRING / UPTHRUST — the boundary gives way intrabar and is taken back.
+// This is the single most useful event in the schematic and the one Money
+// Line already finds under the name "failed breakdown" / "failed breakout".
+sprNow = rngOk and low < rngLo and close > rngLo
+utNow  = rngOk and high > rngHi and close < rngHi
+
+// SOS / SOW — a decisive close outside the range, on volume.
+sosNow = rngOk and close > rngHi and not na(volX) and volX >= sosVolX
+sowNow = rngOk and close < rngLo and not na(volX) and volX >= sosVolX
+
+// ── event memory ───
+var int bcBar = na
+var float bcPx = na
+var int scBar = na
+var float scPx = na
+var int arBar = na
+var float arPx = na
+var int stBar = na
+var int sprBar = na
+var int utBar = na
+var int utadBar = na
+var int sosBar = na
+var int sowBar = na
+var int lpsBar = na
+var int lpsyBar = na
+var float lastSwHi = na
+var float lastSwLo = na
+
+if bcNow
+    bcBar := bar_index
+    bcPx  := high
+if scNow
+    scBar := bar_index
+    scPx  := low
+// AUTOMATIC REACTION — the sharp move away from the climax that sets the
+// opposite boundary. It is only an AR if a climax came first.
+if not na(bcBar) and bar_index > bcBar and bar_index - bcBar <= 10 and na(arBar) and loTest
+    arBar := bar_index
+    arPx  := low
+if not na(scBar) and bar_index > scBar and bar_index - scBar <= 10 and na(arBar) and hiTest
+    arBar := bar_index
+    arPx  := high
+// SECONDARY TEST — a return to the climax end of the range that fails on
+// lighter volume than the climax itself.
+if not na(arBar) and bar_index > arBar and na(stBar) and not na(volX) and volX < climX
+    if bias == 1 and hiTest
+        stBar := bar_index
+    if bias == -1 and loTest
+        stBar := bar_index
+if sprNow
+    sprBar := bar_index
+if utNow
+    utBar := bar_index
+    // An upthrust AFTER the range has been tested from both sides is UTAD -
+    // the last one, the one that matters.
+    if not na(stBar)
+        utadBar := bar_index
+if sosNow
+    sosBar := bar_index
+if sowNow
+    sowBar := bar_index
+
+// ── swings, for LPS and LPSY ───
+swHi = ta.pivothigh(high, 3, 3)
+swLo = ta.pivotlow(low, 3, 3)
+if not na(swHi)
+    // LPSY: a LOWER high after a sign of weakness. The last place supply shows
+    // up before the markdown.
+    if not na(sowBar) and bar_index - 3 > sowBar and not na(lastSwHi) and swHi < lastSwHi
+        lpsyBar := bar_index - 3
+    lastSwHi := swHi
+if not na(swLo)
+    // LPS: a HIGHER low after a sign of strength.
+    if not na(sosBar) and bar_index - 3 > sosBar and not na(lastSwLo) and swLo > lastSwLo
+        lpsBar := bar_index - 3
+    lastSwLo := swLo
+
+f_age(int _b) => na(_b) ? na : bar_index - _b
+f_live(int _b) => not na(_b) and bar_index - _b <= evAge
+
+// ═══════════════════════════════════════════════════════════════
+// PHASE
+// ═══════════════════════════════════════════════════════════════
+// Read strictly in order: the latest event that has fired decides the phase,
+// because the schematic only ever runs forwards.
+inRange = rngOk and close <= rngHi and close >= rngLo
+brokeUp = rngOk and close > rngHi
+brokeDn = rngOk and close < rngLo
+
+phase = not rngOk ? "—" : bias == 0 ? "—" : f_live(lpsyBar) or (f_live(sowBar) and brokeDn and not na(stBar)) ? "E" : f_live(lpsBar) or (f_live(sosBar) and brokeUp and not na(stBar)) ? "E" : f_live(sowBar) or f_live(sosBar) ? "D" : f_live(utadBar) or f_live(sprBar) ? "C" : not na(stBar) ? "B" : not na(arBar) ? "A" : not na(bcBar) or not na(scBar) ? "A" : "B"
+
+phWord = phase == "—" ? "no range, or no prior trend to judge it against" : phase == "A" ? "A — the prior trend is being stopped" : phase == "B" ? "B — building the cause inside the range" : phase == "C" ? "C — the test" : phase == "D" ? "D — moving to the edge of the range" : "E — the trend out of the range"
+
+schem = bias == 1 ? "DISTRIBUTION" : bias == -1 ? "ACCUMULATION" : "UNCLASSIFIED"
+// The bias is the whole interpretation. A spring in accumulation is the buy;
+// the identical bar in distribution is a failed break inside a topping range.
+schemCol = bias == 1 ? color.new(#d50000, 20) : bias == -1 ? color.new(#00c853, 20) : color.new(color.gray, 45)
+
+// ═══════════════════════════════════════════════════════════════
+// READ-OUT
+// ═══════════════════════════════════════════════════════════════
+f_px(float _v) => str.tostring(_v, format.mintick)
+f_n0(float _v) => str.tostring(_v, "#")
+f_n1(float _v) => str.tostring(_v, "#.#")
+f_ev(string _n, int _b) => f_live(_b) ? _n + " " + f_n0(f_age(_b)) + "b · " : ""
+
+evList = (f_ev(bias == 1 ? "BC" : "SC", bias == 1 ? bcBar : scBar)) + f_ev("AR", arBar) + f_ev("ST", stBar) + f_ev(bias == 1 ? "UT" : "spring", bias == 1 ? utBar : sprBar) + f_ev("UTAD", utadBar) + f_ev(bias == 1 ? "SOW" : "SOS", bias == 1 ? sowBar : sosBar) + f_ev(bias == 1 ? "LPSY" : "LPS", bias == 1 ? lpsyBar : lpsBar)
+evSay = evList == "" ? "none yet in the last " + f_n0(evAge) + " bars" : str.substring(evList, 0, math.max(0, str.length(evList) - 3))
+
+rngSay = not rngOk ? (na(rngW) ? "not enough history" : "no range — " + f_n1(rngW) + "% wide over " + f_n0(rngLen) + " bars, above the " + f_n0(rngMaxW) + "% limit") : f_px(rngLo) + " to " + f_px(rngHi) + "   ·   " + f_n1(rngW) + "% wide   ·   price " + (brokeUp ? "ABOVE it" : brokeDn ? "BELOW it" : "inside, " + f_n1((close - rngLo) / (rngHi - rngLo) * 100) + "% up the range")
+
+priorSay = na(pMove) ? "not enough history to judge the prior trend" : (pMove >= 0 ? "+" : "") + f_n1(pMove) + "% into the range over " + f_n0(priorLen) + " bars" + (bias == 0 ? " — too small to call, so no schematic applies" : bias == 1 ? " — an advance, so a range here is distribution" : " — a decline, so a range here is accumulation")
+
+// What the phase means for someone deciding what to do. Wyckoff is a map of
+// where you are, not a signal, so this says what would confirm the next step
+// rather than issuing an order.
+meanSay = phase == "—" ? "Nothing to read. Either price is trending rather than ranging, or the move into it was too small to classify." : bias == 1 and phase == "C" ? "The upthrust is the tell. If price cannot regain " + f_px(rngHi) + ", supply has won and Phase D markdown follows." : bias == -1 and phase == "C" ? "The spring is the tell. If price holds above " + f_px(rngLo) + " and tests it successfully, Phase D markup follows." : phase == "D" and bias == 1 ? "Supply is in control. Rallies to " + f_px(rngLo) + " are last points of supply, not entries." : phase == "D" and bias == -1 ? "Demand is in control. Pullbacks to " + f_px(rngHi) + " are last points of support." : phase == "E" and bias == 1 ? "Markdown. The range is behind; " + f_px(rngLo) + " is resistance now." : phase == "E" and bias == -1 ? "Markup. The range is behind; " + f_px(rngHi) + " is support now." : phase == "A" ? "The prior trend is being stopped. Too early to position — wait for the range to form and be tested." : "Cause is being built. Nothing here is actionable until the range is tested at one edge and breaks at the other."
+
+trigSay = not rngOk ? "—" : bias == 1 ? "A close below " + f_px(rngLo) + " on volume is the sign of weakness. A close back above " + f_px(rngHi) + " would break the distribution read." : bias == -1 ? "A close above " + f_px(rngHi) + " on volume is the sign of strength. A close below " + f_px(rngLo) + " would break the accumulation read." : "—"
+
+// ═══════════════════════════════════════════════════════════════
+// CHART
+// ═══════════════════════════════════════════════════════════════
+var line hiLn = na
+var line loLn = na
+if barstate.islast and showBox and rngOk
+    line.delete(hiLn)
+    line.delete(loLn)
+    hiLn := line.new(bar_index - rngLen, rngHi, bar_index + 6, rngHi, color = color.new(#d50000, 25), width = 2)
+    loLn := line.new(bar_index - rngLen, rngLo, bar_index + 6, rngLo, color = color.new(#00c853, 25), width = 2)
+
+if showEv and bcNow
+    label.new(bar_index, high, "BC", style = label.style_label_down, color = color.new(#d50000, 0), textcolor = color.white, size = size.tiny)
+if showEv and scNow
+    label.new(bar_index, low, "SC", style = label.style_label_up, color = color.new(#00c853, 0), textcolor = color.white, size = size.tiny)
+if showEv and sprNow
+    label.new(bar_index, low, bias == -1 ? "SPRING" : "spring", style = label.style_label_up, color = color.new(#00c853, 0), textcolor = color.white, size = size.tiny)
+if showEv and utNow
+    label.new(bar_index, high, na(stBar) ? "UT" : "UTAD", style = label.style_label_down, color = color.new(#d50000, 0), textcolor = color.white, size = size.tiny)
+if showEv and sosNow
+    label.new(bar_index, low, "SOS", style = label.style_label_up, color = color.new(#2962ff, 0), textcolor = color.white, size = size.tiny)
+if showEv and sowNow
+    label.new(bar_index, high, "SOW", style = label.style_label_down, color = color.new(#ff6d00, 0), textcolor = color.white, size = size.tiny)
+
+// ═══════════════════════════════════════════════════════════════
+// PANEL
+// ═══════════════════════════════════════════════════════════════
+pPos = panelPos == "Top Left" ? position.top_left : panelPos == "Top Right" ? position.top_right : panelPos == "Middle Left" ? position.middle_left : panelPos == "Bottom Right" ? position.bottom_right : position.bottom_left
+pSz  = panelSz == "Tiny" ? size.tiny : panelSz == "Normal" ? size.normal : size.small
+var table wp = table.new(pPos, 2, 8, border_width = 2)
+
+f_row(table _t, int _r, string _k, string _v, color _c) =>
+    table.cell(_t, 0, _r, _k, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = pSz)
+    table.cell(_t, 1, _r, _v, text_color = color.white, bgcolor = _c, text_halign = text.align_left, text_size = pSz)
+
+if barstate.islast
+    table.clear(wp, 0, 0, 1, 7)
+    f_row(wp, 0, "SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
+    f_row(wp, 1, "PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
+    f_row(wp, 2, "RANGE", rngSay, color.new(#2962ff, 40))
+    f_row(wp, 3, "EVENTS", evSay, color.new(color.purple, 35))
+    f_row(wp, 4, "▶ WHAT IT MEANS", meanSay, color.new(#00695c, 10))
+    f_row(wp, 5, "NEXT TRIGGER", trigSay, color.new(color.black, 25))
+    f_row(wp, 6, "VOLUME", na(volX) ? "not reported for this symbol" : f_n1(volX) + "x the " + f_n0(volLen) + "-bar average" + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : " — light"), color.new(color.navy, 35))
+    f_row(wp, 7, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Every event here is reported after its bar closed.", color.new(color.gray, 55))
+
+alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
+alertcondition(utNow, title = "Wyckoff UPTHRUST / UTAD", message = "{{ticker}} {{interval}}: upthrust — the range high gave way and was taken back at {{close}}")
+alertcondition(sosNow, title = "Wyckoff SIGN OF STRENGTH", message = "{{ticker}} {{interval}}: sign of strength — closed above the range on volume at {{close}}")
+alertcondition(sowNow, title = "Wyckoff SIGN OF WEAKNESS", message = "{{ticker}} {{interval}}: sign of weakness — closed below the range on volume at {{close}}")
