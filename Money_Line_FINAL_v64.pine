@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v67.0", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v67.1", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2571,7 +2571,7 @@ f_boSummary(table _t) =>
         f_cellL(_t, 1, _r, bizSay, not bqHave ? cP9 : bqN >= 3 and bqPE ? cP12 : bqN >= 3 ? cP13 : bqN == 2 ? cP3 : cP11)
         _r := _r + 1
         f_cellL(_t, 0, _r, "VERDICT", cP8)
-        f_cellL(_t, 1, _r, agreeWord + (boTrapUp ? "   ⚠ failed breakout, the break was retaken" : boTrapDn ? "   ⚠ failed breakdown, shorts trapped" : "") + (boDir == 0 ? "   ·   nothing has broken recently" : "   ·   " + f_boKind(boKindAt) + " broke " + f_n0(boBrkAge) + " bar(s) ago, " + f_n0(boScore) + "/10" + (boBrkUnconf ? " ⧗ bar not closed" : boGate ? " ✓gate" : " ✗gate — " + (k1 ? "weak close" : k2 ? "no volume surge" : "no volume surge, weak close"))), vCol)
+        f_cellL(_t, 1, _r, agreeWord + (boTrapUp ? "   ⚠ failed breakout = Wyckoff upthrust, the break was retaken" : boTrapDn ? "   ⚠ failed breakdown = Wyckoff spring, shorts trapped" : "") + (boDir == 0 ? "   ·   nothing has broken recently" : "   ·   " + f_boKind(boKindAt) + " broke " + f_n0(boBrkAge) + " bar(s) ago, " + f_n0(boScore) + "/10" + (boBrkUnconf ? " ⧗ bar not closed" : boGate ? " ✓gate" : " ✗gate — " + (k1 ? "weak close" : k2 ? "no volume surge" : "no volume surge, weak close"))), vCol)
         _r := _r + 1
         f_cellL(_t, 0, _r, "▶ DO THIS", cP8)
         f_cellL(_t, 1, _r, boWTD, color.new(#00695c, 10))
