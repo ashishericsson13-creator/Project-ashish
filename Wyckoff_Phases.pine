@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v2.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v2.8", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -541,7 +541,7 @@ if barstate.islast
     f_row(wp, 7, "WYCKOFF ▸ DO THIS", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
     f_row(wp, 8, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : (wUp or wDn) and rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
     f_row(wp, 9, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
-    f_row(wp, 10, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay, not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
+    f_row(wp, 10, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay + (bBrkUp and (stg3 or stg4) ? "   ⚠ but STAGE reads " + (stg4 ? "Stage 4" : "Stage 3") + " — the trend behind this breakout is gone" : bBrkDn and stg2 ? "   ⚠ but STAGE reads Stage 2 — this is a shakeout until the 200-day gives way" : ""), not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
     f_row(wp, 11, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) or ma200At ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
     f_row(wp, 12, "STAGE ▸ DIP OR TRAP", stWord + "   ·   " + stSay, not stHave ? color.new(color.gray, 45) : stg2 ? color.new(#00c853, stDipOk ? 5 : 25) : stg4 ? color.new(#d50000, 10) : stPull ? color.new(color.orange, 15) : color.new(color.orange, 35))
     f_row(wp, 13, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
