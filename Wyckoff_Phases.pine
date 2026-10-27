@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v3.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v3.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -398,6 +398,7 @@ bTgtUp = na(bH) ? na : bHi + bH * baseRR
 bTgtDn = na(bH) ? na : bLo - bH * baseRR
 // unproven until it breaks: a box after a decline is only a reversal if it
 // actually turns, and until then it is as likely to go on falling
+bsShort = not bOk ? "► none" : bBrkUp ? "▲ broken up" : bBrkDn ? "▼ broken down" : bUpIn ? "▲ continuation" : bDnIn ? "► reversal, unproven" : "► unclassified"
 bsSide = not bOk ? 0 : bBrkUp ? 1 : bBrkDn ? -1 : bUpIn ? 1 : 0
 bsWord = not bOk ? "► NO BASE" : bBrkUp ? "▲ BULLISH — the base has broken up" : bBrkDn ? "▼ BEARISH — the base has broken down" : bUpIn ? "▲ CONTINUATION BASE" : bDnIn ? "► REVERSAL BASE — unproven" : "► BASE — no move into it to classify"
 bsSay = not bOk ? "No tight box in the last " + f_n0(baseLen) + " bars" + (na(bAx) ? "" : " — " + f_n1(bAx) + "x ATR against a " + f_n1(baseATRx) + "x cap, " + f_n1(bW) + "% wide") : bBrkUp ? "Confirmation entry is live. Stop below " + f_px(bLo) + "   ·   target " + f_px(bTgtUp) : bBrkDn ? "Short confirmation is live. Stop above " + f_px(bHi) + "   ·   target " + f_px(bTgtDn) : "RISK ENTRY " + f_px(bLo) + "–" + f_px(bRiskHi) + " inside the base   ·   CONFIRMATION on a close above " + f_px(bHi) + "   ·   stop " + f_px(bLo) + "   ·   target " + f_px(bTgtUp)
@@ -411,12 +412,6 @@ wySide = not rngOk or bias == 0 or not late ? 0 : bias == -1 ? 1 : -1
 ewSide = not wHave ? 0 : wUp and rAll ? 1 : wDn and rAll ? -1 : wUp ? 1 : wDn ? -1 : 0
 wyShort = not rngOk ? "► NO SETUP" : bias == 0 ? "► UNCLASSIFIED" : not late ? "► NEUTRAL" : bias == -1 ? "▲ BULLISH" : "▼ BEARISH"
 ewShort = not wHave ? "► NOT ENOUGH SWINGS" : wUp and rAll ? "▲ BULLISH" : wDn and rAll ? "▼ BEARISH" : wUp ? "▲ leaning bullish" : wDn ? "▼ leaning bearish" : "► CORRECTIVE"
-nBull = (wySide == 1 ? 1 : 0) + (ewSide == 1 ? 1 : 0) + (bsSide == 1 ? 1 : 0)
-nBear = (wySide == -1 ? 1 : 0) + (ewSide == -1 ? 1 : 0) + (bsSide == -1 ? 1 : 0)
-nRead = nBull + nBear
-bothUp = nBear == 0 and nBull >= 2
-bothDn = nBull == 0 and nBear >= 2
-bothSay = nRead == 0 ? "no method has a directional read yet" : nRead == 1 ? "only one method has a read — treat it as half a signal" : nBear == 0 ? f_n0(nBull) + " of 3 agree — BULLISH, and none disagree" : nBull == 0 ? f_n0(nBear) + " of 3 agree — BEARISH, and none disagree" : "THEY DISAGREE — " + f_n0(nBull) + " bullish against " + f_n0(nBear) + " bearish, so wait for one to give way"
 
 actWord = not rngOk ? "► NO SETUP" : bias == 0 ? "► UNCLASSIFIED" : not late ? "► NEUTRAL — cause still building" : bias == -1 ? "▲ BULLISH" : "▼ BEARISH"
 actSay = not rngOk ? "No Wyckoff setup: there is no range here. " + (bOk ? "The BASE row below has one — read that instead." : wUp or wDn ? "ELLIOTT holds the only directional read on this chart." : "Nothing on the base or wave rows either, so this chart has no setup at all.") : bias == 0 ? "A range, but the move into it was too flat to say whether this is accumulation or distribution. No entry either way." : not late ? "Phase " + phase + ". The cause is still being built — no entry until the range is tested at one edge and breaks at the other." : bias == -1 and phase == "C" ? "BUY ZONE " + f_px(rngLo) + " to " + f_px(buyHi) + ". Stop below " + f_px(rngLo) + ". First target " + f_px(rngHi) + ", measured move " + f_px(tgtUp) + "." : bias == -1 ? "Buy pullbacks toward " + f_px(rngHi) + ", support now. Stop below " + f_px(rngLo) + ". Measured move " + f_px(tgtUp) + "." : phase == "C" ? "SELL / EXIT ZONE " + f_px(sellLo) + " to " + f_px(rngHi) + ". Stop above " + f_px(rngHi) + ". First target " + f_px(rngLo) + ", measured move " + f_px(tgtDn) + "." : "Sell rallies toward " + f_px(rngLo) + ", resistance now. Stop above " + f_px(rngHi) + ". Measured move " + f_px(tgtDn) + "."
@@ -511,6 +506,11 @@ stAtMA = not na(d50) and low <= d50 * (1 + stNear / 100)
 stLightV = na(volX) or volX <= stLight
 stDipOk = stg2 and stAtMA and stLightV
 stWord = not stHave ? "► NO 200-DAY YET" : stPull ? "► NEUTRAL — STAGE 2 → 3, BELOW A RISING 200-DAY" : stRecl ? (wUp ? "► leaning bullish — STAGE 1 → 2, RECLAIM OF A FALLING 200-DAY" : "► NEUTRAL — STAGE 1 → 2 ATTEMPT, THE SWINGS HAVE NOT TURNED") : stg2 ? (stDipOk ? "▲ BULLISH — STAGE 2, THIS DIP IS BUYABLE" : "▲ BULLISH — STAGE 2, NO DIP HERE YET") : stg4 ? "▼ BEARISH — STAGE 4, STAY AWAY" : stg3 ? "▼ BEARISH — STAGE 3, TOPPING" : stg1 ? "► NEUTRAL — STAGE 1, BASING" : (stAbove ? "► NEUTRAL — STAGE 2 UNCONFIRMED, THE SWINGS HAVE NOT TURNED" : "► NEUTRAL — STAGE 4 → 1, THE DECLINE IS STALLING")
+// The stage is a method in its own right and now counts with the others. Its
+// side follows the words exactly: Stage 2 bullish, Stages 3 and 4 bearish, a
+// reclaim with the swings turned a lean, everything else neutral.
+stShort = not stHave ? "► none" : stg2 ? "▲ STAGE 2" : stg4 ? "▼ STAGE 4" : stg3 ? "▼ STAGE 3" : stRecl ? (wUp ? "▲ STAGE 1→2" : "► 1→2 attempt") : stPull ? "► STAGE 2→3" : stg1 ? "► STAGE 1" : stAbove ? "► STAGE 2 unconfirmed" : "► STAGE 4→1"
+stSide = not stHave ? 0 : stg2 ? 1 : stg4 or stg3 ? -1 : stRecl and wUp ? 1 : 0
 stSay = not stHave ? "needs 200 days of history behind it" : "200-day " + f_px(d200) + " " + (stAbove ? "▲ above" : "▼ below") + " and " + (stUpMA ? "rising" : stDnMA ? "falling" : "flat") + "   ·   " + (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "swings overlap") + "   ·   " + (stg2 ? (stDipOk ? "back at the 50-day " + f_px(d50) + " on light volume" : stAtMA ? "at the 50-day but volume is heavy — let it settle" : "wait for a pullback to the 50-day " + f_px(d50)) : stg4 ? "cheap gets cheaper; wait for the average to flatten" : stPull ? "trend intact but the average is lost — it must be reclaimed first" : stRecl ? (wUp ? "back over the average but it has not turned up — early and unproven" : "price is back over the average, but neither it nor the swings have turned") : stg1 ? "wait for the average to turn up and price to clear it" : stg3 ? "above the average but it has rolled over — distribution, not a dip" : (stAbove ? "above a rising average, but the swings do not confirm it yet" : "below a falling average, but the swings have stopped confirming the downtrend"))
 
 ma200Say = na(ma200Gap) ? "not enough history — a 200-week average needs 200 weeks of data behind it" : ma200At ? "► ON THE LINE — price is " + f_n1(math.abs(ma200Gap)) + "% " + (ma200Up ? "above" : "below") + " the 200-week average " + f_px(ma200w) + ", too close to call a long-term direction" : (ma200Up ? "▲ BULLISH — price is " + f_n1(ma200Gap) + "% ABOVE the 200-week average " : "▼ BEARISH — price is " + f_n1(-ma200Gap) + "% BELOW the 200-week average ") + f_px(ma200w) + ", so the long-term trend is " + (ma200Up ? "up" : "down")
@@ -523,6 +523,15 @@ ma200Say = na(ma200Gap) ? "not enough history — a 200-week average needs 200 w
 // filter, not a setup, and letting it carry the verdict would mean the word
 // could read BULLISH on a chart where none of the three methods has found
 // anything. Silence from all three is NEUTRAL, which is the honest answer.
+nBull = (wySide == 1 ? 1 : 0) + (ewSide == 1 ? 1 : 0) + (bsSide == 1 ? 1 : 0) + (stSide == 1 ? 1 : 0)
+nBear = (wySide == -1 ? 1 : 0) + (ewSide == -1 ? 1 : 0) + (bsSide == -1 ? 1 : 0) + (stSide == -1 ? 1 : 0)
+nRead = nBull + nBear
+bothUp = nBear == 0 and nBull >= 2
+bothDn = nBull == 0 and nBear >= 2
+f_names(int _w, int _e, int _b, int _s, int _side) => (_w == _side ? "Wyckoff " : "") + (_e == _side ? "Elliott " : "") + (_b == _side ? "Base " : "") + (_s == _side ? "Stage" : "")
+vBull = f_names(wySide, ewSide, bsSide, stSide, 1)
+vBear = f_names(wySide, ewSide, bsSide, stSide, -1)
+bothSay = nRead == 0 ? "none has a directional read yet" : nRead == 1 ? "only one has a read — half a signal" : nBear == 0 ? f_n0(nBull) + " of 4 bullish, none against" : nBull == 0 ? f_n0(nBear) + " of 4 bearish, none against" : f_n0(nBull) + " bullish against " + f_n0(nBear) + " bearish — they disagree"
 vSet = nBull - nBear
 // One method speaking while the other two are silent is half a signal - the
 // row below has always said so - and printing a full-strength BULLISH over
@@ -530,7 +539,7 @@ vSet = nBull - nBear
 // a muted colour, and BULLISH is reserved for two or more agreeing.
 vFirm = nRead >= 2
 vWord = vSet == 0 ? "► NEUTRAL" : vSet > 0 ? (vFirm ? "▲ BULLISH" : "▲ leaning bullish") : (vFirm ? "▼ BEARISH" : "▼ leaning bearish")
-vSay = nRead == 0 ? "none of the three has a directional read on this chart" : nBull > 0 and nBear > 0 ? "they split " + f_n0(nBull) + " bullish against " + f_n0(nBear) + " bearish, so this is the balance of them" : f_n0(nRead) + " of 3 agree" + (nRead == 3 ? "" : ", the other " + f_n0(3 - nRead) + (nRead == 2 ? " is" : " are") + " silent")
+vSay = nRead == 0 ? "none of the four has a directional read on this chart" : nBull > 0 and nBear > 0 ? "bullish: " + vBull + "   ·   bearish: " + vBear + "   — so this is the balance of them" : f_n0(nRead) + " of 4 agree — " + (nBull > 0 ? vBull : vBear) + "  ·  the rest are silent"
 
 var table wp = table.new(pPos, 2, 15, border_width = 2)
 
@@ -540,8 +549,8 @@ f_row(table _t, int _r, string _k, string _v, color _c) =>
 
 if barstate.islast
     table.clear(wp, 0, 0, 1, 14)
-    f_row(wp, 0, "★ VERDICT", vWord + "   ·   " + vSay, vSet > 0 ? color.new(#00c853, vFirm ? 10 : 50) : vSet < 0 ? color.new(#d50000, vFirm ? 10 : 50) : color.new(color.gray, 40))
-    f_row(wp, 1, "★ ALL THREE", "WYCKOFF " + wyShort + "   ·   ELLIOTT " + ewShort + "   ·   BASE " + bsWord + "   ·   " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : nBull > 0 and nBear > 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
+    f_row(wp, 0, "★ VERDICT", vWord + "   ·   " + vSay, vSet > 0 ? color.new(vFirm ? #00c853 : #2e7d32, 10) : vSet < 0 ? color.new(vFirm ? #d50000 : #b71c1c, 10) : color.new(color.gray, 40))
+    f_row(wp, 1, "★ ALL FOUR", "WYCKOFF " + wyShort + "  ·  ELLIOTT " + ewShort + "  ·  BASE " + bsShort + "  ·  STAGE " + stShort + "  ·  " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : nBull > 0 and nBear > 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
     f_row(wp, 2, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
     f_row(wp, 3, "WYCKOFF ▸ PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
     f_row(wp, 4, "WYCKOFF ▸ RANGE", rngSay, color.new(#2962ff, 40))
@@ -552,7 +561,7 @@ if barstate.islast
     f_row(wp, 9, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
     f_row(wp, 10, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay + (bBrkUp and (stg4 or (stg3 and not stRecl)) ? "   ⚠ STAGE says " + (stg4 ? "Stage 4" : "Stage 3") + " — no trend behind it" : bBrkUp and stRecl ? "   ⚠ the 200-day has not turned up yet" : bBrkDn and stg2 ? "   ⚠ STAGE says Stage 2 — likely a shakeout" : ""), not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
     f_row(wp, 11, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) or ma200At ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
-    f_row(wp, 12, "STAGE ▸ DIP OR TRAP", stWord + "   ·   " + stSay, not stHave ? color.new(color.gray, 45) : stg2 ? color.new(#00c853, stDipOk ? 5 : 25) : stg4 ? color.new(#d50000, 10) : stPull ? color.new(color.orange, 20) : stRecl ? (wUp ? color.new(#00c853, 55) : color.new(color.gray, 40)) : stg3 ? color.new(#d50000, 45) : color.new(color.gray, 40))
+    f_row(wp, 12, "STAGE ▸ DIP OR TRAP", stWord + "   ·   " + stSay, not stHave ? color.new(color.gray, 45) : stg2 ? color.new(#00c853, stDipOk ? 5 : 25) : stg4 ? color.new(#d50000, 10) : stPull ? color.new(color.orange, 20) : stRecl ? (wUp ? color.new(#2e7d32, 10) : color.new(color.gray, 40)) : stg3 ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
     f_row(wp, 13, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
     f_row(wp, 14, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
 
