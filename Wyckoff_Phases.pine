@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v2.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v2.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -466,17 +466,14 @@ ma200Say = na(ma200Gap) ? "not enough history — a 200-week average needs 200 w
 // ═══════════════════════════════════════════════════════════════
 // ONE WORD FOR THE WHOLE PANEL
 // ═══════════════════════════════════════════════════════════════
-// The three setups are the primary evidence and outrank everything else when
-// any of them has a direction. When none does - which is most of the time on
-// a trending chart - the 200-week trend is still a directional fact, and
-// saying so is more use than saying nothing. The sentence beside the word
-// always names which of the two the verdict rests on, so a call made on the
-// long-term trend alone is never mistaken for three setups agreeing.
+// Wyckoff, Elliott and the base, and nothing else. The 200-week trend keeps
+// its own row and is deliberately kept out of this one: it is a long-term
+// filter, not a setup, and letting it carry the verdict would mean the word
+// could read BULLISH on a chart where none of the three methods has found
+// anything. Silence from all three is NEUTRAL, which is the honest answer.
 vSet = nBull - nBear
-vMa = na(ma200Gap) ? 0 : ma200Up ? 1 : -1
-vNet = vSet != 0 ? vSet : vMa
-vWord = vNet > 0 ? "▲ BULLISH" : vNet < 0 ? "▼ BEARISH" : "► NEUTRAL"
-vSay = nRead == 0 ? (vMa == 0 ? "nothing to go on yet — no setup has a read and there is no 200-week average on this symbol" : "no setup has a read, so this rests on the 200-week trend alone: price is " + f_n1(math.abs(ma200Gap)) + "% " + (ma200Up ? "above" : "below") + " it") : (nBull > 0 and nBear > 0 ? "the setups split " + f_n0(nBull) + "-" + f_n0(nBear) + ", so this is the balance of them" : f_n0(nRead) + " of 3 setups agree") + (vMa == 0 ? "" : "   ·   the 200-week trend " + ((vMa > 0) == (vNet > 0) ? "agrees" : "disagrees"))
+vWord = vSet > 0 ? "▲ BULLISH" : vSet < 0 ? "▼ BEARISH" : "► NEUTRAL"
+vSay = nRead == 0 ? "none of the three has a directional read on this chart" : nBull > 0 and nBear > 0 ? "they split " + f_n0(nBull) + " bullish against " + f_n0(nBear) + " bearish, so this is the balance of them" : f_n0(nRead) + " of 3 agree" + (nRead == 3 ? "" : ", the other " + f_n0(3 - nRead) + (nRead == 2 ? " is" : " are") + " silent")
 
 var table wp = table.new(pPos, 2, 14, border_width = 2)
 
@@ -486,7 +483,7 @@ f_row(table _t, int _r, string _k, string _v, color _c) =>
 
 if barstate.islast
     table.clear(wp, 0, 0, 1, 13)
-    f_row(wp, 0, "★ VERDICT", vWord + "   ·   " + vSay, vNet > 0 ? color.new(#00c853, 10) : vNet < 0 ? color.new(#d50000, 10) : color.new(color.gray, 40))
+    f_row(wp, 0, "★ VERDICT", vWord + "   ·   " + vSay, vSet > 0 ? color.new(#00c853, 10) : vSet < 0 ? color.new(#d50000, 10) : color.new(color.gray, 40))
     f_row(wp, 1, "★ ALL THREE", "WYCKOFF " + wyShort + "   ·   ELLIOTT " + ewShort + "   ·   BASE " + bsWord + "   ·   " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : nBull > 0 and nBear > 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
     f_row(wp, 2, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
     f_row(wp, 3, "WYCKOFF ▸ PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
