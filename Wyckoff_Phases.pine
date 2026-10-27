@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v2.2", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v2.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -463,27 +463,43 @@ ma200Gap = na(ma200w) or ma200w <= 0 ? na : (close - ma200w) / ma200w * 100
 ma200Up = not na(ma200Gap) and ma200Gap >= 0
 ma200Say = na(ma200Gap) ? "not enough history — a 200-week average needs 200 weeks of data behind it" : (ma200Up ? "▲ BULLISH — price is " + f_n1(ma200Gap) + "% ABOVE the 200-week average " : "▼ BEARISH — price is " + f_n1(-ma200Gap) + "% BELOW the 200-week average ") + f_px(ma200w) + ", so the long-term trend is " + (ma200Up ? "up" : "down")
 
-var table wp = table.new(pPos, 2, 13, border_width = 2)
+// ═══════════════════════════════════════════════════════════════
+// ONE WORD FOR THE WHOLE PANEL
+// ═══════════════════════════════════════════════════════════════
+// The three setups are the primary evidence and outrank everything else when
+// any of them has a direction. When none does - which is most of the time on
+// a trending chart - the 200-week trend is still a directional fact, and
+// saying so is more use than saying nothing. The sentence beside the word
+// always names which of the two the verdict rests on, so a call made on the
+// long-term trend alone is never mistaken for three setups agreeing.
+vSet = nBull - nBear
+vMa = na(ma200Gap) ? 0 : ma200Up ? 1 : -1
+vNet = vSet != 0 ? vSet : vMa
+vWord = vNet > 0 ? "▲ BULLISH" : vNet < 0 ? "▼ BEARISH" : "► NEUTRAL"
+vSay = nRead == 0 ? (vMa == 0 ? "nothing to go on yet — no setup has a read and there is no 200-week average on this symbol" : "no setup has a read, so this rests on the 200-week trend alone: price is " + f_n1(math.abs(ma200Gap)) + "% " + (ma200Up ? "above" : "below") + " it") : (nBull > 0 and nBear > 0 ? "the setups split " + f_n0(nBull) + "-" + f_n0(nBear) + ", so this is the balance of them" : f_n0(nRead) + " of 3 setups agree") + (vMa == 0 ? "" : "   ·   the 200-week trend " + ((vMa > 0) == (vNet > 0) ? "agrees" : "disagrees"))
+
+var table wp = table.new(pPos, 2, 14, border_width = 2)
 
 f_row(table _t, int _r, string _k, string _v, color _c) =>
     table.cell(_t, 0, _r, _k, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = pSz)
     table.cell(_t, 1, _r, _v, text_color = color.white, bgcolor = _c, text_halign = text.align_left, text_size = pSz)
 
 if barstate.islast
-    table.clear(wp, 0, 0, 1, 12)
-    f_row(wp, 0, "★ ALL THREE", "WYCKOFF " + wyShort + "   ·   ELLIOTT " + ewShort + "   ·   BASE " + bsWord + "   ·   " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : nBull > 0 and nBear > 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
-    f_row(wp, 1, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
-    f_row(wp, 2, "WYCKOFF ▸ PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
-    f_row(wp, 3, "WYCKOFF ▸ RANGE", rngSay, color.new(#2962ff, 40))
-    f_row(wp, 4, "WYCKOFF ▸ EVENTS", evSay, color.new(color.purple, 35))
-    f_row(wp, 5, "WYCKOFF ▸ MEANS", meanSay, color.new(#00695c, 10))
-    f_row(wp, 6, "WYCKOFF ▸ DO THIS", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
-    f_row(wp, 7, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : (wUp or wDn) and rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
-    f_row(wp, 8, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
-    f_row(wp, 9, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay, not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
-    f_row(wp, 10, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
-    f_row(wp, 11, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
-    f_row(wp, 12, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
+    table.clear(wp, 0, 0, 1, 13)
+    f_row(wp, 0, "★ VERDICT", vWord + "   ·   " + vSay, vNet > 0 ? color.new(#00c853, 10) : vNet < 0 ? color.new(#d50000, 10) : color.new(color.gray, 40))
+    f_row(wp, 1, "★ ALL THREE", "WYCKOFF " + wyShort + "   ·   ELLIOTT " + ewShort + "   ·   BASE " + bsWord + "   ·   " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : nBull > 0 and nBear > 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
+    f_row(wp, 2, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
+    f_row(wp, 3, "WYCKOFF ▸ PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
+    f_row(wp, 4, "WYCKOFF ▸ RANGE", rngSay, color.new(#2962ff, 40))
+    f_row(wp, 5, "WYCKOFF ▸ EVENTS", evSay, color.new(color.purple, 35))
+    f_row(wp, 6, "WYCKOFF ▸ MEANS", meanSay, color.new(#00695c, 10))
+    f_row(wp, 7, "WYCKOFF ▸ DO THIS", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
+    f_row(wp, 8, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : (wUp or wDn) and rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
+    f_row(wp, 9, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
+    f_row(wp, 10, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay, not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
+    f_row(wp, 11, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
+    f_row(wp, 12, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
+    f_row(wp, 13, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
 
 alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
 alertcondition(utNow, title = "Wyckoff UPTHRUST / UTAD", message = "{{ticker}} {{interval}}: upthrust — the range high gave way and was taken back at {{close}}")
