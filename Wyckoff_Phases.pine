@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v2.8", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v2.9", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -72,6 +72,7 @@ stSlope  = input.int(20, "Stage: days used to judge the 200-day slope", minval =
 stFlat   = input.float(0.5, "Stage: slope under this % over the window counts as flat", minval = 0.0, maxval = 10.0, step = 0.1, tooltip = "Without a flat band any hundredth of a point counts as a rising average, and a topping or basing chart is read as a trending one.", group = "6. Stage 2 / Stage 4")
 stNear   = input.float(2.0, "Stage: a dip counts within this % of the 50-day", minval = 0.2, maxval = 15.0, step = 0.1, group = "6. Stage 2 / Stage 4")
 stLight  = input.float(1.0, "Stage: light volume is under this multiple of average", minval = 0.3, maxval = 2.0, step = 0.05, group = "6. Stage 2 / Stage 4")
+stReclN  = input.int(13, "Stage: bars since price was under the 200-day that still counts as a reclaim", minval = 2, maxval = 60, tooltip = "Price above a falling average means two opposite things. After a long advance it is a top. Days after price climbed back over it, it is a recovery attempt. This is where one ends and the other begins.", group = "6. Stage 2 / Stage 4")
 showStg  = input.bool(true, "Draw the 50-day and 200-day averages", group = "6. Stage 2 / Stage 4")
 col200   = input.color(#ff6d00, "Line colour", group = "5. 200-week average")
 
@@ -496,13 +497,21 @@ stg1 = not stAbove and stFlatMA
 // an advance that is already years old. It is also not Stage 4, because the
 // average has not turned - so it gets named for what it is.
 stPull = not stAbove and stUpMA
+// Price above a FALLING average is the one genuinely ambiguous spot in the
+// model, and it was all being called Stage 3. A top is price that has held
+// above the average for months while it rolls over. A stock that crashed and
+// has just climbed back over a still-falling average is the opposite - the
+// earliest part of a turn - and telling its reader NO NEW BUYS had the model
+// backwards. The two are separated by how recently price was underneath.
+stUnder = ta.barssince(not na(d200) and close < d200)
+stRecl = stAbove and not stUpMA and not na(stUnder) and stUnder <= stReclN
 // A dip is only buyable where there is a dip: price has come back to the
 // rising 50-day, and it came back on light volume rather than heavy selling.
 stAtMA = not na(d50) and low <= d50 * (1 + stNear / 100)
 stLightV = na(volX) or volX <= stLight
 stDipOk = stg2 and stAtMA and stLightV
-stWord = not stHave ? "► NO 200-DAY YET" : stPull ? "► DEEP PULLBACK — BELOW A RISING 200-DAY" : stg2 ? (stDipOk ? "▲ STAGE 2 — THIS DIP IS BUYABLE" : "▲ STAGE 2 — BUY DIPS, NONE HERE YET") : stg4 ? "▼ STAGE 4 — STAY AWAY" : stg3 ? "► STAGE 3 — TOPPING, NO NEW BUYS" : stg1 ? "► STAGE 1 — BASING, WAIT FOR STAGE 2" : "► IN TRANSITION"
-stSay = not stHave ? "needs 200 days of history behind it" : "200-day " + f_px(d200) + " " + (stAbove ? "▲ above" : "▼ below") + " and " + (stUpMA ? "rising" : stDnMA ? "falling" : "flat") + "   ·   " + (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "swings overlap") + "   ·   " + (stg2 ? (stDipOk ? "back at the 50-day " + f_px(d50) + " on light volume" : stAtMA ? "at the 50-day but volume is heavy — let it settle" : "wait for a pullback to the 50-day " + f_px(d50)) : stg4 ? "cheap gets cheaper; wait for the average to flatten" : stPull ? "trend intact but the average is lost — it must be reclaimed first" : stg1 ? "wait for the average to turn up and price to clear it" : stg3 ? "above the average but it has rolled over — distribution, not a dip" : "above a rising average, but the swings do not confirm it yet")
+stWord = not stHave ? "► NO 200-DAY YET" : stPull ? "► DEEP PULLBACK — BELOW A RISING 200-DAY" : stRecl ? "► RECLAIM — BACK OVER A FALLING 200-DAY" : stg2 ? (stDipOk ? "▲ STAGE 2 — THIS DIP IS BUYABLE" : "▲ STAGE 2 — BUY DIPS, NONE HERE YET") : stg4 ? "▼ STAGE 4 — STAY AWAY" : stg3 ? "► STAGE 3 — TOPPING, NO NEW BUYS" : stg1 ? "► STAGE 1 — BASING, WAIT FOR STAGE 2" : "► IN TRANSITION"
+stSay = not stHave ? "needs 200 days of history behind it" : "200-day " + f_px(d200) + " " + (stAbove ? "▲ above" : "▼ below") + " and " + (stUpMA ? "rising" : stDnMA ? "falling" : "flat") + "   ·   " + (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "swings overlap") + "   ·   " + (stg2 ? (stDipOk ? "back at the 50-day " + f_px(d50) + " on light volume" : stAtMA ? "at the 50-day but volume is heavy — let it settle" : "wait for a pullback to the 50-day " + f_px(d50)) : stg4 ? "cheap gets cheaper; wait for the average to flatten" : stPull ? "trend intact but the average is lost — it must be reclaimed first" : stRecl ? "back over the average but it has not turned up — early and unproven" : stg1 ? "wait for the average to turn up and price to clear it" : stg3 ? "above the average but it has rolled over — distribution, not a dip" : "above a rising average, but the swings do not confirm it yet")
 
 ma200Say = na(ma200Gap) ? "not enough history — a 200-week average needs 200 weeks of data behind it" : ma200At ? "► ON THE LINE — price is " + f_n1(math.abs(ma200Gap)) + "% " + (ma200Up ? "above" : "below") + " the 200-week average " + f_px(ma200w) + ", too close to call a long-term direction" : (ma200Up ? "▲ BULLISH — price is " + f_n1(ma200Gap) + "% ABOVE the 200-week average " : "▼ BEARISH — price is " + f_n1(-ma200Gap) + "% BELOW the 200-week average ") + f_px(ma200w) + ", so the long-term trend is " + (ma200Up ? "up" : "down")
 
@@ -543,7 +552,7 @@ if barstate.islast
     f_row(wp, 9, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
     f_row(wp, 10, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay + (bBrkUp and (stg3 or stg4) ? "   ⚠ STAGE says " + (stg4 ? "Stage 4" : "Stage 3") + " — no trend behind it" : bBrkDn and stg2 ? "   ⚠ STAGE says Stage 2 — likely a shakeout" : ""), not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
     f_row(wp, 11, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) or ma200At ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
-    f_row(wp, 12, "STAGE ▸ DIP OR TRAP", stWord + "   ·   " + stSay, not stHave ? color.new(color.gray, 45) : stg2 ? color.new(#00c853, stDipOk ? 5 : 25) : stg4 ? color.new(#d50000, 10) : stPull ? color.new(color.orange, 15) : color.new(color.orange, 35))
+    f_row(wp, 12, "STAGE ▸ DIP OR TRAP", stWord + "   ·   " + stSay, not stHave ? color.new(color.gray, 45) : stg2 ? color.new(#00c853, stDipOk ? 5 : 25) : stg4 ? color.new(#d50000, 10) : stRecl ? color.new(#00c853, 55) : stPull ? color.new(color.orange, 15) : color.new(color.orange, 35))
     f_row(wp, 13, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
     f_row(wp, 14, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
 
