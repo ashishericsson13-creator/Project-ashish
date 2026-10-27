@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v3.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v3.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -94,6 +94,7 @@ f_vis(int _n) => str.tostring(_n) + (_n == 1 ? " visit" : " visits")
 // "#.#" drops the decimal below 0.05 and prints a bare "0", so the volume
 // multiple gets a format that always keeps one.
 f_nx(float _v) => str.tostring(_v, "0.0")
+f_n2(float _v) => str.tostring(_v, "0.00")
 barRng = high - low
 wideBar = not na(atrV) and atrV > 0 and barRng >= atrV * wideX
 
@@ -401,7 +402,7 @@ bTgtDn = na(bH) ? na : bLo - bH * baseRR
 bsShort = not bOk ? "► none" : bBrkUp ? "▲ broken up" : bBrkDn ? "▼ broken down" : bUpIn ? "▲ continuation" : bDnIn ? "► reversal, unproven" : "► unclassified"
 bsSide = not bOk ? 0 : bBrkUp ? 1 : bBrkDn ? -1 : bUpIn ? 1 : 0
 bsWord = not bOk ? "► NO BASE" : bBrkUp ? "▲ BULLISH — the base has broken up" : bBrkDn ? "▼ BEARISH — the base has broken down" : bUpIn ? "▲ CONTINUATION BASE" : bDnIn ? "► REVERSAL BASE — unproven" : "► BASE — no move into it to classify"
-bsSay = not bOk ? "No tight box in the last " + f_n0(baseLen) + " bars" + (na(bAx) ? "" : " — " + f_n1(bAx) + "x ATR against a " + f_n1(baseATRx) + "x cap, " + f_n1(bW) + "% wide") : bBrkUp ? "Confirmation entry is live. Stop below " + f_px(bLo) + "   ·   target " + f_px(bTgtUp) : bBrkDn ? "Short confirmation is live. Stop above " + f_px(bHi) + "   ·   target " + f_px(bTgtDn) : "RISK ENTRY " + f_px(bLo) + "–" + f_px(bRiskHi) + " inside the base   ·   CONFIRMATION on a close above " + f_px(bHi) + "   ·   stop " + f_px(bLo) + "   ·   target " + f_px(bTgtUp)
+bsSay = not bOk ? "No tight box in the last " + f_n0(baseLen) + " bars" + (na(bAx) ? "" : " — " + f_n2(bAx) + "x ATR against a " + f_n2(baseATRx) + "x cap, " + f_n1(bW) + "% wide") : bBrkUp ? "Confirmation entry is live. Stop below " + f_px(bLo) + "   ·   target " + f_px(bTgtUp) : bBrkDn ? "Short confirmation is live. Stop above " + f_px(bHi) + "   ·   target " + f_px(bTgtDn) : "RISK ENTRY " + f_px(bLo) + "–" + f_px(bRiskHi) + " inside the base   ·   CONFIRMATION on a close above " + f_px(bHi) + "   ·   stop " + f_px(bLo) + "   ·   target " + f_px(bTgtUp)
 
 // ── the three methods, each reduced to one word, and whether they agree ──
 // Wyckoff reads a trading range; Elliott reads the swing sequence. They are
@@ -511,7 +512,7 @@ stWord = not stHave ? "► NO 200-DAY YET" : stPull ? "► NEUTRAL — STAGE 2 �
 // reclaim with the swings turned a lean, everything else neutral.
 stShort = not stHave ? "► none" : stg2 ? "▲ STAGE 2" : stg4 ? "▼ STAGE 4" : stg3 ? "▼ STAGE 3" : stRecl ? (wUp ? "▲ STAGE 1→2" : "► 1→2 attempt") : stPull ? "► STAGE 2→3" : stg1 ? "► STAGE 1" : stAbove ? "► STAGE 2 unconfirmed" : "► STAGE 4→1"
 stSide = not stHave ? 0 : stg2 ? 1 : stg4 or stg3 ? -1 : stRecl and wUp ? 1 : 0
-stSay = not stHave ? "needs 200 days of history behind it" : "200-day " + f_px(d200) + " " + (stAbove ? "▲ above" : "▼ below") + " and " + (stUpMA ? "rising" : stDnMA ? "falling" : "flat") + "   ·   " + (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "swings overlap") + "   ·   " + (stg2 ? (stDipOk ? "back at the 50-day " + f_px(d50) + " on light volume" : stAtMA ? "at the 50-day but volume is heavy — let it settle" : "wait for a pullback to the 50-day " + f_px(d50)) : stg4 ? "cheap gets cheaper; wait for the average to flatten" : stPull ? "trend intact but the average is lost — it must be reclaimed first" : stRecl ? (wUp ? "back over the average but it has not turned up — early and unproven" : "price is back over the average, but neither it nor the swings have turned") : stg1 ? "wait for the average to turn up and price to clear it" : stg3 ? "above the average but it has rolled over — distribution, not a dip" : (stAbove ? "above a rising average, but the swings do not confirm it yet" : "below a falling average, but the swings have stopped confirming the downtrend"))
+stSay = not stHave ? "needs 200 days of history behind it" : "200-day " + f_px(d200) + " " + (stAbove ? "▲ above" : "▼ below") + " and " + (stUpMA ? "rising" : stDnMA ? "falling" : "flat") + "   ·   " + (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "swings overlap") + "   ·   " + (stg2 ? (stDipOk ? "back at the 50-day " + f_px(d50) + " on light volume" : stAtMA ? "at the 50-day but volume is heavy — let it settle" : "wait for a pullback to the 50-day " + f_px(d50)) : stg4 ? "cheap gets cheaper; wait for the 200-day to stop falling — then STAGE 1" : stPull ? "trend intact but the average is lost — it must be reclaimed first" : stRecl ? (wUp ? "back over the average but it has not turned up — early and unproven" : "price is back over the average, but neither it nor the swings have turned") : stg1 ? "wait for the average to turn up and price to clear it" : stg3 ? "above the average but it has rolled over — distribution, not a dip" : (stAbove ? "above a rising average, but the swings do not confirm it yet" : "below a falling average, but the swings have stopped confirming the downtrend"))
 
 ma200Say = na(ma200Gap) ? "not enough history — a 200-week average needs 200 weeks of data behind it" : ma200At ? "► ON THE LINE — price is " + f_n1(math.abs(ma200Gap)) + "% " + (ma200Up ? "above" : "below") + " the 200-week average " + f_px(ma200w) + ", too close to call a long-term direction" : (ma200Up ? "▲ BULLISH — price is " + f_n1(ma200Gap) + "% ABOVE the 200-week average " : "▼ BEARISH — price is " + f_n1(-ma200Gap) + "% BELOW the 200-week average ") + f_px(ma200w) + ", so the long-term trend is " + (ma200Up ? "up" : "down")
 
