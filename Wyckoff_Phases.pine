@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v2.1", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v2.2", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -60,7 +60,8 @@ showEv   = input.bool(true, "Label events on the chart", group = "4. Display")
 panelPos = input.string("Bottom Left", "Panel position", options = ["Bottom Left", "Top Left", "Top Right", "Middle Left", "Bottom Right"], group = "4. Display")
 panelSz  = input.string("Small", "Panel text size", options = ["Tiny", "Small", "Normal"], group = "4. Display")
 baseLen  = input.int(10, "Base: bars in the consolidation", minval = 4, maxval = 60, tooltip = "The tight box that precedes the move. Short enough that it is a pause, not a range.", group = "5. Base breakout")
-baseMaxW = input.float(8.0, "Base: widest it may be (%)", minval = 1.0, maxval = 40.0, step = 0.5, tooltip = "What separates a base from a drift. A box wider than this is a trading range, which the Wyckoff rows above already cover.", group = "5. Base breakout")
+baseATRx = input.float(2.0, "Base: height as a multiple of ATR", minval = 0.5, maxval = 10.0, step = 0.1, tooltip = "The real test of tight. A fixed percentage cannot work across timeframes or instruments: 8% is a wide box on a daily chart and a narrow one on a weekly megacap. Measured in ATR, the same number means the same thing everywhere. Over this many bars a random walk spans roughly the square root of the bar count in ATR, so a base should sit well under that.", group = "5. Base breakout")
+baseMaxW = input.float(25.0, "Base: sanity cap on width (%)", minval = 1.0, maxval = 80.0, step = 0.5, tooltip = "A backstop only. The ATR test above is what decides.", group = "5. Base breakout")
 baseBefore = input.int(15, "Base: bars before it used to judge the move into it", minval = 5, maxval = 100, group = "5. Base breakout")
 baseMinM = input.float(8.0, "Base: the move into it must be at least this big (%)", minval = 2.0, maxval = 60.0, step = 1.0, group = "5. Base breakout")
 baseRR   = input.float(2.0, "Base: target as a multiple of base height", minval = 0.5, maxval = 6.0, step = 0.5, group = "5. Base breakout")
@@ -372,14 +373,19 @@ meanSay = phase == "—" ? (bias == 0 ? "Nothing to read — the move into this 
 bHi = ta.highest(high, baseLen)[1]
 bLo = ta.lowest(low, baseLen)[1]
 bW = na(bHi) or na(bLo) or bLo <= 0 ? na : (bHi - bLo) / bLo * 100
-bOk = not na(bW) and bW <= baseMaxW and bar_index >= baseLen + baseBefore
+bH = na(bHi) or na(bLo) ? na : bHi - bLo
+bATR = ta.atr(14)
+// Tight has to be measured against the instrument's own volatility. A fixed
+// percentage silently made this row dead on weekly charts, where ten bars of
+// an ordinary megacap consolidation span far more than eight percent.
+bAx = na(bH) or na(bATR) or bATR <= 0 ? na : bH / bATR
+bOk = not na(bAx) and bAx <= baseATRx and not na(bW) and bW <= baseMaxW and bar_index >= baseLen + baseBefore
 bPs = close[baseLen + baseBefore]
 bPm = na(bPs) or bPs <= 0 ? na : (close[baseLen] - bPs) / bPs * 100
 bUpIn = not na(bPm) and bPm >= baseMinM
 bDnIn = not na(bPm) and bPm <= -baseMinM
 bBrkUp = bOk and close > bHi
 bBrkDn = bOk and close < bLo
-bH = na(bHi) or na(bLo) ? na : bHi - bLo
 bRiskHi = na(bH) ? na : bLo + bH * 0.5
 bTgtUp = na(bH) ? na : bHi + bH * baseRR
 bTgtDn = na(bH) ? na : bLo - bH * baseRR
@@ -387,7 +393,7 @@ bTgtDn = na(bH) ? na : bLo - bH * baseRR
 // actually turns, and until then it is as likely to go on falling
 bsSide = not bOk ? 0 : bBrkUp ? 1 : bBrkDn ? -1 : bUpIn ? 1 : 0
 bsWord = not bOk ? "► NO BASE" : bBrkUp ? "▲ BULLISH — the base has broken up" : bBrkDn ? "▼ BEARISH — the base has broken down" : bUpIn ? "▲ CONTINUATION BASE" : bDnIn ? "► REVERSAL BASE — unproven" : "► BASE — no move into it to classify"
-bsSay = not bOk ? "No tight box in the last " + f_n0(baseLen) + " bars" + (na(bW) ? "" : " — " + f_n1(bW) + "% wide, against a cap of " + f_n1(baseMaxW) + "%") : bBrkUp ? "Confirmation entry is live. Stop below " + f_px(bLo) + "   ·   target " + f_px(bTgtUp) : bBrkDn ? "Short confirmation is live. Stop above " + f_px(bHi) + "   ·   target " + f_px(bTgtDn) : "RISK ENTRY " + f_px(bLo) + "–" + f_px(bRiskHi) + " inside the base   ·   CONFIRMATION on a close above " + f_px(bHi) + "   ·   stop " + f_px(bLo) + "   ·   target " + f_px(bTgtUp)
+bsSay = not bOk ? "No tight box in the last " + f_n0(baseLen) + " bars" + (na(bAx) ? "" : " — " + f_n1(bAx) + "x ATR against a " + f_n1(baseATRx) + "x cap, " + f_n1(bW) + "% wide") : bBrkUp ? "Confirmation entry is live. Stop below " + f_px(bLo) + "   ·   target " + f_px(bTgtUp) : bBrkDn ? "Short confirmation is live. Stop above " + f_px(bHi) + "   ·   target " + f_px(bTgtDn) : "RISK ENTRY " + f_px(bLo) + "–" + f_px(bRiskHi) + " inside the base   ·   CONFIRMATION on a close above " + f_px(bHi) + "   ·   stop " + f_px(bLo) + "   ·   target " + f_px(bTgtUp)
 
 // ── the three methods, each reduced to one word, and whether they agree ──
 // Wyckoff reads a trading range; Elliott reads the swing sequence. They are
