@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v2.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v2.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -67,7 +67,9 @@ baseMinM = input.float(8.0, "Base: the move into it must be at least this big (%
 baseRR   = input.float(2.0, "Base: target as a multiple of base height", minval = 0.5, maxval = 6.0, step = 0.5, group = "5. Base breakout")
 showBase = input.bool(true, "Draw the base box", group = "5. Base breakout")
 show200  = input.bool(true, "Draw the 200-week moving average", group = "5. 200-week average")
+ma200Band = input.float(2.0, "200-week: within this % counts as sitting on it", minval = 0.1, maxval = 15.0, step = 0.1, tooltip = "Price a fraction of a percent under a long-term average is not a downtrend, it is price sitting on the average. Inside this band the row declines to call a direction.", group = "5. 200-week average")
 stSlope  = input.int(20, "Stage: days used to judge the 200-day slope", minval = 5, maxval = 120, tooltip = "The 200-day average is almost never exactly flat, so direction is judged against where it sat this many days ago rather than against the previous bar.", group = "6. Stage 2 / Stage 4")
+stFlat   = input.float(0.5, "Stage: slope under this % over the window counts as flat", minval = 0.0, maxval = 10.0, step = 0.1, tooltip = "Without a flat band any hundredth of a point counts as a rising average, and a topping or basing chart is read as a trending one.", group = "6. Stage 2 / Stage 4")
 stNear   = input.float(2.0, "Stage: a dip counts within this % of the 50-day", minval = 0.2, maxval = 15.0, step = 0.1, group = "6. Stage 2 / Stage 4")
 stLight  = input.float(1.0, "Stage: light volume is under this multiple of average", minval = 0.3, maxval = 2.0, step = 0.05, group = "6. Stage 2 / Stage 4")
 showStg  = input.bool(true, "Draw the 50-day and 200-day averages", group = "6. Stage 2 / Stage 4")
@@ -465,6 +467,7 @@ ma200w = request.security(syminfo.tickerid, "W", ta.sma(close, 200), gaps = barm
 plot(show200 ? ma200w : na, "200-week average", color = col200, linewidth = 2)
 ma200Gap = na(ma200w) or ma200w <= 0 ? na : (close - ma200w) / ma200w * 100
 ma200Up = not na(ma200Gap) and ma200Gap >= 0
+ma200At = not na(ma200Gap) and math.abs(ma200Gap) <= ma200Band
 // ═══════════════════════════════════════════════════════════════
 // STAGE 2 / STAGE 4 — is a dip a gift or a trap
 // ═══════════════════════════════════════════════════════════════
@@ -475,9 +478,11 @@ ma200Up = not na(ma200Gap) and ma200Gap >= 0
 [d200, d200p, d50] = request.security(syminfo.tickerid, "D", [ta.sma(close, 200), ta.sma(close, 200)[stSlope], ta.sma(close, 50)], gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
 plot(showStg ? d200 : na, "200-day average", color = color.new(#8e24aa, 0), linewidth = 2)
 plot(showStg ? d50 : na, "50-day average", color = color.new(#1e88e5, 0), linewidth = 1)
-stHave = not na(d200) and not na(d200p)
-stUpMA = stHave and d200 > d200p
-stDnMA = stHave and d200 < d200p
+stHave = not na(d200) and not na(d200p) and d200p > 0
+stSlp = stHave ? (d200 - d200p) / d200p * 100 : na
+stUpMA = stHave and stSlp > stFlat
+stDnMA = stHave and stSlp < -stFlat
+stFlatMA = stHave and not stUpMA and not stDnMA
 stAbove = not na(d200) and close > d200
 // The direction of the average decides whether the dip is a gift or a trap,
 // and the swing structure has to agree with it. Price above a rising average
@@ -485,16 +490,21 @@ stAbove = not na(d200) and close > d200
 stg2 = stAbove and stUpMA and wUp
 stg4 = not stAbove and stDnMA and wDn
 stg3 = stAbove and not stUpMA
-stg1 = not stAbove and not stDnMA
+stg1 = not stAbove and stFlatMA
+// Below a still-RISING average is not a base. It is the deepest dip an
+// uptrend produces, and lumping it in with Stage 1 told a reader to wait for
+// an advance that is already years old. It is also not Stage 4, because the
+// average has not turned - so it gets named for what it is.
+stPull = not stAbove and stUpMA
 // A dip is only buyable where there is a dip: price has come back to the
 // rising 50-day, and it came back on light volume rather than heavy selling.
 stAtMA = not na(d50) and low <= d50 * (1 + stNear / 100)
 stLightV = na(volX) or volX <= stLight
 stDipOk = stg2 and stAtMA and stLightV
-stWord = not stHave ? "► NO 200-DAY YET" : stg2 ? (stDipOk ? "▲ STAGE 2 — THIS DIP IS BUYABLE" : "▲ STAGE 2 — BUY DIPS, NONE HERE YET") : stg4 ? "▼ STAGE 4 — STAY AWAY" : stg3 ? "► STAGE 3 — TOPPING, NO NEW BUYS" : stg1 ? "► STAGE 1 — BASING, WAIT FOR STAGE 2" : "► IN TRANSITION"
-stSay = not stHave ? "needs 200 days of history behind it" : "200-day " + f_px(d200) + " " + (stAbove ? "▲ above" : "▼ below") + " and " + (stUpMA ? "rising" : stDnMA ? "falling" : "flat") + "   ·   " + (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "swings overlap") + "   ·   " + (stg2 ? (stDipOk ? "back at the 50-day " + f_px(d50) + " on light volume" : stAtMA ? "at the 50-day but volume is heavy — let it settle" : "wait for a pullback to the 50-day " + f_px(d50)) : stg4 ? "cheap gets cheaper; wait for the average to flatten" : "no dip to buy until the stage is clean")
+stWord = not stHave ? "► NO 200-DAY YET" : stPull ? "► DEEP PULLBACK — BELOW A RISING 200-DAY" : stg2 ? (stDipOk ? "▲ STAGE 2 — THIS DIP IS BUYABLE" : "▲ STAGE 2 — BUY DIPS, NONE HERE YET") : stg4 ? "▼ STAGE 4 — STAY AWAY" : stg3 ? "► STAGE 3 — TOPPING, NO NEW BUYS" : stg1 ? "► STAGE 1 — BASING, WAIT FOR STAGE 2" : "► IN TRANSITION"
+stSay = not stHave ? "needs 200 days of history behind it" : "200-day " + f_px(d200) + " " + (stAbove ? "▲ above" : "▼ below") + " and " + (stUpMA ? "rising" : stDnMA ? "falling" : "flat") + "   ·   " + (wUp ? "higher highs and higher lows" : wDn ? "lower highs and lower lows" : "swings overlap") + "   ·   " + (stg2 ? (stDipOk ? "back at the 50-day " + f_px(d50) + " on light volume" : stAtMA ? "at the 50-day but volume is heavy — let it settle" : "wait for a pullback to the 50-day " + f_px(d50)) : stg4 ? "cheap gets cheaper; wait for the average to flatten" : stPull ? "trend intact but the average is lost — it must be reclaimed first" : stg1 ? "wait for the average to turn up and price to clear it" : stg3 ? "above the average but it has rolled over — distribution, not a dip" : "above a rising average, but the swings do not confirm it yet")
 
-ma200Say = na(ma200Gap) ? "not enough history — a 200-week average needs 200 weeks of data behind it" : (ma200Up ? "▲ BULLISH — price is " + f_n1(ma200Gap) + "% ABOVE the 200-week average " : "▼ BEARISH — price is " + f_n1(-ma200Gap) + "% BELOW the 200-week average ") + f_px(ma200w) + ", so the long-term trend is " + (ma200Up ? "up" : "down")
+ma200Say = na(ma200Gap) ? "not enough history — a 200-week average needs 200 weeks of data behind it" : ma200At ? "► ON THE LINE — price is " + f_n1(math.abs(ma200Gap)) + "% " + (ma200Up ? "above" : "below") + " the 200-week average " + f_px(ma200w) + ", too close to call a long-term direction" : (ma200Up ? "▲ BULLISH — price is " + f_n1(ma200Gap) + "% ABOVE the 200-week average " : "▼ BEARISH — price is " + f_n1(-ma200Gap) + "% BELOW the 200-week average ") + f_px(ma200w) + ", so the long-term trend is " + (ma200Up ? "up" : "down")
 
 // ═══════════════════════════════════════════════════════════════
 // ONE WORD FOR THE WHOLE PANEL
@@ -505,7 +515,12 @@ ma200Say = na(ma200Gap) ? "not enough history — a 200-week average needs 200 w
 // could read BULLISH on a chart where none of the three methods has found
 // anything. Silence from all three is NEUTRAL, which is the honest answer.
 vSet = nBull - nBear
-vWord = vSet > 0 ? "▲ BULLISH" : vSet < 0 ? "▼ BEARISH" : "► NEUTRAL"
+// One method speaking while the other two are silent is half a signal - the
+// row below has always said so - and printing a full-strength BULLISH over
+// that line made the panel argue with itself. A lone read is now a lean, in
+// a muted colour, and BULLISH is reserved for two or more agreeing.
+vFirm = nRead >= 2
+vWord = vSet == 0 ? "► NEUTRAL" : vSet > 0 ? (vFirm ? "▲ BULLISH" : "▲ leaning bullish") : (vFirm ? "▼ BEARISH" : "▼ leaning bearish")
 vSay = nRead == 0 ? "none of the three has a directional read on this chart" : nBull > 0 and nBear > 0 ? "they split " + f_n0(nBull) + " bullish against " + f_n0(nBear) + " bearish, so this is the balance of them" : f_n0(nRead) + " of 3 agree" + (nRead == 3 ? "" : ", the other " + f_n0(3 - nRead) + (nRead == 2 ? " is" : " are") + " silent")
 
 var table wp = table.new(pPos, 2, 15, border_width = 2)
@@ -516,7 +531,7 @@ f_row(table _t, int _r, string _k, string _v, color _c) =>
 
 if barstate.islast
     table.clear(wp, 0, 0, 1, 14)
-    f_row(wp, 0, "★ VERDICT", vWord + "   ·   " + vSay, vSet > 0 ? color.new(#00c853, 10) : vSet < 0 ? color.new(#d50000, 10) : color.new(color.gray, 40))
+    f_row(wp, 0, "★ VERDICT", vWord + "   ·   " + vSay, vSet > 0 ? color.new(#00c853, vFirm ? 10 : 50) : vSet < 0 ? color.new(#d50000, vFirm ? 10 : 50) : color.new(color.gray, 40))
     f_row(wp, 1, "★ ALL THREE", "WYCKOFF " + wyShort + "   ·   ELLIOTT " + ewShort + "   ·   BASE " + bsWord + "   ·   " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : nBull > 0 and nBear > 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
     f_row(wp, 2, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
     f_row(wp, 3, "WYCKOFF ▸ PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
@@ -527,8 +542,8 @@ if barstate.islast
     f_row(wp, 8, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : (wUp or wDn) and rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
     f_row(wp, 9, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
     f_row(wp, 10, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay, not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
-    f_row(wp, 11, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
-    f_row(wp, 12, "STAGE ▸ DIP OR TRAP", stWord + "   ·   " + stSay, not stHave ? color.new(color.gray, 45) : stg2 ? color.new(#00c853, stDipOk ? 5 : 25) : stg4 ? color.new(#d50000, 10) : color.new(color.orange, 30))
+    f_row(wp, 11, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) or ma200At ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
+    f_row(wp, 12, "STAGE ▸ DIP OR TRAP", stWord + "   ·   " + stSay, not stHave ? color.new(color.gray, 45) : stg2 ? color.new(#00c853, stDipOk ? 5 : 25) : stg4 ? color.new(#d50000, 10) : stPull ? color.new(color.orange, 15) : color.new(color.orange, 35))
     f_row(wp, 13, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
     f_row(wp, 14, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
 
