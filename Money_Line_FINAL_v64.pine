@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v67.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v67.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2333,8 +2333,10 @@ botCall = f_botCall()
 // what to do there, decided now, while nothing is at stake.
 f_tgtPlan() =>
     _p = ""
-    if boDir != 1 or na(boTarget)
+    if boDir == 0 or na(boTarget)
         _p := "no live target — nothing to plan for yet"
+    else if boDir == -1
+        _p := close <= boTarget ? "✓ REACHED " + f_px(boTarget) + " — measured downside done. Cover; do not chase." : "FIRST SUPPORT " + f_px(boTarget) + ", " + f_n1((close - boTarget) / close * 100) + "% down — where this leg is aiming, not a forecast of the low."
     else if close >= boTarget
         _p := "✓ REACHED " + f_px(boTarget) + " — bank a third to a half NOW, lift the stop to " + f_px(moneyLine) + ", trail the rest. Do not add here."
     else
@@ -2591,7 +2593,7 @@ f_boSummary(table _t) =>
         f_cellL(_t, 0, _r, "⛔ SELL NOW?", cP8)
         f_cellL(_t, 1, _r, selSay, buyGo or selN < 6 ? color.new(#1b5e20, 30) : selN >= 9 ? color.new(#b71c1c, 0) : cP15)
         _r := _r + 1
-        tCol = boDir != 1 or na(boTarget) ? cP9 : close >= boTarget ? cP4 : color.new(#00695c, 0)
+        tCol = boDir == 0 or na(boTarget) ? cP9 : boDir == -1 ? cP5 : close >= boTarget ? cP4 : color.new(#00695c, 0)
         f_cellL(_t, 0, _r, "AT TARGET", cP8)
         f_cellL(_t, 1, _r, tgtPlan, tCol)
         _r := _r + 1
