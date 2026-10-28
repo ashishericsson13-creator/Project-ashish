@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v67.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v67.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -1970,6 +1970,7 @@ if patMemBack
     patMemX := true
 patMemHit = patMemOld and not na(patMemT) and (patMemD == -1 ? low <= patMemT : high >= patMemT)
 patMemLive = patMemOld and not patMemX and not patMemHit
+patMemGap = na(patMemT) or close <= 0 ? na : math.abs(patMemT - close) / close * 100
 
 // ── the 50/200 cross ───
 // ta.* kept out of the ternary and off the `and`, so the call runs on every
@@ -2396,7 +2397,7 @@ tfAll = tfCnt == 3 ? "ALL THREE" : "BOTH"
 tfConf = (not tfSameD and na(regD)) or (not tfSameW and na(regW)) ? "partial data" : tfNB == tfCnt ? tfAll + " BULLISH — the cleanest backdrop there is" : tfNB == 0 ? tfAll + " BEARISH — stand aside" : "CONFLICT " + str.tostring(tfNB) + "/" + str.tostring(tfCnt) + " bullish — the small timeframe is fighting the big one"
 tfSay = (tfSameD ? "" : "Daily " + f_arw(regD) + "   ·   ") + (tfSameW ? "" : "Weekly " + f_arw(regW) + "   ·   ") + "This chart (" + tfWord + ") " + f_arw(trend) + "   —   " + tfConf
 
-patMemWord = patMem == "" or not patMemOld ? "" : patMemX ? patMem + " from " + f_n0(patMemAge) + " bars ago has FAILED — price closed back through " + f_px(patMemN) : patMemHit ? patMem + " from " + f_n0(patMemAge) + " bars ago — target " + f_px(patMemT) + " ✓ REACHED" : patMem + " confirmed " + f_n0(patMemAge) + " bars ago, neckline " + f_px(patMemN) + (na(patMemT) ? "" : ", target " + f_px(patMemT))
+patMemWord = patMem == "" or not patMemOld ? "" : patMemX ? patMem + " from " + f_n0(patMemAge) + " bars ago has FAILED — price closed back through " + f_px(patMemN) : patMemHit ? patMem + " from " + f_n0(patMemAge) + " bars ago — target " + f_px(patMemT) + " ✓ REACHED" : patMem + " confirmed " + f_n0(patMemAge) + " bars ago, neckline " + f_px(patMemN) + (na(patMemT) ? "" : ", target " + f_px(patMemT) + " — AWAITING, " + f_n1(patMemGap) + "% away")
 patSay = not patOn ? gcShort : patName == "" ? (patMemWord == "" ? "no double/triple top or bottom and no head and shoulders in the last " + f_n0(patAge) + " bars" : patMemWord) + (gcShort == "" ? "" : "   ·   " + gcShort) : patName + (patConf ? " CONFIRMED — closed " + (patDir == 1 ? "above " : "below ") + f_px(patNeck) : patDead ? " FAILED — price went back through " + f_px(patExt) : " FORMING — not a signal until a " + tfWord + " close " + (patDir == 1 ? "above " : "below ") + f_px(patNeck)) + (na(patTgt) ? "" : "   target " + f_px(patTgt)) + (na(patExt) ? "" : "   stop " + f_px(patExt)) + (gcShort == "" ? "" : "   ·   " + gcShort)
 
 // ── the final call ───
