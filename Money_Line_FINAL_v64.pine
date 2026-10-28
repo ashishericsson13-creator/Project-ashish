@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v67.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v67.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2555,7 +2555,7 @@ f_boSummary(table _t) =>
         table.clear(_t, 0, 0, 1, 25)
         aCol = atrBull ? cP13 : cP11
         lCol = lnBull ? cP13 : lnBear ? cP11 : cP3
-        vCol = bothBuy ? cP4 : bothSell ? cP5 : color.new(color.orange, 15)
+        vCol = bothBuy ? cP4 : bothSell ? cP5 : color.new(color.orange, 0)
         bCol = not botOn or na(botAV) ? cP9 : botConf ? cP12 : botAbove ? cP2 : cP11
         ltBad = exRoll or exBiz or exHot or (profOn and profLost)
         ltCol = not bqHave and not ltBad ? cP9 : exRoll and exBiz ? color.new(#b71c1c, 0) : exRoll ? cP6 : exBiz or exHot ? cP15 : bigBuy ? color.new(#1b5e20, 0) : color.new(#1b5e20, 30)
@@ -2574,7 +2574,7 @@ f_boSummary(table _t) =>
             f_cellL(_t, 1, _r, patWord + patSay, patConf and patDir == 1 ? cP12 : patConf and patDir == -1 ? cP11 : patName == "" ? cP9 : cP3)
             _r := _r + 1
         f_cellL(_t, 0, _r, "MOMENTUM", color.new(color.purple, 25))
-        f_cellL(_t, 1, _r, momWord + "RSI " + (na(rsiV) ? "—" : f_n0(rsiV) + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : f_n0(adxV) + " " + f_adxWord(adxV)) + "   ·   vol " + (na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light")))) + (candSay == "" ? "" : "   ·   " + candSay), color.new(color.purple, 50))
+        f_cellL(_t, 1, _r, momWord + "RSI " + (na(rsiV) ? "—" : f_n0(rsiV) + " " + f_rsiWord(rsiV)) + "   ·   MACD " + (na(macdL) or na(macdS) ? "—" : (macdL > macdS ? "up" : "down") + (na(macdH) ? "" : macdH > nz(macdH[1]) ? ", building" : ", fading")) + "   ·   ADX " + (na(adxV) ? "—" : f_n0(adxV) + " " + f_adxWord(adxV)) + "   ·   vol " + (na(volRatio) ? "not reported for this symbol — the volume check is skipped" : str.tostring(volRatio, "#.##") + "x the 20-bar average — " + f_volWord(volRatio) + (boDir == 0 ? "" : "   ·   on the break " + (na(boVolAt) ? "—" : str.tostring(boVolAt, "#.##") + "x " + (k1 ? "✓" : boBrkUnconf ? "⧗ still filling" : "✗ too light")))) + (candSay == "" ? "" : "   ·   " + candSay), color.new(color.purple, 0))
         _r := _r + 1
         f_cellL(_t, 0, _r, "BUSINESS", color.new(#4527a0, 10))
         f_cellL(_t, 1, _r, bizSay, not bqHave ? cP9 : bqN >= 3 and bqPE ? cP12 : bqN >= 3 ? cP13 : bqN == 2 ? cP3 : cP11)
@@ -2591,7 +2591,7 @@ f_boSummary(table _t) =>
         f_cellL(_t, 0, _r, "⛔ SELL NOW?", cP8)
         f_cellL(_t, 1, _r, selSay, buyGo or selN < 6 ? color.new(#1b5e20, 30) : selN >= 9 ? color.new(#b71c1c, 0) : cP15)
         _r := _r + 1
-        tCol = boDir != 1 or na(boTarget) ? cP9 : close >= boTarget ? cP4 : color.new(#00695c, 30)
+        tCol = boDir != 1 or na(boTarget) ? cP9 : close >= boTarget ? cP4 : color.new(#00695c, 0)
         f_cellL(_t, 0, _r, "AT TARGET", cP8)
         f_cellL(_t, 1, _r, tgtPlan, tCol)
         _r := _r + 1
@@ -2601,16 +2601,16 @@ f_boSummary(table _t) =>
         // reason: with rows appearing and disappearing, a printed "7" would lie.
         if not boSlim
             f_cellL(_t, 0, _r, "NUMBERS", color.new(color.navy, 15))
-            f_cellL(_t, 1, _r, boDir == 0 or na(boStop) ? "no live setup — nothing to size yet" : (boGate ? "" : boPending ? "⧗ NOT SETTLED, bar still filling — reference only:  " : "⚠ GATE FAILED — reference only, do NOT size off this:  ") + "entry " + f_px(boEntry) + "   stop " + f_px(boStop) + "   (" + f_n1(boRisk / boEntry * 100) + "% risk)" + (na(boTarget) ? "" : "   target " + f_px(boTarget) + boTgtSrc) + (na(boRR) ? "" : "   R:R " + str.tostring(boRR, "#.##")) + (na(boSizePc) ? "" : "   size " + f_n1(boSizePc) + "%" + (not na(boSizeRaw) and boSizeRaw > boMaxSize + 0.05 ? " (capped, risk maths said " + f_n1(boSizeRaw) + "%)" : "")), color.new(color.navy, 35))
+            f_cellL(_t, 1, _r, boDir == 0 or na(boStop) ? "no live setup — nothing to size yet" : (boGate ? "" : boPending ? "⧗ NOT SETTLED, bar still filling — reference only:  " : "⚠ GATE FAILED — reference only, do NOT size off this:  ") + "entry " + f_px(boEntry) + "   stop " + f_px(boStop) + "   (" + f_n1(boRisk / boEntry * 100) + "% risk)" + (na(boTarget) ? "" : "   target " + f_px(boTarget) + boTgtSrc) + (na(boRR) ? "" : "   R:R " + str.tostring(boRR, "#.##")) + (na(boSizePc) ? "" : "   size " + f_n1(boSizePc) + "%" + (not na(boSizeRaw) and boSizeRaw > boMaxSize + 0.05 ? " (capped, risk maths said " + f_n1(boSizeRaw) + "%)" : "")), color.new(color.navy, 0))
             _r := _r + 1
             f_cellL(_t, 0, _r, "TREND", color.new(#ffd600, 30))
             f_cellL(_t, 1, _r, na(profEma) ? "—" : (profAbove ? "above" : "below") + " the " + f_n0(profWeeks) + "wEMA " + f_px(profEma) + (profAbove and not na(profBars) ? ", held " + f_n0(profBars) + " bars" : "") + (na(profGain) ? "" : ", " + (profGain >= 0 ? "+" : "") + f_n1(profGain) + "% since reclaim") + (na(emaX21) ? "" : "   ·   " + f_n1(emaX21) + "x ATR from the 21" + (emaOver ? " ⚠ extended" : "")), profAbove ? color.new(#00c853, 45) : color.new(#d50000, 45))
             _r := _r + 1
             f_cellL(_t, 0, _r, "LEVELS", color.new(color.olive, 20))
-            f_cellL(_t, 1, _r, (na(lvlR) or lvlRfar ? "resistance — none within " + f_n0(lvlMaxATR) + " ATR" : "resistance " + f_px(lvlR) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + f_n0(lvlMaxATR) + " ATR" : "support " + f_px(lvlS) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + f_px(boFlipLvl) + (boFlipRe ? " ✓held" : " ·untested")), color.new(color.olive, 50))
+            f_cellL(_t, 1, _r, (na(lvlR) or lvlRfar ? "resistance — none within " + f_n0(lvlMaxATR) + " ATR" : "resistance " + f_px(lvlR) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + f_n0(lvlMaxATR) + " ATR" : "support " + f_px(lvlS) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + f_px(boFlipLvl) + (boFlipRe ? " ✓held" : " ·untested")), color.new(color.olive, 0))
             _r := _r + 1
             f_cellL(_t, 0, _r, "STRUCTURE", cP24)
-            f_cellL(_t, 1, _r, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? f_n0(suBars) + "-bar base " + f_px(suLo) + "-" + f_px(suHi) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + f_n0(wgApexN) + " bars)" : "") + (wgType == "—" or na(wgTgt) ? "" : " broke " + (wgDnBrk ? "DOWN" : "UP") + ", target " + f_px(wgTgt)) + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + f_px(suTgt1)), color.new(#2962ff, 50))
+            f_cellL(_t, 1, _r, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? f_n0(suBars) + "-bar base " + f_px(suLo) + "-" + f_px(suHi) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + f_n0(wgApexN) + " bars)" : "") + (wgType == "—" or na(wgTgt) ? "" : " broke " + (wgDnBrk ? "DOWN" : "UP") + ", target " + f_px(wgTgt)) + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + f_px(suTgt1)), color.new(#2962ff, 0))
             _r := _r + 1
         cCol = botMature ? cP9 : botConf ? cP4 : botNeedN - botScr <= 1 ? color.new(color.orange, 10) : botScr >= 2 ? cP11 : color.new(#b71c1c, 10)
         f_cellL(_t, 0, _r, "BOTTOM", color.new(#00bfa5, 0))
