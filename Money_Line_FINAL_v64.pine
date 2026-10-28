@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v67.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v67.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2448,6 +2448,8 @@ bizSay = not bqHave ? "NO FINANCIALS for this symbol — an index, metal or cryp
 // against a buy, never for one.
 wgUpBrk = not na(tlUpNow) and close > tlUpNow
 wgDnBrk = not na(tlLoNow) and close < tlLoNow
+wgHgt = na(hiA_px) or na(loA_px) ? na : math.abs(hiA_px - loA_px)
+wgTgt = na(wgHgt) ? na : wgDnBrk ? tlLoNow - wgHgt : wgUpBrk ? tlUpNow + wgHgt : na
 stBull = flagBull or pennUp or suIsBase or ((wgType == "FALLING WEDGE" or wgType == "ASCENDING TRIANGLE") and wgUpBrk) or (wgType == "RECTANGLE" and atrBull)
 stBear = flagBear or pennDn or ((wgType == "RISING WEDGE" or wgType == "DESCENDING TRIANGLE") and wgDnBrk) or (wgType == "RECTANGLE" and not atrBull)
 mcdUp = not na(macdL) and not na(macdS) and (macdL > macdS or macdXUp or (not na(macdH) and macdH > nz(macdH[1])))
@@ -2608,7 +2610,7 @@ f_boSummary(table _t) =>
             f_cellL(_t, 1, _r, (na(lvlR) or lvlRfar ? "resistance — none within " + f_n0(lvlMaxATR) + " ATR" : "resistance " + f_px(lvlR) + lvlRsrc + " (" + str.tostring((lvlR - close) / close * 100, "#.#") + "%)") + "   ·   " + (na(lvlS) or lvlSfar ? "support — none within " + f_n0(lvlMaxATR) + " ATR" : "support " + f_px(lvlS) + lvlSsrc + " (" + str.tostring((lvlS - close) / close * 100, "#.#") + "%)") + (not boFlipLive or (not na(lvlS) and math.abs(boFlipLvl - lvlS) < syminfo.mintick) ? "" : "   ·   flip " + f_px(boFlipLvl) + (boFlipRe ? " ✓held" : " ·untested")), color.new(color.olive, 50))
             _r := _r + 1
             f_cellL(_t, 0, _r, "STRUCTURE", cP24)
-            f_cellL(_t, 1, _r, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? f_n0(suBars) + "-bar base " + f_px(suLo) + "-" + f_px(suHi) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + f_n0(wgApexN) + " bars)" : "") + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + f_px(suTgt1)), color.new(#2962ff, 50))
+            f_cellL(_t, 1, _r, (flagWord == "" ? "" : flagWord + (na(flagTgtUp) and na(flagTgtDn) ? "" : " → target " + str.tostring(nz(flagTgtUp, flagTgtDn), format.mintick)) + "   ·   ") + (suIsBase ? f_n0(suBars) + "-bar base " + f_px(suLo) + "-" + f_px(suHi) : "no base") + (suSqz ? "  · SQUEEZE" : "") + (suNewATH ? "  · AT ALL-TIME HIGH" : suNew52 ? "  · at 52w high" : "") + "   ·   " + wgType + (wgApexOk ? " (apex " + f_n0(wgApexN) + " bars)" : "") + (wgType == "—" or na(wgTgt) ? "" : " broke " + (wgDnBrk ? "DOWN" : "UP") + ", target " + f_px(wgTgt)) + (not suIsBase or na(suTgt1) ? "" : "   ·   measured move " + f_px(suTgt1)), color.new(#2962ff, 50))
             _r := _r + 1
         cCol = botMature ? cP9 : botConf ? cP4 : botNeedN - botScr <= 1 ? color.new(color.orange, 10) : botScr >= 2 ? cP11 : color.new(#b71c1c, 10)
         f_cellL(_t, 0, _r, "BOTTOM", color.new(#00bfa5, 0))
