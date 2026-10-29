@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v67.9", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v68.0", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -1594,8 +1594,8 @@ boActing  = boVerdict == "STRONG BUY" or boVerdict == "BUY" or boVerdict == "STR
 boEntry  = close
 boStop   = boDir == 1 ? nz(boLvlAt, close) - boStopATR * atrV : boDir == -1 ? nz(boLvlAt, close) + boStopATR * atrV : na
 boRisk   = na(boStop) ? na : math.abs(boEntry - boStop)
-boTgtATH = boDir == 1 and not na(hiAll) and hiAll > close * 1.005 ? hiAll : na
-boTgtMA  = boDir == -1 and not na(ma200bar) and ma200bar < close * 0.995 ? ma200bar : na
+boTgtATH = not na(hiAll) and hiAll > close * 1.005 ? hiAll : na
+boTgtMA  = not na(ma200bar) and ma200bar < close * 0.995 ? ma200bar : na
 f_tgt(float _a, float _b, float _c, float _d, bool _up, float _px, float _at, float _min) =>
     _g  = na(_at) or _at <= 0 ? 0.0 : _min * _at
     _oa = na(_a) ? false : (_up ? _a - _px >= _g : _px - _a >= _g)
