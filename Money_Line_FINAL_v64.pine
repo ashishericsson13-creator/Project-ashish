@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v67.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v67.8", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2336,7 +2336,8 @@ f_tgtPlan() =>
     if boDir == 0 or na(boTarget)
         _p := "no live target — nothing to plan for yet"
     else if boDir == -1
-        _p := close <= boTarget ? "✓ REACHED " + f_px(boTarget) + " — measured downside done. Cover; do not chase." : "FIRST SUPPORT " + f_px(boTarget) + ", " + f_n1((close - boTarget) / close * 100) + "% down — where this leg is aiming, not a forecast of the low."
+        _dn = (close - boTarget) / close * 100
+        _p := close <= boTarget ? "✓ REACHED " + f_px(boTarget) + " — measured downside done. Cover; do not chase." : (_dn > 20 ? "NO NEAR SUPPORT — the nearest defended level is " : "FIRST SUPPORT ") + f_px(boTarget) + ", " + f_n1(_dn) + "% down" + (_dn > 20 ? ". Nothing to lean on before then, so size for an air pocket." : " — where this leg is aiming, not a forecast of the low.")
     else if close >= boTarget
         _p := "✓ REACHED " + f_px(boTarget) + " — bank a third to a half NOW, lift the stop to " + f_px(moneyLine) + ", trail the rest. Do not add here."
     else
