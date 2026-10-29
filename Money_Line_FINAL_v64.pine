@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v68.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v68.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -532,6 +532,7 @@ peRatio   = not na(epsTTM) and epsTTM > 0 ? close / epsTTM : na
 // hoisted: ta.* must run every bar (calling inside `if` blocks corrupts history)
 hi52  = ta.highest(high, 52)
 hiAll = ta.highest(high, 500)
+loAll = ta.lowest(low, 500)
 
 // ═══════════════════════════════════════════════════════════════
 // AUTO SUPPORT / RESISTANCE (swing pivots — where price reacted before)
@@ -1595,7 +1596,7 @@ boEntry  = close
 boStop   = boDir == 1 ? nz(boLvlAt, close) - boStopATR * atrV : boDir == -1 ? nz(boLvlAt, close) + boStopATR * atrV : na
 boRisk   = na(boStop) ? na : math.abs(boEntry - boStop)
 boTgtATH = not na(hiAll) and hiAll > close * 1.005 ? hiAll : na
-boTgtMA  = not na(ma200bar) and ma200bar < close * 0.995 ? ma200bar : na
+boTgtMA  = not na(ma200bar) and ma200bar < close * 0.995 ? ma200bar : not na(loAll) and loAll < close * 0.995 ? loAll : na
 f_tgt(float _a, float _b, float _c, float _d, bool _up, float _px, float _at, float _min) =>
     _g  = na(_at) or _at <= 0 ? 0.0 : _min * _at
     _oa = na(_a) ? false : (_up ? _a - _px >= _g : _px - _a >= _g)
@@ -2299,8 +2300,8 @@ f_botCall() =>
     // BOTTOM CALL saying do not buy, three rows apart. Both were correct about
     // their own question: one is the trend trade, the other is the bottom
     // signal. In an intact uptrend this row should decline to answer the first.
-    _nb = trend == 1 ? " That is the bottom signal only — the trend trade is in DO THIS." : " Do not buy ahead of it."
-    _lapsed = not botConf and not na(_age) and _age <= botCool ? "  ·  the BOTTOM label " + f_n0(_age) + " bars back has LAPSED — its low still holds, but the setup is no longer live" : ""
+    _nb = trend == 1 ? " Bottom signal only; the trend trade is in DO THIS." : " Do not buy ahead of it."
+    _lapsed = not botConf and not na(_age) and _age <= botCool ? "  ·  the BOTTOM label " + f_n0(_age) + " bars back LAPSED — the low holds, the setup does not" : ""
     if not botOn
         _c := "—"
     else if botMature
@@ -2315,11 +2316,11 @@ f_botCall() =>
     else if botConf
         _c := "✅ BOTTOM LOOKS IN — start a first position, small. The ATR model has not turned yet, so add only on a " + tfWord + " close above " + f_px(moneyLine) + ". Stop below " + f_px(botAnc) + "."
     else if _gap <= 0 and botBlock != ""
-        _c := "⏳ BOTTOM IS FORMING — enough checks have passed and only one thing is missing: " + botBlock + ". Set an alert." + _nb + _lapsed
+        _c := "⏳ BOTTOM IS FORMING — one thing missing: " + botBlock + ". Set an alert." + _nb + _lapsed
     else if _gap <= 1
-        _c := "⏳ BOTTOM IS FORMING — one check short" + (botMiss == "" ? "" : ", any one of: " + botMiss) + (botBlock == "" ? "" : ", and " + botBlock) + ". This is where real bottoms begin." + _nb + _lapsed
+        _c := "⏳ BOTTOM IS FORMING — one check short" + (botMiss == "" ? "" : ", any one of: " + botMiss) + (botBlock == "" ? "" : ", and " + botBlock) + "." + _nb + _lapsed
     else if botScr >= 2
-        _c := "⚠ BOTTOM IS STILL AWAY — need any " + f_n0(_gap) + " of these " + f_n0(botMissN) + ": " + botMiss + (botRFail ? ". A bottom here already failed" : "") + ". A bounce from here is a trade at best, not an entry."
+        _c := "⚠ BOTTOM IS STILL AWAY — need any " + f_n0(_gap) + " of these " + f_n0(botMissN) + ": " + botMiss + (botRFail ? ". A bottom here already failed" : "") + ". A bounce here is a trade, not an entry."
     else
         _c := "⛔ STILL FALLING — almost no sign of a low. Stay out; there is nothing to catch yet."
     _c
