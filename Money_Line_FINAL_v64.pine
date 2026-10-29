@@ -65,7 +65,7 @@
 // is about 14 years, so the oldest BUY/SELL labels stop being drawn and a
 // "from 2010" backtest window effectively starts nearer 2012. Raise it for a
 // deeper record, lower it for a lighter script.
-indicator("Money Line MASTER v68.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
+indicator("Money Line MASTER v68.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 2000, calc_bars_count = 750)
 
 // PALETTE: every colour construction this script builds three or more times,
 // made once. Pure de-duplication - each name is the identical expression it
@@ -2340,7 +2340,7 @@ f_tgtPlan() =>
     _u = _sky ? "blue sky, 2R projection " + f_px(close + (close - moneyLine) * 2) : na(tgtUp) ? _n : f_px(tgtUp) + "  +" + f_n1((tgtUp - close) / close * 100) + "%" + (close >= tgtUp ? " ✓" : "")
     _d = na(tgtDn) ? _n : f_px(tgtDn) + "  −" + f_n1((close - tgtDn) / close * 100) + "%" + (close <= tgtDn ? " ✓" : "")
     _far = not na(tgtDn) and (close - tgtDn) / close * 100 > 20
-    "▲ UP " + _u + "   ·   ▼ DOWN " + _d + (na(_fib) ? "" : "   ·   fib 1.618 " + f_px(_fib)) + (_far ? "   ·   nothing to lean on below — size for an air pocket" : "") + "   ·   " + (boDir == 1 ? "bank a third to a half at the upside, lift the stop to the money line, trail the rest" : boDir == -1 ? "cover into the downside; never add at a target" : "no live break — these are the levels either way")
+    "▲ UP " + _u + "   ·   ▼ DOWN " + _d + (na(_fib) ? "" : "   ·   fib 1.618 " + f_px(_fib)) + (_far ? (atrBull ? "   ·   nothing below if it breaks — not broken yet, so this is a sizing note" : "   ·   nothing to lean on below — the air pocket is live") : "") + "   ·   " + (boDir == 1 ? "bank a third to a half at the upside, lift the stop to the money line, trail the rest" : boDir == -1 ? "cover into the downside; never add at a target" : "no live break — these are the levels either way")
 tgtPlan = f_tgtPlan()
 
 f_ltWarn() => ltDown ? "  ⚠ 200-bar MA falling — counter-trend, keep it small." : ""
