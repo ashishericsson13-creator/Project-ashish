@@ -1,0 +1,5 @@
+.env
+.venv/
+trades.log
+KILL
+__pycache__/
