@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v3.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v4.0", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -73,6 +73,14 @@ stFlat   = input.float(0.5, "Stage: slope under this % over the window counts as
 stNear   = input.float(2.0, "Stage: a dip counts within this % of the 50-day", minval = 0.2, maxval = 15.0, step = 0.1, group = "6. Stage 2 / Stage 4")
 stLight  = input.float(1.0, "Stage: light volume is under this multiple of average", minval = 0.3, maxval = 2.0, step = 0.05, group = "6. Stage 2 / Stage 4")
 stReclN  = input.int(13, "Stage: bars since price was under the 200-day that still counts as a reclaim", minval = 2, maxval = 60, tooltip = "Price above a falling average means two opposite things. After a long advance it is a top. Days after price climbed back over it, it is a recovery attempt. This is where one ends and the other begins.", group = "6. Stage 2 / Stage 4")
+sbWin    = input.int(4, "Shakeout: bars to reclaim the 200-day before it is a breakdown", minval = 1, maxval = 20, tooltip = "An undercut that is taken back quickly is a shakeout. The same undercut left unreclaimed is a breakdown. This is where one becomes the other.", group = "7. Shakeout and gap rules")
+sbFadeX  = input.float(1.0, "Shakeout: selling counts as fading under this volume multiple", minval = 0.3, maxval = 2.0, step = 0.05, group = "7. Shakeout and gap rules")
+gapPct   = input.float(8.0, "Drop of this size starts the wait (%)", minval = 2.0, maxval = 40.0, step = 0.5, group = "7. Shakeout and gap rules")
+waitBars = input.int(3, "Bars to wait after that drop before considering a buy", minval = 1, maxval = 15, tooltip = "The 3-day rule. Institutions cannot sell millions of shares in one session, so the first bounce is usually short covering rather than demand. On a weekly chart these are weeks, not days.", group = "7. Shakeout and gap rules")
+vixOn    = input.bool(true, "Show the fear gauge", group = "7. Shakeout and gap rules")
+vixSym   = input.symbol("CBOE:VIX", "Fear gauge symbol", group = "7. Shakeout and gap rules")
+vixCalm  = input.float(20.0, "Below this is calm", minval = 5.0, maxval = 40.0, step = 0.5, group = "7. Shakeout and gap rules")
+vixFear  = input.float(26.0, "Above this is fear", minval = 10.0, maxval = 80.0, step = 0.5, group = "7. Shakeout and gap rules")
 showStg  = input.bool(true, "Draw the 50-day and 200-day averages", group = "6. Stage 2 / Stage 4")
 col200   = input.color(#ff6d00, "Line colour", group = "5. 200-week average")
 
@@ -500,7 +508,32 @@ stPull = not stAbove and stUpMA
 // earliest part of a turn - and telling its reader NO NEW BUYS had the model
 // backwards. The two are separated by how recently price was underneath.
 stUnder = ta.barssince(not na(d200) and close < d200)
-stRecl = stAbove and not stUpMA and not na(stUnder) and stUnder <= stReclN
+// ═══════════════════════════════════════════════════════════════
+// SHAKEOUT OR BREAKDOWN, AND WHAT TO DO AFTER A GAP DOWN
+// ═══════════════════════════════════════════════════════════════
+// Both readings turn on the same event — price losing the 200-day — and are
+// told apart by what happens next, not by the loss itself. An undercut taken
+// back inside a few bars on fading volume is a shakeout. The same undercut
+// left unreclaimed, with lower highs and heavy selling, is a breakdown.
+stOver = ta.barssince(not na(d200) and close > d200)
+sbFade = not na(volX) and volX < sbFadeX
+sbHeavy = not na(volX) and volX >= 1.3
+sbShake = stHave and stAbove and stUnder >= 1 and stUnder <= sbWin and not wDn
+sbBreak = stHave and not stAbove and not na(stOver) and stOver > sbWin and wDn
+sbWord = not stHave ? "► NO 200-DAY YET" : sbShake ? "▲ SHAKEOUT — undercut and reclaimed" : sbBreak ? "▼ BREAKDOWN — the 200-day is resistance now" : stAbove ? "► ABOVE THE LINE — nothing to judge yet" : "► BELOW THE LINE — too early to call"
+sbSay = not stHave ? "needs 200 days of history" : sbShake ? "back above " + f_px(d200) + " after " + f_n0(stUnder) + " bars under it" + (sbFade ? ", and the selling has dried up" : sbHeavy ? ", but volume is still heavy — not confirmed" : "") : sbBreak ? f_n0(stOver) + " bars below " + f_px(d200) + " with lower highs and lower lows" + (sbHeavy ? ", on heavy volume" : "") : stAbove ? "price is above " + f_px(d200) + " and has not been under it recently" : "under " + f_px(d200) + " for " + f_n0(stOver) + " bars — " + f_n0(sbWin) + " is the line between a shakeout and a breakdown"
+
+// The 3-day rule. The first bounce after a hard drop is usually short covering,
+// because the institutions doing the selling need several sessions to finish.
+gapDn = not na(close[1]) and close[1] > 0 and (close - close[1]) / close[1] * 100 <= -gapPct
+gapAge = ta.barssince(gapDn)
+gapWait = not na(gapAge) and gapAge < waitBars
+gapLo = ta.lowest(low, waitBars + 1)
+gapHold = not na(gapLo) and close > gapLo
+vix = vixOn ? request.security(vixSym, "D", close, gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off) : na
+vixSay = na(vix) ? "" : "   ·   fear gauge " + f_n1(vix) + " — " + (vix < vixCalm ? "calm" : vix <= vixFear ? "caution" : "fear")
+gapWord = na(gapAge) ? "► NO RECENT DROP" : gapWait ? "⏳ WAIT — bar " + f_n0(gapAge + 1) + " of " + f_n0(waitBars) + " since the drop" : gapAge <= evAge ? "► PAST THE WAIT — now check the list" : "► NO RECENT DROP"
+gapSay = (na(gapAge) or gapAge > evAge ? "No drop of " + f_n1(gapPct) + "% or more lately." : gapWait ? "Do not buy yet; the first bounce is short covering, not demand." : "Selling " + (sbFade ? "has dried up ✓" : "is still heavy ✗") + "   ·   price " + (gapHold ? "holding above the low ✓" : "making new lows ✗") + "   ·   and you must know why it dropped") + vixSay and not na(stUnder) and stUnder <= stReclN
 // A dip is only buyable where there is a dip: price has come back to the
 // rising 50-day, and it came back on light volume rather than heavy selling.
 stAtMA = not na(d50) and low <= d50 * (1 + stNear / 100)
@@ -542,14 +575,14 @@ vFirm = nRead >= 2
 vWord = vSet == 0 ? "► NEUTRAL" : vSet > 0 ? (vFirm ? "▲ BULLISH" : "▲ leaning bullish") : (vFirm ? "▼ BEARISH" : "▼ leaning bearish")
 vSay = nRead == 0 ? "none of the four has a directional read on this chart" : nBull > 0 and nBear > 0 ? "bullish: " + vBull + "   ·   bearish: " + vBear + "   — so this is the balance of them" : f_n0(nRead) + " of 4 agree — " + (nBull > 0 ? vBull : vBear) + "  ·  the rest are silent"
 
-var table wp = table.new(pPos, 2, 15, border_width = 2)
+var table wp = table.new(pPos, 2, 17, border_width = 2)
 
 f_row(table _t, int _r, string _k, string _v, color _c) =>
     table.cell(_t, 0, _r, _k, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = pSz)
     table.cell(_t, 1, _r, _v, text_color = color.white, bgcolor = _c, text_halign = text.align_left, text_size = pSz)
 
 if barstate.islast
-    table.clear(wp, 0, 0, 1, 14)
+    table.clear(wp, 0, 0, 1, 16)
     f_row(wp, 0, "★ VERDICT", vWord + "   ·   " + vSay, vSet > 0 ? color.new(vFirm ? #00c853 : #2e7d32, 10) : vSet < 0 ? color.new(vFirm ? #d50000 : #b71c1c, 10) : color.new(color.gray, 40))
     f_row(wp, 1, "★ ALL FOUR", "WYCKOFF " + wyShort + "  ·  ELLIOTT " + ewShort + "  ·  BASE " + bsShort + "  ·  STAGE " + stShort + "  ·  " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : nBull > 0 and nBear > 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
     f_row(wp, 2, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
@@ -563,8 +596,10 @@ if barstate.islast
     f_row(wp, 10, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay + (bBrkUp and (stg4 or (stg3 and not stRecl)) ? "   ⚠ STAGE says " + (stg4 ? "Stage 4" : "Stage 3") + " — no trend behind it" : bBrkUp and stRecl ? "   ⚠ the 200-day has not turned up yet" : bBrkDn and stg2 ? "   ⚠ STAGE says Stage 2 — likely a shakeout" : ""), not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
     f_row(wp, 11, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) or ma200At ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
     f_row(wp, 12, "STAGE ▸ DIP OR TRAP", stWord + "   ·   " + stSay, not stHave ? color.new(color.gray, 45) : stg2 ? color.new(#00c853, stDipOk ? 5 : 25) : stg4 ? color.new(#d50000, 10) : stPull ? color.new(color.orange, 20) : stRecl ? (wUp ? color.new(#2e7d32, 10) : color.new(color.gray, 40)) : stg3 ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
-    f_row(wp, 13, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
-    f_row(wp, 14, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
+    f_row(wp, 13, "200-DAY ▸ SHAKEOUT?", sbWord + "   ·   " + sbSay, not stHave ? color.new(color.gray, 45) : sbShake ? color.new(#2e7d32, 10) : sbBreak ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
+    f_row(wp, 14, "▸ AFTER A DROP", gapWord + "   ·   " + gapSay, na(gapAge) or gapAge > evAge ? color.new(color.gray, 45) : gapWait ? color.new(color.orange, 15) : color.new(#00695c, 10))
+    f_row(wp, 15, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
+    f_row(wp, 16, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
 
 alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
 alertcondition(utNow, title = "Wyckoff UPTHRUST / UTAD", message = "{{ticker}} {{interval}}: upthrust — the range high gave way and was taken back at {{close}}")
