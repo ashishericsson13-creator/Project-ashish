@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v4.5", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v4.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -567,7 +567,7 @@ dbHave = not na(dbLo1) and not na(dbLo2) and not na(dbNk) and dbLo1 > 0 and dbNk
 dbLevel = dbHave and math.abs(dbLo2 - dbLo1) / dbLo1 * 100 <= dbTol
 dbDry = not na(dbV1) and not na(dbV2) and dbV1 > 0 and dbV2 < dbV1
 dbOver = dbHave and close > dbNk
-dbPow = not na(volX) and volX >= dbBrkV
+dbPow = dbOver and not na(volX) and volX >= dbBrkV and close > close[1]
 dbBack = dbOver and low <= dbNk * (1 + dbTol / 100)
 dbN = (dbLevel ? 1 : 0) + (dbDry ? 1 : 0) + (dbOver ? 1 : 0) + (dbPow ? 1 : 0)
 dbWord = not dbHave ? "► NO DOUBLE BOTTOM" : dbOver and dbPow and dbLevel and dbDry ? "▲ CONFIRMED — all four" : dbOver ? "▲ BROKEN OUT — " + f_n0(dbN) + " of 4" : "► FORMING — " + f_n0(dbN) + " of 4, neckline " + f_px(dbNk)
@@ -619,9 +619,9 @@ acSay = na(acR) ? "an index or metal reports none, so this reads nothing" : "up 
 // break it was waiting for.
 s2a = stAbove
 s2b = stHave and not stDnMA
-s2c = bOk and bDnIn
+s2c = bOk and bDnIn and not bBrkDn
 s2d = bOk and not na(bHi) and close > bHi
-s2e = not na(volX) and volX >= s2Vol
+s2e = s2d and not na(volX) and volX >= s2Vol and close > close[1]
 s2N = (s2a ? 1 : 0) + (s2b ? 1 : 0) + (s2c ? 1 : 0) + (s2d ? 1 : 0) + (s2e ? 1 : 0)
 s2Go = s2a and s2b and s2c and s2d and s2e
 s2Word = s2Go ? "▲ STAGE 2 BREAKOUT — all five" : s2N >= 3 ? "► CLOSE — " + f_n0(s2N) + " of 5" : "► NOT YET — " + f_n0(s2N) + " of 5"
