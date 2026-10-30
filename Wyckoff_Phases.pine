@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v4.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v4.4.1", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -519,6 +519,7 @@ stPull = not stAbove and stUpMA
 // earliest part of a turn - and telling its reader NO NEW BUYS had the model
 // backwards. The two are separated by how recently price was underneath.
 stUnder = ta.barssince(not na(d200) and close < d200)
+stRecl = stAbove and not stUpMA and not na(stUnder) and stUnder <= stReclN
 // ═══════════════════════════════════════════════════════════════
 // SHAKEOUT OR BREAKDOWN, AND WHAT TO DO AFTER A GAP DOWN
 // ═══════════════════════════════════════════════════════════════
@@ -598,7 +599,7 @@ gapHold = not na(gapLo) and close > gapLo
 vix = vixOn ? request.security(vixSym, "D", close, gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off) : na
 vixSay = na(vix) ? "" : "   ·   fear gauge " + f_n1(vix) + " — " + (vix < vixCalm ? "calm" : vix <= vixFear ? "caution" : "fear")
 gapWord = na(gapAge) ? "► NO RECENT DROP" : gapWait ? "⏳ WAIT — bar " + f_n0(gapAge + 1) + " of " + f_n0(waitBars) + " since the drop" : gapAge <= evAge ? "► PAST THE WAIT — now check the list" : "► NO RECENT DROP"
-gapSay = (na(gapAge) or gapAge > evAge ? "No drop of " + f_n1(gapPct) + "% or more lately." : gapWait ? "Do not buy yet; the first bounce is short covering, not demand." : "Selling " + (sbFade ? "has dried up ✓" : "is still heavy ✗") + "   ·   price " + (gapHold ? "holding above the low ✓" : "making new lows ✗") + "   ·   and you must know why it dropped") + vixSay and not na(stUnder) and stUnder <= stReclN
+gapSay = (na(gapAge) or gapAge > evAge ? "No drop of " + f_n1(gapPct) + "% or more lately." : gapWait ? "Do not buy yet; the first bounce is short covering, not demand." : "Selling " + (sbFade ? "has dried up ✓" : "is still heavy ✗") + "   ·   price " + (gapHold ? "holding above the low ✓" : "making new lows ✗") + "   ·   and you must know why it dropped") + vixSay
 // A dip is only buyable where there is a dip: price has come back to the
 // rising 50-day, and it came back on light volume rather than heavy selling.
 stAtMA = not na(d50) and low <= d50 * (1 + stNear / 100)
