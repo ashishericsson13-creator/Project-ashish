@@ -29,7 +29,20 @@ MAX_ORDER_USD = float(os.getenv("MAX_ORDER_USD", "2500"))
 MIN_STOP_PCT  = float(os.getenv("MIN_STOP_PCT", "2.0"))
 MAX_STOP_PCT  = float(os.getenv("MAX_STOP_PCT", "25.0"))
 FRACTIONAL    = os.getenv("ALLOW_FRACTIONAL", "true").lower() == "true"
-ALLOWLIST     = {s.strip().upper() for s in os.getenv("ALLOWLIST", "").split(",") if s.strip()}
+def _parse_universe(raw: str) -> dict[str, str]:
+    """ "AAPL:tech,XOM:energy" -> {"AAPL": "tech", "XOM": "energy"} """
+    out = {}
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        sym, _, sector = item.partition(":")
+        out[sym.strip().upper()] = (sector.strip().lower() or "unsorted")
+    return out
+
+SECTOR        = _parse_universe(os.getenv("ALLOWLIST", ""))
+ALLOWLIST     = set(SECTOR)
+MAX_PER_SECTOR = int(os.getenv("MAX_PER_SECTOR", "2"))
 RTH_ONLY      = os.getenv("RTH_ONLY", "true").lower() == "true"
 
 BASE = Path(__file__).resolve().parent
@@ -150,6 +163,11 @@ def place(sig: dict) -> dict:
             raise Refused(f"already long {ticker}, not adding")
         if len(held) >= MAX_POSITIONS:
             raise Refused(f"{len(held)} positions open, limit is {MAX_POSITIONS}")
+        mine = SECTOR.get(ticker, "unsorted")
+        same = [s for s in held if SECTOR.get(s, "unsorted") == mine]
+        if len(same) >= MAX_PER_SECTOR:
+            raise Refused(f"already hold {len(same)} in {mine} ({', '.join(same)}), "
+                          f"limit is {MAX_PER_SECTOR} — correlated names are one bet")
         qty = size(sig)
     else:
         qty = abs(held.get(ticker, 0))
