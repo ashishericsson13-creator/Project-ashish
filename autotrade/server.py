@@ -28,6 +28,7 @@ MAX_POSITIONS = int(os.getenv("MAX_POSITIONS", "5"))
 MAX_ORDER_USD = float(os.getenv("MAX_ORDER_USD", "2500"))
 MIN_STOP_PCT  = float(os.getenv("MIN_STOP_PCT", "2.0"))
 MAX_STOP_PCT  = float(os.getenv("MAX_STOP_PCT", "25.0"))
+FRACTIONAL    = os.getenv("ALLOW_FRACTIONAL", "true").lower() == "true"
 ALLOWLIST     = {s.strip().upper() for s in os.getenv("ALLOWLIST", "").split(",") if s.strip()}
 RTH_ONLY      = os.getenv("RTH_ONLY", "true").lower() == "true"
 
@@ -104,7 +105,7 @@ def validate(p: dict) -> dict:
             "source": str(p.get("source", "?"))}
 
 
-def size(sig: dict) -> int:
+def size(sig: dict) -> float:
     """1% of equity at risk, then every cap that can shrink it."""
     price, stop = sig["price"], sig["stop"]
 
@@ -117,13 +118,25 @@ def size(sig: dict) -> int:
         raise Refused(f"stop is {stop_pct:.1f}% away, over the {MAX_STOP_PCT}% ceiling")
 
     risk = equity() * RISK_PCT / 100
-    qty = int(risk / (price - stop))
-    capped = int(MAX_ORDER_USD / price)
-    if qty > capped:
-        log.info("size capped by MAX_ORDER_USD: %d → %d shares", qty, capped)
-        qty = capped
-    if qty < 1:
-        raise Refused(f"1% of equity buys less than one share at {price}")
+    want = risk / (price - stop)
+    capped = MAX_ORDER_USD / price
+    qty = min(want, capped)
+    if qty < capped and want > capped:
+        log.info("size capped by MAX_ORDER_USD: %.4f → %.4f shares", want, capped)
+
+    if FRACTIONAL:
+        qty = round(qty, 4)
+        if qty * price < 1:
+            raise Refused(f"sized position is under $1 at {price}")
+    else:
+        whole = int(qty)
+        if whole < 1:
+            raise Refused(f"1% of equity buys less than one share at {price} "
+                          f"(wanted {qty:.2f}; enable ALLOW_FRACTIONAL)")
+        if whole and abs(qty - whole) / qty > 0.15:
+            log.warning("rounding %s from %.2f to %d shares loses %.0f%% of intended risk",
+                        sig["ticker"], qty, whole, (qty - whole) / qty * 100)
+        qty = whole
     return qty
 
 
@@ -139,8 +152,8 @@ def place(sig: dict) -> dict:
             raise Refused(f"{len(held)} positions open, limit is {MAX_POSITIONS}")
         qty = size(sig)
     else:
-        qty = int(abs(held.get(ticker, 0)))
-        if qty == 0:
+        qty = abs(held.get(ticker, 0))
+        if not qty:
             raise Refused(f"no position in {ticker} to sell")
 
     contract = Stock(ticker, "SMART", "USD")
@@ -151,9 +164,11 @@ def place(sig: dict) -> dict:
     pad = sig["price"] * 0.003
     limit = round(sig["price"] + pad if action == "buy" else sig["price"] - pad, 2)
 
-    order = LimitOrder(action.upper(), qty, limit, tif="DAY", outsideRth=not RTH_ONLY)
+    # IBKR requires fractional orders to stay inside regular hours.
+    order = LimitOrder(action.upper(), qty, limit, tif="DAY",
+                       outsideRth=False if isinstance(qty, float) and qty % 1 else not RTH_ONLY)
     trade = ib.placeOrder(contract, order)
-    log.info("ORDER %s %d %s @ %.2f limit (signal %.2f stop %.2f, %s)",
+    log.info("ORDER %s %s %s @ %.2f limit (signal %.2f stop %.2f, %s)",
              action.upper(), qty, ticker, limit, sig["price"], sig["stop"], sig["source"])
     return {"ok": True, "ticker": ticker, "action": action,
             "qty": qty, "limit": limit, "orderId": trade.order.orderId}
