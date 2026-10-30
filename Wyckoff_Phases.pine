@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v4.6", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v4.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -679,35 +679,54 @@ vFirm = nRead >= 2
 vWord = vSet == 0 ? "► NEUTRAL" : vSet > 0 ? (vFirm ? "▲ BULLISH" : "▲ leaning bullish") : (vFirm ? "▼ BEARISH" : "▼ leaning bearish")
 vSay = nRead == 0 ? "none of the four has a directional read on this chart" : nBull > 0 and nBear > 0 ? "bullish: " + vBull + "   ·   bearish: " + vBear + "   — so this is the balance of them" : f_n0(nRead) + " of 4 agree — " + (nBull > 0 ? vBull : vBear) + "  ·  the rest are silent"
 
-var table wp = table.new(pPos, 2, 21, border_width = 2)
+// ═══════════════════════════════════════════════════════════════
+// IS IT TIME TO BUY
+// ═══════════════════════════════════════════════════════════════
+// Twenty-one rows and not one of them answered the only question most
+// readings end on. This is not a summary of the panel — it is three rows in
+// Weinstein's own order: the stage decides whether buying is allowed at all,
+// the breakout checklist decides whether now is the moment, and relative
+// strength decides whether this is the name worth owning. Everything else on
+// the panel explains those three. Each verdict names the row it came from so
+// the reasoning is one glance away.
+byWait = gapWait
+byNo = stg4 or stg3
+byBuyBrk = s2Go and rsUp
+byBuyDip = stg2 and stDipOk and rsUp
+byWatch = stRecl or stPull or stg1
+byWord = byWait ? "⏳ NOT YET" : byNo ? "⛔ NO — DO NOT BUY" : byBuyBrk ? "✅ YES — BUY THE BREAKOUT" : byBuyDip ? "✅ YES — BUY THIS DIP" : stg2 ? "► HOLD — NO ENTRY HERE" : byWatch ? "👁 WATCHLIST — NOT YET" : "⛔ NO — NOTHING HERE"
+bySay = byWait ? "bar " + f_n0(gapAge + 1) + " of " + f_n0(waitBars) + " since the drop; the first bounce is short covering   ·   see ▸ AFTER A DROP" : byNo ? (stg4 ? "Stage 4 — the trend is down and the average is falling" : "Stage 3 — distribution after a run") + "   ·   see STAGE ▸ DIP OR TRAP" : byBuyBrk ? "all five breakout checks and relative strength is gaining   ·   see STAGE 2 ▸ BREAKOUT" : byBuyDip ? "Stage 2, back at the rising 50-day on light volume   ·   see STAGE ▸ DIP OR TRAP" : stg2 ? "Stage 2 holds, but there is no dip and no breakout to buy" + (rsUp ? "" : ", and it is lagging the market") + "   ·   see STAGE 2 ▸ BREAKOUT" : byWatch ? "not in Stage 2 yet — build the watchlist, do not commit   ·   see STAGE ▸ DIP OR TRAP" : "neither the stage nor the structure supports a buy"
+
+var table wp = table.new(pPos, 2, 22, border_width = 2)
 
 f_row(table _t, int _r, string _k, string _v, color _c) =>
     table.cell(_t, 0, _r, _k, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = pSz)
     table.cell(_t, 1, _r, _v, text_color = color.white, bgcolor = _c, text_halign = text.align_left, text_size = pSz)
 
 if barstate.islast
-    table.clear(wp, 0, 0, 1, 20)
-    f_row(wp, 0, "★ VERDICT", vWord + "   ·   " + vSay, vSet > 0 ? color.new(vFirm ? #00c853 : #2e7d32, 10) : vSet < 0 ? color.new(vFirm ? #d50000 : #b71c1c, 10) : color.new(color.gray, 40))
-    f_row(wp, 1, "★ ALL FOUR", "WYCKOFF " + wyShort + "  ·  ELLIOTT " + ewShort + "  ·  BASE " + bsShort + "  ·  STAGE " + stShort + "  ·  " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : nBull > 0 and nBear > 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
-    f_row(wp, 2, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
-    f_row(wp, 3, "WYCKOFF ▸ PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
-    f_row(wp, 4, "WYCKOFF ▸ RANGE", rngSay, color.new(#2962ff, 40))
-    f_row(wp, 5, "WYCKOFF ▸ EVENTS", evSay, color.new(color.purple, 35))
-    f_row(wp, 6, "WYCKOFF ▸ MEANS", meanSay, color.new(#00695c, 10))
-    f_row(wp, 7, "WYCKOFF ▸ DO THIS", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
-    f_row(wp, 8, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : (wUp or wDn) and rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
-    f_row(wp, 9, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
-    f_row(wp, 10, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay + (bBrkUp and (stg4 or (stg3 and not stRecl)) ? "   ⚠ STAGE says " + (stg4 ? "Stage 4" : "Stage 3") + " — no trend behind it" : bBrkUp and stRecl ? "   ⚠ the 200-day has not turned up yet" : bBrkDn and stg2 ? "   ⚠ STAGE says Stage 2 — likely a shakeout" : ""), not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
-    f_row(wp, 11, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) or ma200At ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
-    f_row(wp, 12, "STAGE ▸ DIP OR TRAP", stWord + "   ·   " + stSay, not stHave ? color.new(color.gray, 45) : stg2 ? color.new(#00c853, stDipOk ? 5 : 25) : stg4 ? color.new(#d50000, 10) : stPull ? color.new(color.orange, 20) : stRecl ? (wUp ? color.new(#2e7d32, 10) : color.new(color.gray, 40)) : stg3 ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
-    f_row(wp, 13, "STAGE 2 ▸ BREAKOUT", s2Word + "   ·   " + s2Say, s2Go ? color.new(#00c853, 5) : s2N >= 3 ? color.new(#2e7d32, 40) : color.new(color.gray, 45))
-    f_row(wp, 14, "200-DAY ▸ SHAKEOUT?", sbWord + "   ·   " + sbSay, not stHave ? color.new(color.gray, 45) : sbShake ? color.new(#2e7d32, 10) : sbBreak ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
-    f_row(wp, 15, "▸ AFTER A DROP", gapWord + "   ·   " + gapSay, na(gapAge) or gapAge > evAge ? color.new(color.gray, 45) : gapWait ? color.new(color.orange, 15) : color.new(#00695c, 10))
-    f_row(wp, 16, "DOUBLE BOTTOM", dbWord + "   ·   " + dbSay, not dbHave ? color.new(color.gray, 45) : dbOver and dbPow and dbLevel and dbDry ? color.new(#00c853, 5) : dbOver ? color.new(#2e7d32, 25) : color.new(color.gray, 40))
-    f_row(wp, 17, "RS ▸ VS MARKET", rsWord + "   ·   " + rsSay, na(rsR) ? color.new(color.gray, 45) : rsNew ? color.new(#00c853, 5) : rsUp ? color.new(#2e7d32, 10) : color.new(#b71c1c, 10))
-    f_row(wp, 18, "VOLUME ▸ CONTROL", acWord + "   ·   " + acSay, na(acR) ? color.new(color.gray, 45) : acBull ? color.new(#2e7d32, 10) : acBear ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
-    f_row(wp, 19, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
-    f_row(wp, 20, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
+    table.clear(wp, 0, 0, 1, 21)
+    f_row(wp, 0, "★ IS IT TIME?", byWord + "   ·   " + bySay, byBuyBrk or byBuyDip ? color.new(#00c853, 0) : byNo ? color.new(#b71c1c, 0) : byWait ? color.new(color.orange, 10) : byWatch ? color.new(#2e7d32, 35) : color.new(color.gray, 35))
+    f_row(wp, 1, "★ VERDICT", vWord + "   ·   " + vSay, vSet > 0 ? color.new(vFirm ? #00c853 : #2e7d32, 10) : vSet < 0 ? color.new(vFirm ? #d50000 : #b71c1c, 10) : color.new(color.gray, 40))
+    f_row(wp, 2, "★ ALL FOUR", "WYCKOFF " + wyShort + "  ·  ELLIOTT " + ewShort + "  ·  BASE " + bsShort + "  ·  STAGE " + stShort + "  ·  " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : nBull > 0 and nBear > 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
+    f_row(wp, 3, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
+    f_row(wp, 4, "WYCKOFF ▸ PHASE", phWord, phase == "C" ? color.new(color.orange, 15) : phase == "D" or phase == "E" ? schemCol : color.new(color.gray, 45))
+    f_row(wp, 5, "WYCKOFF ▸ RANGE", rngSay, color.new(#2962ff, 40))
+    f_row(wp, 6, "WYCKOFF ▸ EVENTS", evSay, color.new(color.purple, 35))
+    f_row(wp, 7, "WYCKOFF ▸ MEANS", meanSay, color.new(#00695c, 10))
+    f_row(wp, 8, "WYCKOFF ▸ DO THIS", actWord + "   ·   " + actSay, not rngOk or bias == 0 or not late ? color.new(color.gray, 45) : bias == -1 ? color.new(#00c853, 15) : color.new(#d50000, 15))
+    f_row(wp, 9, "ELLIOTT ▸ STRUCTURE", wWord + "   ·   " + wSay, not wHave ? color.new(color.gray, 45) : wUp and rAll ? color.new(#00c853, 15) : wDn and rAll ? color.new(#d50000, 15) : (wUp or wDn) and rBroke ? color.new(color.orange, 25) : color.new(color.gray, 40))
+    f_row(wp, 10, "WYCKOFF ▸ TRIGGER", trigSay, color.new(color.black, 25))
+    f_row(wp, 11, "BASE ▸ BREAKOUT", bsWord + "   ·   " + bsSay + (bBrkUp and (stg4 or (stg3 and not stRecl)) ? "   ⚠ STAGE says " + (stg4 ? "Stage 4" : "Stage 3") + " — no trend behind it" : bBrkUp and stRecl ? "   ⚠ the 200-day has not turned up yet" : bBrkDn and stg2 ? "   ⚠ STAGE says Stage 2 — likely a shakeout" : ""), not bOk ? color.new(color.gray, 45) : bsSide == 1 ? color.new(#00c853, 20) : bsSide == -1 ? color.new(#d50000, 20) : color.new(color.orange, 30))
+    f_row(wp, 12, "200-WEEK AVERAGE", ma200Say, na(ma200Gap) or ma200At ? color.new(color.gray, 45) : ma200Up ? color.new(#00c853, 20) : color.new(#d50000, 20))
+    f_row(wp, 13, "STAGE ▸ DIP OR TRAP", stWord + "   ·   " + stSay, not stHave ? color.new(color.gray, 45) : stg2 ? color.new(#00c853, stDipOk ? 5 : 25) : stg4 ? color.new(#d50000, 10) : stPull ? color.new(color.orange, 20) : stRecl ? (wUp ? color.new(#2e7d32, 10) : color.new(color.gray, 40)) : stg3 ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
+    f_row(wp, 14, "STAGE 2 ▸ BREAKOUT", s2Word + "   ·   " + s2Say, s2Go ? color.new(#00c853, 5) : s2N >= 3 ? color.new(#2e7d32, 40) : color.new(color.gray, 45))
+    f_row(wp, 15, "200-DAY ▸ SHAKEOUT?", sbWord + "   ·   " + sbSay, not stHave ? color.new(color.gray, 45) : sbShake ? color.new(#2e7d32, 10) : sbBreak ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
+    f_row(wp, 16, "▸ AFTER A DROP", gapWord + "   ·   " + gapSay, na(gapAge) or gapAge > evAge ? color.new(color.gray, 45) : gapWait ? color.new(color.orange, 15) : color.new(#00695c, 10))
+    f_row(wp, 17, "DOUBLE BOTTOM", dbWord + "   ·   " + dbSay, not dbHave ? color.new(color.gray, 45) : dbOver and dbPow and dbLevel and dbDry ? color.new(#00c853, 5) : dbOver ? color.new(#2e7d32, 25) : color.new(color.gray, 40))
+    f_row(wp, 18, "RS ▸ VS MARKET", rsWord + "   ·   " + rsSay, na(rsR) ? color.new(color.gray, 45) : rsNew ? color.new(#00c853, 5) : rsUp ? color.new(#2e7d32, 10) : color.new(#b71c1c, 10))
+    f_row(wp, 19, "VOLUME ▸ CONTROL", acWord + "   ·   " + acSay, na(acR) ? color.new(color.gray, 45) : acBull ? color.new(#2e7d32, 10) : acBear ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
+    f_row(wp, 20, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
+    f_row(wp, 21, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
 
 alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
 alertcondition(utNow, title = "Wyckoff UPTHRUST / UTAD", message = "{{ticker}} {{interval}}: upthrust — the range high gave way and was taken back at {{close}}")
