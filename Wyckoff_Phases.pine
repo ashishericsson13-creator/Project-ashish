@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v4.3", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v4.4", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -73,6 +73,9 @@ stFlat   = input.float(0.5, "Stage: slope under this % over the window counts as
 stNear   = input.float(2.0, "Stage: a dip counts within this % of the 50-day", minval = 0.2, maxval = 15.0, step = 0.1, group = "6. Stage 2 / Stage 4")
 stLight  = input.float(1.0, "Stage: light volume is under this multiple of average", minval = 0.3, maxval = 2.0, step = 0.05, group = "6. Stage 2 / Stage 4")
 stReclN  = input.int(13, "Stage: bars since price was under the 200-day that still counts as a reclaim", minval = 2, maxval = 60, tooltip = "Price above a falling average means two opposite things. After a long advance it is a top. Days after price climbed back over it, it is a recovery attempt. This is where one ends and the other begins.", group = "6. Stage 2 / Stage 4")
+rsSym    = input.symbol("AMEX:SPY", "Relative strength benchmark", group = "9. Relative strength")
+rsLen    = input.int(26, "Relative strength lookback (bars)", minval = 4, maxval = 200, tooltip = "Weinstein's RS line is the stock divided by the index. What matters is its direction, not its level: a stock can be down and still leading if the market is down more.", group = "9. Relative strength")
+show30   = input.bool(true, "Draw the 30-week average (Weinstein's own line)", group = "9. Relative strength")
 acLen    = input.int(25, "Accumulation: bars to weigh up-volume against down-volume", minval = 5, maxval = 120, group = "8. Accumulation / distribution")
 acEdge   = input.float(1.2, "Accumulation: ratio that counts as one side being in control", minval = 1.0, maxval = 3.0, step = 0.05, tooltip = "Up-volume divided by down-volume. Above this is accumulation, below its reciprocal is distribution, and between the two neither side has committed.", group = "8. Accumulation / distribution")
 ddDrop   = input.float(0.2, "Distribution bar: close down at least this much (%)", minval = 0.0, maxval = 5.0, step = 0.1, group = "8. Accumulation / distribution")
@@ -531,6 +534,26 @@ sbBreak = stHave and not stAbove and not na(stOver) and stOver > sbWin and wDn
 sbWord = not stHave ? "► NO 200-DAY YET" : sbShake ? "▲ SHAKEOUT — undercut and reclaimed" : sbBreak ? "▼ BREAKDOWN — the 200-day is resistance now" : stAbove ? "► ABOVE THE LINE — nothing to judge yet" : "► BELOW THE LINE — too early to call"
 sbSay = not stHave ? "needs 200 days of history" : sbShake ? "back above " + f_px(d200) + " after " + f_n0(stUnder) + " bars under it" + (sbFade ? ", and the selling has dried up" : sbHeavy ? ", but volume is still heavy — not confirmed" : "") : sbBreak ? f_n0(stOver) + " bars below " + f_px(d200) + " with lower highs and lower lows" + (sbHeavy ? ", on heavy volume" : "") : stAbove ? "price is above " + f_px(d200) + " and has not been under it recently" : "under " + f_px(d200) + " for " + f_n0(stOver) + " bars — " + f_n0(sbWin) + " is the line between a shakeout and a breakdown"
 
+// ── RELATIVE STRENGTH, AND WEINSTEIN'S OWN AVERAGE ──
+// The RS line is the stock divided by the index. Its direction is the whole
+// reading: a stock down 10% while the index is down 20% is leading, and the
+// price chart alone cannot say that. Stage 2 breakouts that work tend to have
+// this already turning up before the breakout, which is why it sits in its own
+// row rather than inside the breakout checklist.
+bench = request.security(rsSym, timeframe.period, close, gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
+rsR = na(bench) or bench <= 0 ? na : close / bench
+rsOld = rsR[rsLen]
+rsUp = not na(rsR) and not na(rsOld) and rsR > rsOld
+rsPeak = ta.highest(nz(rsR, 0), rsLen * 2)
+rsNew = not na(rsR) and rsPeak > 0 and rsR >= rsPeak * 0.999
+rsGap = na(rsR) or na(rsOld) or rsOld <= 0 ? na : (rsR / rsOld - 1) * 100
+// Weinstein uses the 30-week average, this script the 200-day. The line is
+// drawn so the textbook picture is on the chart; the rows keep one yardstick.
+ma30w = request.security(syminfo.tickerid, "W", ta.sma(close, 30), gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
+plot(show30 ? ma30w : na, "30-week average", color = color.new(#f06292, 0), linewidth = 2)
+rsWord = na(rsR) ? "► NO BENCHMARK DATA" : rsNew ? "▲ LEADING — RS line at a new high" : rsUp ? "▲ IMPROVING — gaining on the market" : "▼ LAGGING — losing to the market"
+rsSay = na(rsGap) ? "could not read " + rsSym : (rsGap >= 0 ? "+" : "") + f_n1(rsGap) + "% against " + rsSym + " over " + f_n0(rsLen) + " bars" + (rsNew ? "   ·   and the RS line is at a new high, which is what leadership looks like" : rsUp ? "   ·   improving, though not yet leading" : "   ·   a Stage 2 breakout without this tends to fail")
+
 // ── ACCUMULATION OR DISTRIBUTION ──
 // Volume on up bars against volume on down bars. A rally nobody funds and a
 // decline everybody funds are the same chart with the buyers removed, and the
@@ -617,14 +640,14 @@ vFirm = nRead >= 2
 vWord = vSet == 0 ? "► NEUTRAL" : vSet > 0 ? (vFirm ? "▲ BULLISH" : "▲ leaning bullish") : (vFirm ? "▼ BEARISH" : "▼ leaning bearish")
 vSay = nRead == 0 ? "none of the four has a directional read on this chart" : nBull > 0 and nBear > 0 ? "bullish: " + vBull + "   ·   bearish: " + vBear + "   — so this is the balance of them" : f_n0(nRead) + " of 4 agree — " + (nBull > 0 ? vBull : vBear) + "  ·  the rest are silent"
 
-var table wp = table.new(pPos, 2, 19, border_width = 2)
+var table wp = table.new(pPos, 2, 20, border_width = 2)
 
 f_row(table _t, int _r, string _k, string _v, color _c) =>
     table.cell(_t, 0, _r, _k, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = pSz)
     table.cell(_t, 1, _r, _v, text_color = color.white, bgcolor = _c, text_halign = text.align_left, text_size = pSz)
 
 if barstate.islast
-    table.clear(wp, 0, 0, 1, 18)
+    table.clear(wp, 0, 0, 1, 19)
     f_row(wp, 0, "★ VERDICT", vWord + "   ·   " + vSay, vSet > 0 ? color.new(vFirm ? #00c853 : #2e7d32, 10) : vSet < 0 ? color.new(vFirm ? #d50000 : #b71c1c, 10) : color.new(color.gray, 40))
     f_row(wp, 1, "★ ALL FOUR", "WYCKOFF " + wyShort + "  ·  ELLIOTT " + ewShort + "  ·  BASE " + bsShort + "  ·  STAGE " + stShort + "  ·  " + bothSay, bothUp ? color.new(#00c853, 10) : bothDn ? color.new(#d50000, 10) : nBull > 0 and nBear > 0 ? color.new(color.orange, 15) : color.new(color.gray, 40))
     f_row(wp, 2, "WYCKOFF ▸ SCHEMATIC", schem + "   ·   " + priorSay, schemCol)
@@ -641,9 +664,10 @@ if barstate.islast
     f_row(wp, 13, "STAGE 2 ▸ BREAKOUT", s2Word + "   ·   " + s2Say, s2Go ? color.new(#00c853, 5) : s2N >= 3 ? color.new(#2e7d32, 40) : color.new(color.gray, 45))
     f_row(wp, 14, "200-DAY ▸ SHAKEOUT?", sbWord + "   ·   " + sbSay, not stHave ? color.new(color.gray, 45) : sbShake ? color.new(#2e7d32, 10) : sbBreak ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
     f_row(wp, 15, "▸ AFTER A DROP", gapWord + "   ·   " + gapSay, na(gapAge) or gapAge > evAge ? color.new(color.gray, 45) : gapWait ? color.new(color.orange, 15) : color.new(#00695c, 10))
-    f_row(wp, 16, "VOLUME ▸ CONTROL", acWord + "   ·   " + acSay, na(acR) ? color.new(color.gray, 45) : acBull ? color.new(#2e7d32, 10) : acBear ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
-    f_row(wp, 17, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
-    f_row(wp, 18, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
+    f_row(wp, 16, "RS ▸ VS MARKET", rsWord + "   ·   " + rsSay, na(rsR) ? color.new(color.gray, 45) : rsNew ? color.new(#00c853, 5) : rsUp ? color.new(#2e7d32, 10) : color.new(#b71c1c, 10))
+    f_row(wp, 17, "VOLUME ▸ CONTROL", acWord + "   ·   " + acSay, na(acR) ? color.new(color.gray, 45) : acBull ? color.new(#2e7d32, 10) : acBear ? color.new(#b71c1c, 10) : color.new(color.gray, 40))
+    f_row(wp, 18, "VOLUME — ALL", (barLive and not na(volX) ? "⧗ this bar is still forming, so volume is partial — no climax or sign of strength can fire yet. " : "") + (na(volX) ? "not reported for this symbol" : f_nx(volX) + "x the " + f_n0(volLen) + "-bar average" + (barLive ? " so far" : "") + (volX >= climX ? " — climactic" : volX >= sosVolX ? " — above average" : barLive ? "" : " — light")), color.new(color.navy, 35))
+    f_row(wp, 19, "CAUTION", "A range is a range until it breaks, and Phase B can outlast your patience. Events are reported only after the bar closed. Wave structure is not a count — it changes as new swings form.", color.new(color.gray, 55))
 
 alertcondition(sprNow, title = "Wyckoff SPRING", message = "{{ticker}} {{interval}}: spring — the range low gave way and was taken back at {{close}}")
 alertcondition(utNow, title = "Wyckoff UPTHRUST / UTAD", message = "{{ticker}} {{interval}}: upthrust — the range high gave way and was taken back at {{close}}")
