@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v4.7", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v4.8", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -695,7 +695,7 @@ byBuyBrk = s2Go and rsUp
 byBuyDip = stg2 and stDipOk and rsUp
 byWatch = stRecl or stPull or stg1
 byWord = byWait ? "⏳ NOT YET" : byNo ? "⛔ NO — DO NOT BUY" : byBuyBrk ? "✅ YES — BUY THE BREAKOUT" : byBuyDip ? "✅ YES — BUY THIS DIP" : stg2 ? "► HOLD — NO ENTRY HERE" : byWatch ? "👁 WATCHLIST — NOT YET" : "⛔ NO — NOTHING HERE"
-bySay = byWait ? "bar " + f_n0(gapAge + 1) + " of " + f_n0(waitBars) + " since the drop; the first bounce is short covering   ·   see ▸ AFTER A DROP" : byNo ? (stg4 ? "Stage 4 — the trend is down and the average is falling" : "Stage 3 — distribution after a run") + "   ·   see STAGE ▸ DIP OR TRAP" : byBuyBrk ? "all five breakout checks and relative strength is gaining   ·   see STAGE 2 ▸ BREAKOUT" : byBuyDip ? "Stage 2, back at the rising 50-day on light volume   ·   see STAGE ▸ DIP OR TRAP" : stg2 ? "Stage 2 holds, but there is no dip and no breakout to buy" + (rsUp ? "" : ", and it is lagging the market") + "   ·   see STAGE 2 ▸ BREAKOUT" : byWatch ? "not in Stage 2 yet — build the watchlist, do not commit   ·   see STAGE ▸ DIP OR TRAP" : "neither the stage nor the structure supports a buy"
+bySay = byWait ? "bar " + f_n0(gapAge + 1) + " of " + f_n0(waitBars) + " since the drop; the first bounce is short covering   ·   see ▸ AFTER A DROP" : byNo ? (stg4 ? "Stage 4 — the trend is down and the average is falling" : "Stage 3 — distribution after a run") + "   ·   see STAGE ▸ DIP OR TRAP" : byBuyBrk ? "all five breakout checks and relative strength is gaining   ·   see STAGE 2 ▸ BREAKOUT" : byBuyDip ? "Stage 2, back at the rising 50-day on light volume   ·   see STAGE ▸ DIP OR TRAP" : stg2 ? (stDipOk or s2Go ? (stDipOk ? "the dip is here and buyable" : "all five breakout checks are in") + ", but it is lagging the market — RS has to turn first   ·   see RS ▸ VS MARKET" : "no dip to buy and no breakout yet" + (rsUp ? "" : ", and it is lagging the market") + "   ·   see STAGE 2 ▸ BREAKOUT") : byWatch ? "not in Stage 2 yet — build the watchlist, do not commit   ·   see STAGE ▸ DIP OR TRAP" : "neither the stage nor the structure supports a buy"
 
 var table wp = table.new(pPos, 2, 22, border_width = 2)
 
