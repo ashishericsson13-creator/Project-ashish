@@ -30,7 +30,7 @@
 //   D  the move to the edge                SOS/LPS up, or SOW/LPSY down
 //   E  the trend out of the range          markup or markdown
 // ═══════════════════════════════════════════════════════════════════════════
-indicator("Wyckoff Phases v4.8", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
+indicator("Wyckoff Phases v4.9", overlay = true, max_labels_count = 500, max_lines_count = 500, max_bars_back = 1000)
 
 // ── 1. The range ───
 rngLen   = input.int(30, "Range lookback (bars)", minval = 8, maxval = 200, tooltip = "How far back the script measures the consolidation. Too short and every pause looks like a range; too long and a real range is diluted by the trend that preceded it.", group = "1. Range")
@@ -570,7 +570,7 @@ dbOver = dbHave and close > dbNk
 dbPow = dbOver and not na(volX) and volX >= dbBrkV and close > close[1]
 dbBack = dbOver and low <= dbNk * (1 + dbTol / 100)
 dbN = (dbLevel ? 1 : 0) + (dbDry ? 1 : 0) + (dbOver ? 1 : 0) + (dbPow ? 1 : 0)
-dbWord = not dbHave ? "► NO DOUBLE BOTTOM" : dbOver and dbPow and dbLevel and dbDry ? "▲ CONFIRMED — all four" : dbOver ? "▲ BROKEN OUT — " + f_n0(dbN) + " of 4" : "► FORMING — " + f_n0(dbN) + " of 4, neckline " + f_px(dbNk)
+dbWord = not dbHave ? "► NO DOUBLE BOTTOM" : not dbLevel ? "► NOT ONE — the two lows are too far apart" : dbOver and dbPow and dbDry ? "▲ CONFIRMED — all four" : dbOver ? "▲ BROKEN OUT — " + f_n0(dbN) + " of 4" : "► FORMING — " + f_n0(dbN) + " of 4, neckline " + f_px(dbNk)
 dbSay = not dbHave ? "the last three swings are not a low, a high and a low" : "lows " + f_px(dbLo1) + " and " + f_px(dbLo2) + " " + (dbLevel ? "level ✓" : "uneven ✗") + "   ·   lighter selling at the second " + (dbDry ? "✓" : "✗") + "   ·   neckline " + f_px(dbNk) + " " + (dbOver ? "broken ✓" : "intact ✗") + "   ·   break volume " + (na(volX) ? "—" : f_n1(volX) + "x") + " " + (dbPow ? "✓" : "✗") + (dbBack ? "   ·   retesting it — must hold" : "")
 
 // ── RELATIVE STRENGTH, AND WEINSTEIN'S OWN AVERAGE ──
