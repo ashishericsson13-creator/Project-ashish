@@ -155,7 +155,7 @@ f_state() =>
     _bLo  = ta.lowest(low, baseN)[1]
     _base = not na(_bLo) and _bLo > 0 and (_bHi - _bLo) / _bLo * 100 <= baseW
     _brk  = _base and close > _bHi and not na(_vx) and _vx >= brkVol and close > close[1]
-    [_stage, _dip ? 1 : 0, _brk ? 1 : 0, close, close[rsLen], _d50, _base ? _bHi : na]
+    [_stage, _dip ? 1 : 0, _brk ? 1 : 0, close, close[rsLen], _d50, _base ? _bHi : na, _d200]
 
 var array<string> rSym = array.new<string>()
 var array<int>    rVer = array.new<int>()
@@ -179,7 +179,7 @@ benchPick = chartMkt == 2 ? rsBenc2 : chartMkt == 3 ? rsBenc3 : rsBench
 // 3 = buy, 2 = stage 2 with no entry, 1 = watchlist, 0 = no.
 // Only the market you are looking at is collected, so a US chart never lists
 // NSE names and the panel stays the length of one market.
-f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50, float _bhi) =>
+f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50, float _bhi, float _d200) =>
     _m = f_mkt(_sym)
     if barstate.islast and not na(_px)
         _b  = bNow
@@ -193,7 +193,9 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
              : _v == 2 and not na(_bhi) ? "buy a close above " + str.tostring(_bhi, format.mintick) + " on volume — " + str.tostring((_bhi - _px) / _px * 100, "#.#") + "% above"
              : _v == 2 and not na(_gap) and _gap > 0 ? "buy a dip to the 50-day " + str.tostring(_d50, format.mintick) + " — " + str.tostring(_gap, "#.#") + "% below"
              : _v == 2 ? "Stage 2, waiting for a dip or a base to form"
+             : _v == 1 and not na(_d200) ? "basing — the 200-day " + str.tostring(_d200, format.mintick) + " has to turn up and price clear it, " + str.tostring(math.abs(_d200 - _px) / _px * 100, "#.#") + "% " + (_d200 > _px ? "above" : "below")
              : _v == 1 ? "basing — needs the 200-day to turn up and price to clear it"
+             : _st == 4 and not na(_d200) ? "Stage 4 — stay away until the 200-day " + str.tostring(_d200, format.mintick) + " stops falling"
              : _st == 4 ? "Stage 4 — stay away" : "above a stalled average"
         // how far the trigger is, so the list can lead with the nearest
         _dist = _v == 2 and not na(_bhi) ? math.abs(_bhi - _px) / _px * 100 : _v == 2 and not na(_gap) and _gap > 0 ? _gap : 999.0
@@ -203,46 +205,46 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
         array.push(rWhy, _trig)
 
 
-[st01, dp01, bk01, px01, og01, md01, bh01] = request.security(sym01, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym01, st01, dp01, bk01, px01, og01, md01, bh01)
-[st02, dp02, bk02, px02, og02, md02, bh02] = request.security(sym02, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym02, st02, dp02, bk02, px02, og02, md02, bh02)
-[st03, dp03, bk03, px03, og03, md03, bh03] = request.security(sym03, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym03, st03, dp03, bk03, px03, og03, md03, bh03)
-[st04, dp04, bk04, px04, og04, md04, bh04] = request.security(sym04, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym04, st04, dp04, bk04, px04, og04, md04, bh04)
-[st05, dp05, bk05, px05, og05, md05, bh05] = request.security(sym05, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym05, st05, dp05, bk05, px05, og05, md05, bh05)
-[st06, dp06, bk06, px06, og06, md06, bh06] = request.security(sym06, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym06, st06, dp06, bk06, px06, og06, md06, bh06)
-[st07, dp07, bk07, px07, og07, md07, bh07] = request.security(sym07, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym07, st07, dp07, bk07, px07, og07, md07, bh07)
-[st08, dp08, bk08, px08, og08, md08, bh08] = request.security(sym08, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym08, st08, dp08, bk08, px08, og08, md08, bh08)
-[st09, dp09, bk09, px09, og09, md09, bh09] = request.security(sym09, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym09, st09, dp09, bk09, px09, og09, md09, bh09)
-[st10, dp10, bk10, px10, og10, md10, bh10] = request.security(sym10, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym10, st10, dp10, bk10, px10, og10, md10, bh10)
-[st11, dp11, bk11, px11, og11, md11, bh11] = request.security(sym11, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym11, st11, dp11, bk11, px11, og11, md11, bh11)
-[st12, dp12, bk12, px12, og12, md12, bh12] = request.security(sym12, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym12, st12, dp12, bk12, px12, og12, md12, bh12)
-[st13, dp13, bk13, px13, og13, md13, bh13] = request.security(sym13, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym13, st13, dp13, bk13, px13, og13, md13, bh13)
-[st14, dp14, bk14, px14, og14, md14, bh14] = request.security(sym14, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym14, st14, dp14, bk14, px14, og14, md14, bh14)
-[st15, dp15, bk15, px15, og15, md15, bh15] = request.security(sym15, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym15, st15, dp15, bk15, px15, og15, md15, bh15)
-[st16, dp16, bk16, px16, og16, md16, bh16] = request.security(sym16, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym16, st16, dp16, bk16, px16, og16, md16, bh16)
-[st17, dp17, bk17, px17, og17, md17, bh17] = request.security(sym17, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym17, st17, dp17, bk17, px17, og17, md17, bh17)
-[st18, dp18, bk18, px18, og18, md18, bh18] = request.security(sym18, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym18, st18, dp18, bk18, px18, og18, md18, bh18)
-[st19, dp19, bk19, px19, og19, md19, bh19] = request.security(sym19, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym19, st19, dp19, bk19, px19, og19, md19, bh19)
-[st20, dp20, bk20, px20, og20, md20, bh20] = request.security(sym20, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym20, st20, dp20, bk20, px20, og20, md20, bh20)
+[st01, dp01, bk01, px01, og01, md01, bh01, dd01] = request.security(sym01, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym01, st01, dp01, bk01, px01, og01, md01, bh01, dd01)
+[st02, dp02, bk02, px02, og02, md02, bh02, dd02] = request.security(sym02, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym02, st02, dp02, bk02, px02, og02, md02, bh02, dd02)
+[st03, dp03, bk03, px03, og03, md03, bh03, dd03] = request.security(sym03, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym03, st03, dp03, bk03, px03, og03, md03, bh03, dd03)
+[st04, dp04, bk04, px04, og04, md04, bh04, dd04] = request.security(sym04, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym04, st04, dp04, bk04, px04, og04, md04, bh04, dd04)
+[st05, dp05, bk05, px05, og05, md05, bh05, dd05] = request.security(sym05, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym05, st05, dp05, bk05, px05, og05, md05, bh05, dd05)
+[st06, dp06, bk06, px06, og06, md06, bh06, dd06] = request.security(sym06, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym06, st06, dp06, bk06, px06, og06, md06, bh06, dd06)
+[st07, dp07, bk07, px07, og07, md07, bh07, dd07] = request.security(sym07, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym07, st07, dp07, bk07, px07, og07, md07, bh07, dd07)
+[st08, dp08, bk08, px08, og08, md08, bh08, dd08] = request.security(sym08, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym08, st08, dp08, bk08, px08, og08, md08, bh08, dd08)
+[st09, dp09, bk09, px09, og09, md09, bh09, dd09] = request.security(sym09, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym09, st09, dp09, bk09, px09, og09, md09, bh09, dd09)
+[st10, dp10, bk10, px10, og10, md10, bh10, dd10] = request.security(sym10, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym10, st10, dp10, bk10, px10, og10, md10, bh10, dd10)
+[st11, dp11, bk11, px11, og11, md11, bh11, dd11] = request.security(sym11, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym11, st11, dp11, bk11, px11, og11, md11, bh11, dd11)
+[st12, dp12, bk12, px12, og12, md12, bh12, dd12] = request.security(sym12, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym12, st12, dp12, bk12, px12, og12, md12, bh12, dd12)
+[st13, dp13, bk13, px13, og13, md13, bh13, dd13] = request.security(sym13, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym13, st13, dp13, bk13, px13, og13, md13, bh13, dd13)
+[st14, dp14, bk14, px14, og14, md14, bh14, dd14] = request.security(sym14, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym14, st14, dp14, bk14, px14, og14, md14, bh14, dd14)
+[st15, dp15, bk15, px15, og15, md15, bh15, dd15] = request.security(sym15, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym15, st15, dp15, bk15, px15, og15, md15, bh15, dd15)
+[st16, dp16, bk16, px16, og16, md16, bh16, dd16] = request.security(sym16, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym16, st16, dp16, bk16, px16, og16, md16, bh16, dd16)
+[st17, dp17, bk17, px17, og17, md17, bh17, dd17] = request.security(sym17, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym17, st17, dp17, bk17, px17, og17, md17, bh17, dd17)
+[st18, dp18, bk18, px18, og18, md18, bh18, dd18] = request.security(sym18, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym18, st18, dp18, bk18, px18, og18, md18, bh18, dd18)
+[st19, dp19, bk19, px19, og19, md19, bh19, dd19] = request.security(sym19, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym19, st19, dp19, bk19, px19, og19, md19, bh19, dd19)
+[st20, dp20, bk20, px20, og20, md20, bh20, dd20] = request.security(sym20, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym20, st20, dp20, bk20, px20, og20, md20, bh20, dd20)
 
 // ═══════════════════════════════════════════════════════════════
 // THE PANEL
