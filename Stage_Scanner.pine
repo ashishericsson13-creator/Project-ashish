@@ -109,6 +109,7 @@ f_state() =>
 var array<string> rSym = array.new<string>()
 var array<int>    rVer = array.new<int>()
 var array<string> rWhy = array.new<string>()
+var array<float>  rGap = array.new<float>()
 
 // 1 US, 2 India, 3 crypto — taken from the symbol string rather than from
 // which input slot it sits in, so any slot can hold anything.
@@ -141,11 +142,14 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
         _gap = na(_d50) or _px <= 0 ? na : (_px - _d50) / _px * 100
         _trig = _v == 3 ? (_bk == 1 ? "BREAKOUT on volume, RS gaining" : "dip to the 50-day, RS gaining")
              : _v == 2 and not _rs ? "setup is there — needs RS to turn, see its chart"
-             : _v == 2 and not na(_bhi) ? "buy a close above " + str.tostring(_bhi, format.mintick) + " on volume"
+             : _v == 2 and not na(_bhi) ? "buy a close above " + str.tostring(_bhi, format.mintick) + " on volume — " + str.tostring((_bhi - _px) / _px * 100, "#.#") + "% above"
              : _v == 2 and not na(_gap) and _gap > 0 ? "buy a dip to the 50-day " + str.tostring(_d50, format.mintick) + " — " + str.tostring(_gap, "#.#") + "% below"
              : _v == 2 ? "Stage 2, waiting for a dip or a base to form"
              : _v == 1 ? "basing — needs the 200-day to turn up and price to clear it"
              : _st == 4 ? "Stage 4 — stay away" : "above a stalled average"
+        // how far the trigger is, so the list can lead with the nearest
+        _dist = _v == 2 and not na(_bhi) ? math.abs(_bhi - _px) / _px * 100 : _v == 2 and not na(_gap) and _gap > 0 ? _gap : 999.0
+        array.push(rGap, _dist)
         array.push(rSym, f_label(_sym))
         array.push(rVer, _v)
         array.push(rWhy, _trig)
@@ -254,9 +258,18 @@ if barstate.islast
     f_cell(2, 0, _tfBad ? "⚠ " + scanTf + " — the 200-day is now 200 " + scanTf + " bars" : str.tostring(_n) + " " + _mName + " symbols on " + scanTf, _tfBad ? color.new(#b71c1c, 0) : color.new(#1a237e, 0), color.white)
     _r = 1
     // 3 then 2 then 1; a flat no only when asked for
+    _done = array.new<bool>(math.max(_n, 1), false)
     for _want = 3 to 1
-        for _i = 0 to (_n > 0 ? _n - 1 : 0)
-            if _n > 0 and _r < 41 and array.get(rVer, _i) == _want
+        for _k = 0 to (_n > 0 ? _n - 1 : 0)
+            _pick = -1
+            _near = 1.0e9
+            for _i = 0 to (_n > 0 ? _n - 1 : 0)
+                if _n > 0 and not array.get(_done, _i) and array.get(rVer, _i) == _want and array.get(rGap, _i) < _near
+                    _near := array.get(rGap, _i)
+                    _pick := _i
+            if _pick >= 0 and _r < 41
+                _i = _pick
+                array.set(_done, _i, true)
                 _v = array.get(rVer, _i)
                 _bg = _v == 3 ? color.new(#00c853, 0) : _v == 2 ? color.new(#2e7d32, 35) : color.new(color.gray, 45)
                 f_cell(0, _r, array.get(rSym, _i), _bg, color.white)
@@ -270,6 +283,7 @@ if barstate.islast
                 f_cell(1, _r, "⛔ no", color.new(#b71c1c, 30), color.white)
                 f_cell(2, _r, array.get(rWhy, _i), color.new(#b71c1c, 30), color.white)
                 _r := _r + 1
+    array.clear(rGap)
     array.clear(rSym)
     array.clear(rVer)
     array.clear(rWhy)
