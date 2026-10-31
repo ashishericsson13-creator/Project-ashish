@@ -281,7 +281,7 @@ if barstate.islast
     _age1 = _same3 ? "5-yr low" : _same2 ? "2-yr low" : "1-yr low"
     _ok1 = supOn and _near1 and _s1 < close
     _ok2 = supOn and _near2 and sup2 < close and (na(_s1) or math.abs(sup2 - _s1) / _s1 > 0.005)
-    _ok3 = supOn and _near3 and sup3 < close and (na(sup2) or math.abs(sup3 - sup2) / sup2 > 0.005) and (na(sup1) or math.abs(sup3 - sup1) / _s1 > 0.005)
+    _ok3 = supOn and _near3 and sup3 < close and (na(sup2) or math.abs(sup3 - sup2) / sup2 > 0.005) and (na(_s1) or math.abs(sup3 - _s1) / _s1 > 0.005)
     if _ok1
         supL1 := line.new(bar_index - 2, _s1, bar_index, _s1, extend = extend.both, color = supCol, width = 2, style = line.style_dashed)
         supB1 := label.new(bar_index, _s1, "bottom zone · " + _age1 + "  " + str.tostring(_s1, format.mintick), style = label.style_label_left, color = supCol, textcolor = color.white, size = size.small)
