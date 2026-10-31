@@ -150,8 +150,11 @@ f_state() =>
     _va   = ta.sma(volume, 20)
     _vx   = na(_va) or _va <= 0 ? na : volume / _va
     _abv  = not na(_d200) and close > _d200
-    // 2 advancing, 4 declining, 3 above a stalled average, 1 basing
-    _stage = _abv and _up and _hh and _hl ? 2 : not _abv and _dn and not _hh and not _hl ? 4 : _abv ? 3 : 1
+    // 2 advancing, 4 declining, 3 above a stalled average, 1 basing.
+    // A falling 200-day can only be 4, or 1 once higher highs and higher lows
+    // are both in. It can never be 3: that would quote a top's trigger on a
+    // stock that is still in a downtrend.
+    _stage = _abv and _up and _hh and _hl ? 2 : _dn and not (_hh and _hl) ? 4 : _dn ? 1 : _abv ? 3 : 1
     _dip  = _abv and not na(_d50) and low <= _d50 * (1 + dipNear / 100) and (na(_vx) or _vx <= dipVol)
     _bHi  = ta.highest(high, baseN)[1]
     _bLo  = ta.lowest(low, baseN)[1]
@@ -265,12 +268,15 @@ if barstate.islast
     label.delete(supB1)
     label.delete(supB2)
     label.delete(supB3)
+    _same2 = not na(sup1) and not na(sup2) and sup1 > 0 and math.abs(sup2 - sup1) / sup1 <= 0.005
+    _same3 = not na(sup1) and not na(sup3) and sup1 > 0 and math.abs(sup3 - sup1) / sup1 <= 0.005
+    _age1 = _same3 ? "5-yr low" : _same2 ? "2-yr low" : "1-yr low"
     _ok1 = supOn and not na(sup1) and sup1 < close
     _ok2 = supOn and not na(sup2) and sup2 < close and (na(sup1) or math.abs(sup2 - sup1) / sup1 > 0.005)
     _ok3 = supOn and not na(sup3) and sup3 < close and (na(sup2) or math.abs(sup3 - sup2) / sup2 > 0.005) and (na(sup1) or math.abs(sup3 - sup1) / sup1 > 0.005)
     if _ok1
         supL1 := line.new(bar_index - 2, sup1, bar_index, sup1, extend = extend.both, color = supCol, width = 2, style = line.style_dashed)
-        supB1 := label.new(bar_index, sup1, "bottom zone · 1-yr low  " + str.tostring(sup1, format.mintick), style = label.style_label_left, color = supCol, textcolor = color.white, size = size.small)
+        supB1 := label.new(bar_index, sup1, "bottom zone · " + _age1 + "  " + str.tostring(sup1, format.mintick), style = label.style_label_left, color = supCol, textcolor = color.white, size = size.small)
     if _ok2
         supL2 := line.new(bar_index - 2, sup2, bar_index, sup2, extend = extend.both, color = color.new(supCol, 35), width = 1, style = line.style_dashed)
         supB2 := label.new(bar_index, sup2, "2-yr low  " + str.tostring(sup2, format.mintick), style = label.style_label_left, color = color.new(supCol, 35), textcolor = color.white, size = size.small)
