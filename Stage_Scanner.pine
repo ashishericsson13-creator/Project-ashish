@@ -269,13 +269,13 @@ if barstate.islast
     _ok2 = supOn and not na(sup2) and sup2 < close and (na(sup1) or math.abs(sup2 - sup1) / sup1 > 0.005)
     _ok3 = supOn and not na(sup3) and sup3 < close and (na(sup2) or math.abs(sup3 - sup2) / sup2 > 0.005) and (na(sup1) or math.abs(sup3 - sup1) / sup1 > 0.005)
     if _ok1
-        supL1 := line.new(bar_index - 2, sup1, bar_index, sup1, extend = line.extend_both, color = supCol, width = 2, style = line.style_dashed)
+        supL1 := line.new(bar_index - 2, sup1, bar_index, sup1, extend = extend.both, color = supCol, width = 2, style = line.style_dashed)
         supB1 := label.new(bar_index, sup1, "bottom zone · 1-yr low  " + str.tostring(sup1, format.mintick), style = label.style_label_left, color = supCol, textcolor = color.white, size = size.small)
     if _ok2
-        supL2 := line.new(bar_index - 2, sup2, bar_index, sup2, extend = line.extend_both, color = color.new(supCol, 35), width = 1, style = line.style_dashed)
+        supL2 := line.new(bar_index - 2, sup2, bar_index, sup2, extend = extend.both, color = color.new(supCol, 35), width = 1, style = line.style_dashed)
         supB2 := label.new(bar_index, sup2, "2-yr low  " + str.tostring(sup2, format.mintick), style = label.style_label_left, color = color.new(supCol, 35), textcolor = color.white, size = size.small)
     if _ok3
-        supL3 := line.new(bar_index - 2, sup3, bar_index, sup3, extend = line.extend_both, color = color.new(supCol, 55), width = 1, style = line.style_dotted)
+        supL3 := line.new(bar_index - 2, sup3, bar_index, sup3, extend = extend.both, color = color.new(supCol, 55), width = 1, style = line.style_dotted)
         supB3 := label.new(bar_index, sup3, "5-yr low  " + str.tostring(sup3, format.mintick), style = label.style_label_left, color = color.new(supCol, 55), textcolor = color.white, size = size.small)
 [st01, dp01, bk01, px01, og01, md01, bh01, dd01, lo01, hi01] = request.security(sym01, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
 f_push(sym01, st01, dp01, bk01, px01, og01, md01, bh01, dd01, lo01, hi01, false)
