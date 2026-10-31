@@ -20,8 +20,13 @@
 // ═══════════════════════════════════════════════════════════════════════════
 indicator("Stage Scanner", overlay = true, max_bars_back = 500)
 
+// Which market this chart belongs to. Every slot below points at that
+// market's symbol, so 32 requests cover 96 symbols: only the 32 that match
+// the chart are ever fetched.
+chartMkt = syminfo.type == "crypto" ? 3 : str.contains(str.upper(syminfo.prefix), "NSE") or str.contains(str.upper(syminfo.prefix), "BSE") ? 2 : 1
+
 scanTf  = input.timeframe("D", "Timeframe to scan", tooltip = "Daily keeps the 200-day a true 200-day whatever chart this sits on.", group = "1. Scan")
-rsBench = input.symbol("AMEX:SPY", "Benchmark for the US list", group = "1. Scan")
+rsBench = input.symbol("AMEX:SPY", "Benchmark — US", group = "1. Scan")
 rsBenc3 = input.symbol("BINANCE:BTCUSDT", "Benchmark for the crypto list", group = "1. Scan")
 rsBenc2 = input.symbol("NSE:NIFTY", "Benchmark for the India list", tooltip = "Relative strength only means anything against the market the stock trades in. Measuring an NSE name against SPY mixes two market cycles and the rupee, and buries a stock leading its own index.", group = "1. Scan")
 rsLen   = input.int(26, "Relative strength lookback (bars)", minval = 5, maxval = 250, group = "1. Scan")
@@ -37,43 +42,135 @@ showAll = input.bool(false, "Show every symbol, not just the ones that qualify",
 sPos    = input.string("Top Right", "Panel position", options = ["Top Right", "Top Left", "Bottom Right", "Bottom Left", "Middle Right"], group = "4. Display")
 sSize   = input.string("Small", "Text size", options = ["Tiny", "Small", "Normal"], group = "4. Display")
 
-sym01 = input.symbol("NASDAQ:AAPL", "#1", group = "2. US symbols")
-sym02 = input.symbol("NASDAQ:MSFT", "#2", group = "2. US symbols")
-sym03 = input.symbol("NASDAQ:NVDA", "#3", group = "2. US symbols")
-sym04 = input.symbol("NASDAQ:GOOGL", "#4", group = "2. US symbols")
-sym05 = input.symbol("NASDAQ:AMZN", "#5", group = "2. US symbols")
-sym06 = input.symbol("NASDAQ:META", "#6", group = "2. US symbols")
-sym07 = input.symbol("NASDAQ:AVGO", "#7", group = "2. US symbols")
-sym08 = input.symbol("NYSE:BRK.B", "#8", group = "2. US symbols")
-sym09 = input.symbol("NYSE:LLY", "#9", group = "2. US symbols")
-sym10 = input.symbol("NYSE:UNH", "#10", group = "2. US symbols")
-sym11 = input.symbol("NYSE:V", "#11", group = "2. US symbols")
-sym12 = input.symbol("NYSE:JPM", "#12", group = "2. US symbols")
-sym13 = input.symbol("NYSE:XOM", "#13", group = "2. US symbols")
-sym14 = input.symbol("NASDAQ:COST", "#14", group = "2. US symbols")
-sym15 = input.symbol("NYSE:KO", "#15", group = "2. US symbols")
-sym16 = input.symbol("NSE:RELIANCE", "#16", group = "3. India symbols")
-sym17 = input.symbol("NSE:HDFCBANK", "#17", group = "3. India symbols")
-sym18 = input.symbol("NSE:TCS", "#18", group = "3. India symbols")
-sym19 = input.symbol("NSE:INFY", "#19", group = "3. India symbols")
-sym20 = input.symbol("NSE:ICICIBANK", "#20", group = "3. India symbols")
-sym21 = input.symbol("NSE:BHARTIARTL", "#21", group = "3. India symbols")
-sym22 = input.symbol("NSE:ITC", "#22", group = "3. India symbols")
-sym23 = input.symbol("NSE:LT", "#23", group = "3. India symbols")
-sym24 = input.symbol("NSE:SBIN", "#24", group = "3. India symbols")
-sym25 = input.symbol("NSE:AXISBANK", "#25", group = "3. India symbols")
-sym26 = input.symbol("NSE:KOTAKBANK", "#26", group = "3. India symbols")
-sym27 = input.symbol("NSE:HINDUNILVR", "#27", group = "3. India symbols")
-sym28 = input.symbol("NSE:BAJFINANCE", "#28", group = "3. India symbols")
-sym29 = input.symbol("BINANCE:BTCUSDT", "#29", group = "4. Crypto symbols")
-sym30 = input.symbol("BINANCE:ETHUSDT", "#30", group = "4. Crypto symbols")
-sym31 = input.symbol("BINANCE:SOLUSDT", "#31", group = "4. Crypto symbols")
-sym32 = input.symbol("BINANCE:BNBUSDT", "#32", group = "4. Crypto symbols")
-sym33 = input.symbol("BINANCE:XRPUSDT", "#33", group = "4. Crypto symbols")
-sym34 = input.symbol("BINANCE:ADAUSDT", "#34", group = "4. Crypto symbols")
-sym35 = input.symbol("BINANCE:AVAXUSDT", "#35", group = "4. Crypto symbols")
-sym36 = input.symbol("BINANCE:LINKUSDT", "#36", group = "4. Crypto symbols")
-sym37 = input.symbol("BINANCE:DOTUSDT", "#37", group = "4. Crypto symbols")
+us01 = input.symbol("NASDAQ:AAPL", "US #1", group = "2. US list")
+in01 = input.symbol("NSE:RELIANCE", "India #1", group = "3. India list")
+cr01 = input.symbol("BINANCE:BTCUSDT", "Crypto #1", group = "4. Crypto list")
+us02 = input.symbol("NASDAQ:MSFT", "US #2", group = "2. US list")
+in02 = input.symbol("NSE:HDFCBANK", "India #2", group = "3. India list")
+cr02 = input.symbol("BINANCE:ETHUSDT", "Crypto #2", group = "4. Crypto list")
+us03 = input.symbol("NASDAQ:NVDA", "US #3", group = "2. US list")
+in03 = input.symbol("NSE:TCS", "India #3", group = "3. India list")
+cr03 = input.symbol("BINANCE:SOLUSDT", "Crypto #3", group = "4. Crypto list")
+us04 = input.symbol("NASDAQ:GOOGL", "US #4", group = "2. US list")
+in04 = input.symbol("NSE:INFY", "India #4", group = "3. India list")
+cr04 = input.symbol("BINANCE:BNBUSDT", "Crypto #4", group = "4. Crypto list")
+us05 = input.symbol("NASDAQ:AMZN", "US #5", group = "2. US list")
+in05 = input.symbol("NSE:ICICIBANK", "India #5", group = "3. India list")
+cr05 = input.symbol("BINANCE:XRPUSDT", "Crypto #5", group = "4. Crypto list")
+us06 = input.symbol("NASDAQ:META", "US #6", group = "2. US list")
+in06 = input.symbol("NSE:BHARTIARTL", "India #6", group = "3. India list")
+cr06 = input.symbol("BINANCE:ADAUSDT", "Crypto #6", group = "4. Crypto list")
+us07 = input.symbol("NASDAQ:AVGO", "US #7", group = "2. US list")
+in07 = input.symbol("NSE:ITC", "India #7", group = "3. India list")
+cr07 = input.symbol("BINANCE:AVAXUSDT", "Crypto #7", group = "4. Crypto list")
+us08 = input.symbol("NYSE:BRK.B", "US #8", group = "2. US list")
+in08 = input.symbol("NSE:LT", "India #8", group = "3. India list")
+cr08 = input.symbol("BINANCE:LINKUSDT", "Crypto #8", group = "4. Crypto list")
+us09 = input.symbol("NYSE:LLY", "US #9", group = "2. US list")
+in09 = input.symbol("NSE:SBIN", "India #9", group = "3. India list")
+cr09 = input.symbol("BINANCE:DOTUSDT", "Crypto #9", group = "4. Crypto list")
+us10 = input.symbol("NYSE:UNH", "US #10", group = "2. US list")
+in10 = input.symbol("NSE:AXISBANK", "India #10", group = "3. India list")
+cr10 = input.symbol("BINANCE:LTCUSDT", "Crypto #10", group = "4. Crypto list")
+us11 = input.symbol("NYSE:V", "US #11", group = "2. US list")
+in11 = input.symbol("NSE:KOTAKBANK", "India #11", group = "3. India list")
+cr11 = input.symbol("BINANCE:ATOMUSDT", "Crypto #11", group = "4. Crypto list")
+us12 = input.symbol("NYSE:JPM", "US #12", group = "2. US list")
+in12 = input.symbol("NSE:HINDUNILVR", "India #12", group = "3. India list")
+cr12 = input.symbol("BINANCE:UNIUSDT", "Crypto #12", group = "4. Crypto list")
+us13 = input.symbol("NYSE:XOM", "US #13", group = "2. US list")
+in13 = input.symbol("NSE:BAJFINANCE", "India #13", group = "3. India list")
+cr13 = input.symbol("BINANCE:ETCUSDT", "Crypto #13", group = "4. Crypto list")
+us14 = input.symbol("NYSE:CVX", "US #14", group = "2. US list")
+in14 = input.symbol("NSE:MARUTI", "India #14", group = "3. India list")
+cr14 = input.symbol("BINANCE:XLMUSDT", "Crypto #14", group = "4. Crypto list")
+us15 = input.symbol("NASDAQ:COST", "US #15", group = "2. US list")
+in15 = input.symbol("NSE:SUNPHARMA", "India #15", group = "3. India list")
+cr15 = input.symbol("BINANCE:NEARUSDT", "Crypto #15", group = "4. Crypto list")
+us16 = input.symbol("NYSE:KO", "US #16", group = "2. US list")
+in16 = input.symbol("NSE:TITAN", "India #16", group = "3. India list")
+cr16 = input.symbol("BINANCE:APTUSDT", "Crypto #16", group = "4. Crypto list")
+us17 = input.symbol("NYSE:NKE", "US #17", group = "2. US list")
+in17 = input.symbol("NSE:ASIANPAINT", "India #17", group = "3. India list")
+cr17 = input.symbol("BINANCE:ARBUSDT", "Crypto #17", group = "4. Crypto list")
+us18 = input.symbol("NASDAQ:TSLA", "US #18", group = "2. US list")
+in18 = input.symbol("NSE:NTPC", "India #18", group = "3. India list")
+cr18 = input.symbol("BINANCE:OPUSDT", "Crypto #18", group = "4. Crypto list")
+us19 = input.symbol("NYSE:CRM", "US #19", group = "2. US list")
+in19 = input.symbol("NSE:TATASTEEL", "India #19", group = "3. India list")
+cr19 = input.symbol("BINANCE:FILUSDT", "Crypto #19", group = "4. Crypto list")
+us20 = input.symbol("NASDAQ:ORCL", "US #20", group = "2. US list")
+in20 = input.symbol("NSE:WIPRO", "India #20", group = "3. India list")
+cr20 = input.symbol("BINANCE:INJUSDT", "Crypto #20", group = "4. Crypto list")
+us21 = input.symbol("NASDAQ:AMD", "US #21", group = "2. US list")
+in21 = input.symbol("NSE:HCLTECH", "India #21", group = "3. India list")
+cr21 = input.symbol("BINANCE:SUIUSDT", "Crypto #21", group = "4. Crypto list")
+us22 = input.symbol("NASDAQ:NFLX", "US #22", group = "2. US list")
+in22 = input.symbol("NSE:ULTRACEMCO", "India #22", group = "3. India list")
+cr22 = input.symbol("BINANCE:SEIUSDT", "Crypto #22", group = "4. Crypto list")
+us23 = input.symbol("NASDAQ:ADBE", "US #23", group = "2. US list")
+in23 = input.symbol("NSE:POWERGRID", "India #23", group = "3. India list")
+cr23 = input.symbol("BINANCE:TIAUSDT", "Crypto #23", group = "4. Crypto list")
+us24 = input.symbol("NASDAQ:PEP", "US #24", group = "2. US list")
+in24 = input.symbol("NSE:NESTLEIND", "India #24", group = "3. India list")
+cr24 = input.symbol("BINANCE:RUNEUSDT", "Crypto #24", group = "4. Crypto list")
+us25 = input.symbol("NYSE:MRK", "US #25", group = "2. US list")
+in25 = input.symbol("NSE:ADANIENT", "India #25", group = "3. India list")
+cr25 = input.symbol("BINANCE:AAVEUSDT", "Crypto #25", group = "4. Crypto list")
+us26 = input.symbol("NYSE:ABBV", "US #26", group = "2. US list")
+in26 = input.symbol("NSE:ONGC", "India #26", group = "3. India list")
+cr26 = input.symbol("BINANCE:MKRUSDT", "Crypto #26", group = "4. Crypto list")
+us27 = input.symbol("NYSE:WMT", "US #27", group = "2. US list")
+in27 = input.symbol("NSE:COALINDIA", "India #27", group = "3. India list")
+cr27 = input.symbol("BINANCE:GRTUSDT", "Crypto #27", group = "4. Crypto list")
+us28 = input.symbol("NYSE:HD", "US #28", group = "2. US list")
+in28 = input.symbol("NSE:GRASIM", "India #28", group = "3. India list")
+cr28 = input.symbol("BINANCE:SANDUSDT", "Crypto #28", group = "4. Crypto list")
+us29 = input.symbol("NYSE:BAC", "US #29", group = "2. US list")
+in29 = input.symbol("NSE:JSWSTEEL", "India #29", group = "3. India list")
+cr29 = input.symbol("BINANCE:AXSUSDT", "Crypto #29", group = "4. Crypto list")
+us30 = input.symbol("NYSE:PG", "US #30", group = "2. US list")
+in30 = input.symbol("NSE:TECHM", "India #30", group = "3. India list")
+cr30 = input.symbol("BINANCE:ALGOUSDT", "Crypto #30", group = "4. Crypto list")
+us31 = input.symbol("NYSE:DIS", "US #31", group = "2. US list")
+in31 = input.symbol("NSE:CIPLA", "India #31", group = "3. India list")
+cr31 = input.symbol("BINANCE:ICPUSDT", "Crypto #31", group = "4. Crypto list")
+us32 = input.symbol("NASDAQ:INTC", "US #32", group = "2. US list")
+in32 = input.symbol("NSE:DRREDDY", "India #32", group = "3. India list")
+cr32 = input.symbol("BINANCE:FETUSDT", "Crypto #32", group = "4. Crypto list")
+
+sym01 = chartMkt == 2 ? in01 : chartMkt == 3 ? cr01 : us01
+sym02 = chartMkt == 2 ? in02 : chartMkt == 3 ? cr02 : us02
+sym03 = chartMkt == 2 ? in03 : chartMkt == 3 ? cr03 : us03
+sym04 = chartMkt == 2 ? in04 : chartMkt == 3 ? cr04 : us04
+sym05 = chartMkt == 2 ? in05 : chartMkt == 3 ? cr05 : us05
+sym06 = chartMkt == 2 ? in06 : chartMkt == 3 ? cr06 : us06
+sym07 = chartMkt == 2 ? in07 : chartMkt == 3 ? cr07 : us07
+sym08 = chartMkt == 2 ? in08 : chartMkt == 3 ? cr08 : us08
+sym09 = chartMkt == 2 ? in09 : chartMkt == 3 ? cr09 : us09
+sym10 = chartMkt == 2 ? in10 : chartMkt == 3 ? cr10 : us10
+sym11 = chartMkt == 2 ? in11 : chartMkt == 3 ? cr11 : us11
+sym12 = chartMkt == 2 ? in12 : chartMkt == 3 ? cr12 : us12
+sym13 = chartMkt == 2 ? in13 : chartMkt == 3 ? cr13 : us13
+sym14 = chartMkt == 2 ? in14 : chartMkt == 3 ? cr14 : us14
+sym15 = chartMkt == 2 ? in15 : chartMkt == 3 ? cr15 : us15
+sym16 = chartMkt == 2 ? in16 : chartMkt == 3 ? cr16 : us16
+sym17 = chartMkt == 2 ? in17 : chartMkt == 3 ? cr17 : us17
+sym18 = chartMkt == 2 ? in18 : chartMkt == 3 ? cr18 : us18
+sym19 = chartMkt == 2 ? in19 : chartMkt == 3 ? cr19 : us19
+sym20 = chartMkt == 2 ? in20 : chartMkt == 3 ? cr20 : us20
+sym21 = chartMkt == 2 ? in21 : chartMkt == 3 ? cr21 : us21
+sym22 = chartMkt == 2 ? in22 : chartMkt == 3 ? cr22 : us22
+sym23 = chartMkt == 2 ? in23 : chartMkt == 3 ? cr23 : us23
+sym24 = chartMkt == 2 ? in24 : chartMkt == 3 ? cr24 : us24
+sym25 = chartMkt == 2 ? in25 : chartMkt == 3 ? cr25 : us25
+sym26 = chartMkt == 2 ? in26 : chartMkt == 3 ? cr26 : us26
+sym27 = chartMkt == 2 ? in27 : chartMkt == 3 ? cr27 : us27
+sym28 = chartMkt == 2 ? in28 : chartMkt == 3 ? cr28 : us28
+sym29 = chartMkt == 2 ? in29 : chartMkt == 3 ? cr29 : us29
+sym30 = chartMkt == 2 ? in30 : chartMkt == 3 ? cr30 : us30
+sym31 = chartMkt == 2 ? in31 : chartMkt == 3 ? cr31 : us31
+sym32 = chartMkt == 2 ? in32 : chartMkt == 3 ? cr32 : us32
 
 // ═══════════════════════════════════════════════════════════════
 // THE SCAN
@@ -117,25 +214,22 @@ f_mkt(string _s) =>
     _u = str.upper(_s)
     str.contains(_u, "NSE:") or str.contains(_u, "BSE:") ? 2 : str.contains(_u, "USDT") or str.contains(_u, "USD.P") or str.contains(_u, "BINANCE") or str.contains(_u, "COINBASE") or str.contains(_u, "BITSTAMP") ? 3 : 1
 
-chartMkt = syminfo.type == "crypto" ? 3 : str.contains(str.upper(syminfo.prefix), "NSE") or str.contains(str.upper(syminfo.prefix), "BSE") ? 2 : 1
-
 f_label(string _s) =>
     _i = str.pos(_s, ":")
     na(_i) ? _s : str.substring(_s, _i + 1)
 
 // The three benchmarks, declared ahead of f_push because it reads them.
-[bNow3, bOld3] = request.security(rsBenc3, scanTf, [close, close[rsLen]], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-[bNow2, bOld2] = request.security(rsBenc2, scanTf, [close, close[rsLen]], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-[bNow, bOld] = request.security(rsBench, scanTf, [close, close[rsLen]], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+benchPick = chartMkt == 2 ? rsBenc2 : chartMkt == 3 ? rsBenc3 : rsBench
+[bNow, bOld] = request.security(benchPick, scanTf, [close, close[rsLen]], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
 
 // 3 = buy, 2 = stage 2 with no entry, 1 = watchlist, 0 = no.
 // Only the market you are looking at is collected, so a US chart never lists
 // NSE names and the panel stays the length of one market.
 f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50, float _bhi) =>
     _m = f_mkt(_sym)
-    if barstate.islast and not na(_px) and _m == chartMkt
-        _b  = _m == 2 ? bNow2 : _m == 3 ? bNow3 : bNow
-        _bo = _m == 2 ? bOld2 : _m == 3 ? bOld3 : bOld
+    if barstate.islast and not na(_px)
+        _b  = bNow
+        _bo = bOld
         _rs = na(_og) or _og <= 0 or na(_b) or na(_bo) or _bo <= 0 ? false : _px / _og > _b / _bo
         _v = _st == 2 and (_bk == 1 or _dp == 1) and _rs ? 3 : _st == 2 ? 2 : _st == 1 ? 1 : 0
         // What would have to happen for this to become a buy, with the number.
@@ -219,16 +313,6 @@ f_push(sym30, st30, dp30, bk30, px30, og30, md30, bh30)
 f_push(sym31, st31, dp31, bk31, px31, og31, md31, bh31)
 [st32, dp32, bk32, px32, og32, md32, bh32] = request.security(sym32, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
 f_push(sym32, st32, dp32, bk32, px32, og32, md32, bh32)
-[st33, dp33, bk33, px33, og33, md33, bh33] = request.security(sym33, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym33, st33, dp33, bk33, px33, og33, md33, bh33)
-[st34, dp34, bk34, px34, og34, md34, bh34] = request.security(sym34, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym34, st34, dp34, bk34, px34, og34, md34, bh34)
-[st35, dp35, bk35, px35, og35, md35, bh35] = request.security(sym35, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym35, st35, dp35, bk35, px35, og35, md35, bh35)
-[st36, dp36, bk36, px36, og36, md36, bh36] = request.security(sym36, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym36, st36, dp36, bk36, px36, og36, md36, bh36)
-[st37, dp37, bk37, px37, og37, md37, bh37] = request.security(sym37, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym37, st37, dp37, bk37, px37, og37, md37, bh37)
 
 // ═══════════════════════════════════════════════════════════════
 // THE PANEL
