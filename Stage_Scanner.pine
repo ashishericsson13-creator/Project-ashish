@@ -28,6 +28,7 @@ flatPct = input.float(0.5, "Slope under this % counts as flat", minval = 0.0, ma
 swingN  = input.int(20, "Bars per swing when testing higher highs and lows", minval = 5, maxval = 100, group = "1. Scan")
 dipNear = input.float(2.0, "A dip counts within this % of the 50-day", minval = 0.2, maxval = 15.0, step = 0.1, group = "1. Scan")
 dipVol  = input.float(1.0, "Light volume is under this multiple", minval = 0.3, maxval = 2.0, step = 0.05, group = "1. Scan")
+baseW   = input.float(15.0, "A base must be no wider than this (%) for a break of it to count", minval = 2.0, maxval = 60.0, step = 0.5, tooltip = "Without this the test is just a 10-bar high on volume, which fires on anything extended. The chart panel will not tick its pivot box without a base either, and the two must not disagree.", group = "1. Scan")
 brkVol  = input.float(1.4, "Breakout volume multiple", minval = 1.0, maxval = 4.0, step = 0.05, group = "1. Scan")
 showAll = input.bool(false, "Show every symbol, not just the ones that qualify", group = "4. Display")
 sPos    = input.string("Top Right", "Panel position", options = ["Top Right", "Top Left", "Bottom Right", "Bottom Left", "Middle Right"], group = "4. Display")
@@ -97,15 +98,19 @@ f_state() =>
     // 2 advancing, 4 declining, 3 above a stalled average, 1 basing
     _stage = _abv and _up and _hh and _hl ? 2 : not _abv and _dn and not _hh and not _hl ? 4 : _abv ? 3 : 1
     _dip  = _abv and not na(_d50) and low <= _d50 * (1 + dipNear / 100) and (na(_vx) or _vx <= dipVol)
-    _piv  = ta.highest(high, 10)[1]
-    _brk  = not na(_piv) and close > _piv and not na(_vx) and _vx >= brkVol and close > close[1]
+    _bHi  = ta.highest(high, 20)[1]
+    _bLo  = ta.lowest(low, 20)[1]
+    _base = not na(_bLo) and _bLo > 0 and (_bHi - _bLo) / _bLo * 100 <= baseW
+    _brk  = _base and close > _bHi and not na(_vx) and _vx >= brkVol and close > close[1]
     [_stage, _dip ? 1 : 0, _brk ? 1 : 0, close, close[rsLen]]
 
 var array<string> rSym = array.new<string>()
 var array<int>    rVer = array.new<int>()
 var array<string> rWhy = array.new<string>()
 
-f_label(string _s) => str.replace_all(str.replace_all(str.replace_all(_s, "NASDAQ:", ""), "NYSE:", ""), "NSE:", "")
+f_label(string _s) =>
+    _i = str.pos(_s, ":")
+    na(_i) ? _s : str.substring(_s, _i + 1)
 
 // 3 = buy, 2 = stage 2 but nothing to buy, 1 = watchlist, 0 = no
 f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _b, float _bo) =>
