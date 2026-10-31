@@ -23,7 +23,9 @@ indicator("Stage Scanner", overlay = true, max_bars_back = 500)
 // Which market this chart belongs to. Every slot below points at that
 // market's symbol, so 32 requests cover 96 symbols: only the 32 that match
 // the chart are ever fetched.
-chartMkt = syminfo.type == "crypto" ? 3 : str.contains(str.upper(syminfo.prefix), "NSE") or str.contains(str.upper(syminfo.prefix), "BSE") ? 2 : 1
+mktMode  = input.string("Auto", "Which list to show", options = ["Auto", "US", "India", "Crypto"], tooltip = "Auto follows the chart. Set it by hand if a symbol's exchange is not recognised.", group = "1. Scan")
+autoMkt  = syminfo.type == "crypto" ? 3 : syminfo.prefix == "NSE" or syminfo.prefix == "BSE" ? 2 : 1
+chartMkt = mktMode == "US" ? 1 : mktMode == "India" ? 2 : mktMode == "Crypto" ? 3 : autoMkt
 
 scanTf  = input.timeframe("D", "Timeframe to scan", tooltip = "Daily keeps the 200-day a true 200-day whatever chart this sits on.", group = "1. Scan")
 rsBench = input.symbol("AMEX:SPY", "Benchmark — US", group = "1. Scan")
