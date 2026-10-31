@@ -208,7 +208,8 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
         // the level buyers have already defended, which is what a bottom is
         // until a higher low proves a new one.
         _newLo = not na(_lo) and _px <= _lo * 1.01
-        _btm = na(_lo) or _px <= 0 ? "" : _newLo ? "   ·   at new lows — no floor to name yet" : "   ·   bottom zone " + str.tostring(_lo, format.mintick) + ", " + str.tostring((_px - _lo) / _px * 100, "#.#") + "% below"
+        _far = na(_lo) or _px <= 0 or (_px - _lo) / _px * 100 > 20
+        _btm = na(_lo) or _px <= 0 or (_v >= 2 and _far) ? "" : _newLo ? "   ·   at new lows — no floor to name yet" : "   ·   bottom zone " + str.tostring(_lo, format.mintick) + ", " + str.tostring((_px - _lo) / _px * 100, "#.#") + "% below"
         _upTo = na(_bhi) ? _hi : _bhi
         _trig = _v == 3 ? "✅ BUY NOW near " + str.tostring(_px, format.mintick) + " — " + (_bk == 1 ? "breakout on volume, RS gaining" : "dip to the 50-day, RS gaining")
              : _v == 2 and not _rs and not na(_upTo) ? "buy over " + str.tostring(_upTo, format.mintick) + " once RS turns — see its chart" + _btm
