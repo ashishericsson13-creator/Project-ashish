@@ -122,6 +122,11 @@ f_label(string _s) =>
     _i = str.pos(_s, ":")
     na(_i) ? _s : str.substring(_s, _i + 1)
 
+// The three benchmarks, declared ahead of f_push because it reads them.
+[bNow3, bOld3] = request.security(rsBenc3, scanTf, [close, close[rsLen]], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+[bNow2, bOld2] = request.security(rsBenc2, scanTf, [close, close[rsLen]], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+[bNow, bOld] = request.security(rsBench, scanTf, [close, close[rsLen]], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+
 // 3 = buy, 2 = stage 2 with no entry, 1 = watchlist, 0 = no.
 // Only the market you are looking at is collected, so a US chart never lists
 // NSE names and the panel stays the length of one market.
@@ -145,9 +150,6 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
         array.push(rVer, _v)
         array.push(rWhy, _trig)
 
-[bNow3, bOld3] = request.security(rsBenc3, scanTf, [close, close[rsLen]], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-[bNow2, bOld2] = request.security(rsBenc2, scanTf, [close, close[rsLen]], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-[bNow, bOld] = request.security(rsBench, scanTf, [close, close[rsLen]], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
 
 [st01, dp01, bk01, px01, og01, md01, bh01] = request.security(sym01, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
 f_push(sym01, st01, dp01, bk01, px01, og01, md01, bh01)
