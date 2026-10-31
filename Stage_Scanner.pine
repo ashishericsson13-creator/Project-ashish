@@ -207,9 +207,10 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
         // Where the last year of trade found a floor. Not a forecast: it is
         // the level buyers have already defended, which is what a bottom is
         // until a higher low proves a new one.
-        _newLo = not na(_lo) and _px <= _lo * 1.01
+        _newLo = not na(_lo) and _px < _lo
+        _onLo  = not na(_lo) and not _newLo and _px <= _lo * 1.02
         _far = na(_lo) or _px <= 0 or (_px - _lo) / _px * 100 > 20
-        _btm = na(_lo) or _px <= 0 or (_v >= 2 and _far) ? "" : _newLo ? "   ·   at new lows — no floor to name yet" : "   ·   bottom zone " + str.tostring(_lo, format.mintick) + ", " + str.tostring((_px - _lo) / _px * 100, "#.#") + "% below"
+        _btm = na(_lo) or _px <= 0 or (_v >= 2 and _far) ? "" : _newLo ? "   ·   at new lows — nothing under it to name" : _onLo ? "   ·   sitting on its floor " + str.tostring(_lo, format.mintick) + " — it holds here or it does not" : "   ·   bottom zone " + str.tostring(_lo, format.mintick) + ", " + str.tostring((_px - _lo) / _px * 100, "#.#") + "% below"
         _upTo = na(_bhi) ? _hi : _bhi
         _trig = _v == 3 ? "✅ BUY NOW near " + str.tostring(_px, format.mintick) + " — " + (_bk == 1 ? "breakout on volume, RS gaining" : "dip to the 50-day, RS gaining")
              : _v == 2 and not _rs and not na(_upTo) ? "buy over " + str.tostring(_upTo, format.mintick) + " once RS turns — see its chart" + _btm
@@ -218,6 +219,7 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
              : _v == 2 and not na(_gap) and _gap > 0 ? "buy a dip to the 50-day " + str.tostring(_d50, format.mintick) + ", " + str.tostring(_gap, "#.#") + "% below" + _btm
              : _v == 2 and not na(_d50) ? "buy a dip to the 50-day " + str.tostring(_d50, format.mintick) + _btm
              : _v == 2 ? "Stage 2, waiting for a dip or a base to form" + _btm
+             : _v == 1 and not na(_d200) and _d200 <= _px ? "over the 200-day " + str.tostring(_d200, format.mintick) + " already — wait for it to stop falling and turn up" + _btm
              : _v == 1 and not na(_d200) ? "buy only over the 200-day " + str.tostring(_d200, format.mintick) + ", " + str.tostring(math.abs(_d200 - _px) / _px * 100, "#.#") + "% " + (_d200 > _px ? "above" : "below") + ", once it flattens" + _btm
              : _v == 1 ? "basing — needs the 200-day to turn up and price to clear it" + _btm
              : _st == 4 and not na(_d200) ? "NO — needs a higher low, then a close over the 200-day " + str.tostring(_d200, format.mintick) + _btm
@@ -241,6 +243,7 @@ d50on   = input.bool(false, "50-day average line", group = "5. Lines")
 d50col  = input.color(#ef6c00, "50-day colour", group = "5. Lines")
 supOn   = input.bool(true, "Bottom-zone support lines", tooltip = "The lows the last 1, 2 and 5 years have already defended. A level only counts as support while price is above it.", group = "5. Lines")
 supCol  = input.color(#00897b, "Support colour", group = "5. Lines")
+supMax  = input.float(40.0, "Only draw supports within this % of price", minval = 5.0, maxval = 90.0, step = 5.0, tooltip = "A floor far below price is not a level anyone plans around. Gold's five-year low sits 58% down.", group = "5. Lines")
 
 // One request covers the long average and the three floors beneath price.
 [w200, sup1, sup2, sup3] = request.security(syminfo.tickerid, "W", [ta.sma(close, 200), ta.lowest(low, 52), ta.lowest(low, 104), ta.lowest(low, 260)], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
@@ -269,15 +272,19 @@ if barstate.islast
     label.delete(supB1)
     label.delete(supB2)
     label.delete(supB3)
-    _same2 = not na(sup1) and not na(sup2) and sup1 > 0 and math.abs(sup2 - sup1) / sup1 <= 0.005
-    _same3 = not na(sup1) and not na(sup3) and sup1 > 0 and math.abs(sup3 - sup1) / sup1 <= 0.005
+    _s1 = na(loMe) ? sup1 : loMe
+    _near1 = not na(_s1) and close > 0 and (close - _s1) / close * 100 <= supMax
+    _near2 = not na(sup2) and close > 0 and (close - sup2) / close * 100 <= supMax
+    _near3 = not na(sup3) and close > 0 and (close - sup3) / close * 100 <= supMax
+    _same2 = not na(_s1) and not na(sup2) and _s1 > 0 and math.abs(sup2 - _s1) / _s1 <= 0.005
+    _same3 = not na(_s1) and not na(sup3) and _s1 > 0 and math.abs(sup3 - _s1) / _s1 <= 0.005
     _age1 = _same3 ? "5-yr low" : _same2 ? "2-yr low" : "1-yr low"
-    _ok1 = supOn and not na(sup1) and sup1 < close
-    _ok2 = supOn and not na(sup2) and sup2 < close and (na(sup1) or math.abs(sup2 - sup1) / sup1 > 0.005)
-    _ok3 = supOn and not na(sup3) and sup3 < close and (na(sup2) or math.abs(sup3 - sup2) / sup2 > 0.005) and (na(sup1) or math.abs(sup3 - sup1) / sup1 > 0.005)
+    _ok1 = supOn and _near1 and _s1 < close
+    _ok2 = supOn and _near2 and sup2 < close and (na(_s1) or math.abs(sup2 - _s1) / _s1 > 0.005)
+    _ok3 = supOn and _near3 and sup3 < close and (na(sup2) or math.abs(sup3 - sup2) / sup2 > 0.005) and (na(sup1) or math.abs(sup3 - sup1) / _s1 > 0.005)
     if _ok1
-        supL1 := line.new(bar_index - 2, sup1, bar_index, sup1, extend = extend.both, color = supCol, width = 2, style = line.style_dashed)
-        supB1 := label.new(bar_index, sup1, "bottom zone · " + _age1 + "  " + str.tostring(sup1, format.mintick), style = label.style_label_left, color = supCol, textcolor = color.white, size = size.small)
+        supL1 := line.new(bar_index - 2, _s1, bar_index, _s1, extend = extend.both, color = supCol, width = 2, style = line.style_dashed)
+        supB1 := label.new(bar_index, _s1, "bottom zone · " + _age1 + "  " + str.tostring(_s1, format.mintick), style = label.style_label_left, color = supCol, textcolor = color.white, size = size.small)
     if _ok2
         supL2 := line.new(bar_index - 2, sup2, bar_index, sup2, extend = extend.both, color = color.new(supCol, 35), width = 1, style = line.style_dashed)
         supB2 := label.new(bar_index, sup2, "2-yr low  " + str.tostring(sup2, format.mintick), style = label.style_label_left, color = color.new(supCol, 35), textcolor = color.white, size = size.small)
