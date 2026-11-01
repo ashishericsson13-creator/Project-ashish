@@ -268,6 +268,7 @@ lvlAtr = input.float(1.0, "...or this many ATRs apart, whichever is wider", minv
 resCol = input.color(#c62828, "Level above price", group = "6. Levels & targets")
 supCol2 = input.color(#2e7d32, "Level below price", group = "6. Levels & targets")
 trOn   = input.bool(true, "Trendlines through the last two turns", tooltip = "One line through the last two pivot highs and one through the last two pivot lows. Converging lines are a wedge; the break of one is the signal.", group = "6. Levels & targets")
+trExt  = input.int(40, "Project trendlines this many bars forward", minval = 0, maxval = 300, tooltip = "A line through two turns close together has a brutal slope. Extended forever it leaves the chart and says nothing, so the projection is capped both by this many bars and by the point where it has travelled 40% of price.", group = "6. Levels & targets")
 trHiC  = input.color(#c62828, "Trendline through highs", group = "6. Levels & targets")
 trLoC  = input.color(#2e7d32, "Trendline through lows", group = "6. Levels & targets")
 boxOn  = input.bool(true, "Consolidation ranges", group = "6. Levels & targets")
@@ -436,10 +437,14 @@ if barstate.islast
     array.clear(lvOut)
     line.delete(trH)
     line.delete(trL)
-    if trOn and not na(thA) and not na(thB) and txA > txB
-        trH := line.new(txB, thB, txA, thA, extend = extend.right, color = trHiC, width = 2)
-    if trOn and not na(tlA) and not na(tlB) and lxA > lxB
-        trL := line.new(lxB, tlB, lxA, tlA, extend = extend.right, color = trLoC, width = 2)
+    if trOn and not na(thA) and not na(thB) and txA - txB >= pvN
+        _sH = (thA - thB) / (txA - txB)
+        _nH = _sH == 0 or close <= 0 ? trExt : math.min(trExt, int(math.abs(close * 0.4 / _sH)))
+        trH := line.new(txB, thB, txA + _nH, thA + _sH * _nH, color = trHiC, width = 2)
+    if trOn and not na(tlA) and not na(tlB) and lxA - lxB >= pvN
+        _sL = (tlA - tlB) / (lxA - lxB)
+        _nL = _sL == 0 or close <= 0 ? trExt : math.min(trExt, int(math.abs(close * 0.4 / _sL)))
+        trL := line.new(lxB, tlB, lxA + _nL, tlA + _sL * _nL, color = trLoC, width = 2)
 
     // Nearest turning points first, so the levels drawn are the ones price has
     // to deal with next, not the loudest ones on the chart.
