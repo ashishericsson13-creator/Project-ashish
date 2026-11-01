@@ -167,6 +167,7 @@ var array<int>    rVer = array.new<int>()
 var array<string> rWhy = array.new<string>()
 var array<float>  rGap = array.new<float>()
 var array<bool>   rMe  = array.new<bool>()
+var array<int>    rMiss = array.new<int>(1, 0)
 
 // 1 US, 2 India, 3 crypto — taken from the symbol string rather than from
 // which input slot it sits in, so any slot can hold anything.
@@ -197,6 +198,8 @@ benchPick = chartMkt == 2 ? rsBenc2 : chartMkt == 3 ? rsBenc3 : rsBench
 // NSE names and the panel stays the length of one market.
 f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50, float _bhi, float _d200, float _lo, float _hi, bool _me) =>
     _m = f_mkt(_sym)
+    if barstate.islast and na(_px) and not _me
+        array.set(rMiss, 0, array.get(rMiss, 0) + 1)
     if barstate.islast and not na(_px) and (_me or f_base(_sym) != chartBase)
         _b  = bNow
         _bo = bOld
@@ -222,6 +225,7 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
              : _v == 1 and not na(_d200) and _d200 <= _px ? "over the 200-day " + str.tostring(_d200, format.mintick) + " already — wait for it to stop falling and turn up" + _btm
              : _v == 1 and not na(_d200) ? "buy only over the 200-day " + str.tostring(_d200, format.mintick) + ", " + str.tostring(math.abs(_d200 - _px) / _px * 100, "#.#") + "% " + (_d200 > _px ? "above" : "below") + ", once it flattens" + _btm
              : _v == 1 ? "basing — needs the 200-day to turn up and price to clear it" + _btm
+             : _st == 4 and not na(_d200) and _d200 <= _px ? "NO — over the 200-day " + str.tostring(_d200, format.mintick) + " already, but it is still falling and the last high was lower" + _btm
              : _st == 4 and not na(_d200) ? "NO — needs a higher low, then a close over the 200-day " + str.tostring(_d200, format.mintick) + _btm
              : _st == 4 ? "NO — Stage 4, stay away" + _btm
              : not na(_hi) ? "NO — nothing to buy under " + str.tostring(_hi, format.mintick) + ", the year's high, " + str.tostring((_hi - _px) / _px * 100, "#.#") + "% above" + _btm
@@ -357,7 +361,7 @@ if barstate.islast
     f_cell(0, 0, "STAGE SCANNER · " + _mName, color.new(#1a237e, 0), color.white)
     f_cell(1, 0, _buys > 0 ? "✅ " + str.tostring(_buys) + " BUY" : "⛔ 0 buy", _buys > 0 ? color.new(#00c853, 0) : color.new(color.gray, 30), color.white)
     _tfBad = scanTf != "D" and scanTf != "1D"
-    f_cell(2, 0, _tfBad ? "⚠ " + scanTf + " — the 200-day is now 200 " + scanTf + " bars" : str.tostring(_n) + " " + _mName + " on " + scanTf + (_buys > 0 ? " — green rows are the buys" : " — nothing to buy yet; each row says what it needs") + "   ·   ◆ is this chart", _tfBad ? color.new(#b71c1c, 0) : color.new(#1a237e, 0), color.white)
+    f_cell(2, 0, _tfBad ? "⚠ " + scanTf + " — the 200-day is now 200 " + scanTf + " bars" : str.tostring(_n) + " " + _mName + " on " + scanTf + (_buys > 0 ? " — green rows are the buys" : " — nothing to buy yet; each row says what it needs") + "   ·   ◆ is this chart" + (array.get(rMiss, 0) > 0 ? "   ·   ⚠ " + str.tostring(array.get(rMiss, 0)) + " symbol(s) not resolving — check the list" : ""), _tfBad ? color.new(#b71c1c, 0) : color.new(#1a237e, 0), color.white)
     _r = 1
     for _i = 0 to (_n > 0 ? _n - 1 : 0)
         if _n > 0 and array.get(rMe, _i)
@@ -394,6 +398,7 @@ if barstate.islast
             f_cell(1, _r, "⛔ no", color.new(#b71c1c, 0), color.white)
             f_cell(2, _r, array.get(rWhy, _i), color.new(#b71c1c, 0), color.white)
             _r := _r + 1
+    array.set(rMiss, 0, 0)
     array.clear(rMe)
     array.clear(rGap)
     array.clear(rSym)
