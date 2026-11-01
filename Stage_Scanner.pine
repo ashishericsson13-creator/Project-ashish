@@ -207,7 +207,8 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
         _b  = bNow
         _bo = bOld
         _rs = na(_og) or _og <= 0 or na(_b) or na(_bo) or _bo <= 0 ? false : _px / _og > _b / _bo
-        _v = _st == 2 and (_bk == 1 or _dp == 1) and _rs ? 3 : _st == 2 ? 2 : _st == 1 ? 1 : 0
+        _young = na(_d200)
+        _v = _young ? 1 : _st == 2 and (_bk == 1 or _dp == 1) and _rs ? 3 : _st == 2 ? 2 : _st == 1 ? 1 : 0
         // What would have to happen for this to become a buy, with the number.
         _gap = na(_d50) or _px <= 0 ? na : (_px - _d50) / _px * 100
         // Where the last year of trade found a floor. Not a forecast: it is
@@ -218,7 +219,8 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
         _far = na(_lo) or _px <= 0 or (_px - _lo) / _px * 100 > 20
         _btm = na(_lo) or _px <= 0 or (_v >= 2 and _far) ? "" : _newLo ? "   ·   at new lows — nothing under it to name" : _onLo ? "   ·   sitting on its floor " + str.tostring(_lo, format.mintick) + " — it holds here or it does not" : "   ·   bottom zone " + str.tostring(_lo, format.mintick) + ", " + str.tostring((_px - _lo) / _px * 100, "#.#") + "% below"
         _upTo = na(_bhi) ? _hi : _bhi
-        _trig = _v == 3 ? "✅ BUY NOW near " + str.tostring(_px, format.mintick) + " — " + (_bk == 1 ? "breakout on volume, RS gaining" : "dip to the 50-day, RS gaining")
+        _trig = _young ? "too new to stage — no 200-day yet, it has not traded 200 days" + _btm
+             : _v == 3 ? "✅ BUY NOW near " + str.tostring(_px, format.mintick) + " — " + (_bk == 1 ? "breakout on volume, RS gaining" : "dip to the 50-day, RS gaining")
              : _v == 2 and not _rs and not na(_upTo) ? "buy over " + str.tostring(_upTo, format.mintick) + " once RS turns — see its chart" + _btm
              : _v == 2 and not _rs ? "setup is there — needs RS to turn, see its chart" + _btm
              : _v == 2 and not na(_bhi) ? "buy a close above " + str.tostring(_bhi, format.mintick) + " on volume, " + str.tostring((_bhi - _px) / _px * 100, "#.#") + "% above" + _btm
@@ -236,7 +238,7 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
         // how far the trigger is, so the list can lead with the nearest
         _dist = _v == 2 and not na(_bhi) ? math.abs(_bhi - _px) / _px * 100 : _v == 2 and not na(_gap) and _gap > 0 ? _gap : 999.0
         array.push(rMe, _me)
-        array.push(rStg, _st)
+        array.push(rStg, _young ? 9 : _st)
         array.push(rRsi, _rsi)
         array.push(rGap, _dist)
         array.push(rSym, (_me ? "◆ " : "") + f_label(_sym))
@@ -512,7 +514,7 @@ if barstate.islast
             _bg = _v == 3 ? color.new(#00e676, 0) : _v == 2 ? color.new(#1b5e20, 0) : _v == 1 ? color.new(#37474f, 0) : color.new(#b71c1c, 0)
             _tx = _v == 3 ? color.black : color.white
             f_cell(0, _r, array.get(rSym, _i), _bg, _tx)
-            f_cell(1, _r, (_v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : _v == 1 ? "👁 watch" : array.get(rStg, _i) == 4 ? "⛔ SELL" : "⛔ no") + f_rs(array.get(rRsi, _i)), _bg, _tx)
+            f_cell(1, _r, (_v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : _v == 1 ? (array.get(rStg, _i) == 9 ? "👁 new" : "👁 watch") : array.get(rStg, _i) == 4 ? "⛔ SELL" : "⛔ no") + f_rs(array.get(rRsi, _i)), _bg, _tx)
             f_cell(2, _r, array.get(rWhy, _i), _bg, _tx)
             _r := _r + 1
     float _up1 = na
@@ -569,7 +571,7 @@ if barstate.islast
                 _bg = _v == 3 ? color.new(#00e676, 0) : _v == 2 ? color.new(#1b5e20, 0) : color.new(#37474f, 0)
                 _tx = _v == 3 ? color.black : color.white
                 f_cell(0, _r, array.get(rSym, _i), _bg, _tx)
-                f_cell(1, _r, (_v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : "👁 watch") + f_rs(array.get(rRsi, _i)), _bg, _tx)
+                f_cell(1, _r, (_v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : array.get(rStg, _i) == 9 ? "👁 new" : "👁 watch") + f_rs(array.get(rRsi, _i)), _bg, _tx)
                 f_cell(2, _r, array.get(rWhy, _i), _bg, _tx)
                 _r := _r + 1
     for _i = 0 to (_n > 0 ? _n - 1 : 0)
