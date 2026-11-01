@@ -145,6 +145,7 @@ f_state() =>
     _dn   = not na(_slp) and _slp < -flatPct
     _hh   = ta.highest(high, swingN) > ta.highest(high, swingN)[swingN]
     _hl   = ta.lowest(low, swingN) > ta.lowest(low, swingN)[swingN]
+    _rsi  = ta.rsi(close, 14)
     _lo52 = ta.lowest(low, 250)
     _hi52 = ta.highest(high, 250)
     _va   = ta.sma(volume, 20)
@@ -160,7 +161,7 @@ f_state() =>
     _bLo  = ta.lowest(low, baseN)[1]
     _base = not na(_bLo) and _bLo > 0 and (_bHi - _bLo) / _bLo * 100 <= baseW
     _brk  = _base and close > _bHi and not na(_vx) and _vx >= brkVol and close > close[1]
-    [_stage, _dip ? 1 : 0, _brk ? 1 : 0, close, close[rsLen], _d50, _base ? _bHi : na, _d200, _lo52, _hi52]
+    [_stage, _dip ? 1 : 0, _brk ? 1 : 0, close, close[rsLen], _d50, _base ? _bHi : na, _d200, _lo52, _hi52, _rsi]
 
 var array<string> rSym = array.new<string>()
 var array<int>    rVer = array.new<int>()
@@ -169,6 +170,7 @@ var array<float>  rGap = array.new<float>()
 var array<bool>   rMe  = array.new<bool>()
 var array<int>    rMiss = array.new<int>(1, 0)
 var array<int>    rStg = array.new<int>()
+var array<float>  rRsi = array.new<float>()
 
 // 1 US, 2 India, 3 crypto — taken from the symbol string rather than from
 // which input slot it sits in, so any slot can hold anything.
@@ -197,7 +199,7 @@ benchPick = chartMkt == 2 ? rsBenc2 : chartMkt == 3 ? rsBenc3 : rsBench
 // 3 = buy, 2 = stage 2 with no entry, 1 = watchlist, 0 = no.
 // Only the market you are looking at is collected, so a US chart never lists
 // NSE names and the panel stays the length of one market.
-f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50, float _bhi, float _d200, float _lo, float _hi, bool _me) =>
+f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50, float _bhi, float _d200, float _lo, float _hi, float _rsi, bool _me) =>
     _m = f_mkt(_sym)
     if barstate.islast and na(_px) and not _me
         array.set(rMiss, 0, array.get(rMiss, 0) + 1)
@@ -235,6 +237,7 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
         _dist = _v == 2 and not na(_bhi) ? math.abs(_bhi - _px) / _px * 100 : _v == 2 and not na(_gap) and _gap > 0 ? _gap : 999.0
         array.push(rMe, _me)
         array.push(rStg, _st)
+        array.push(rRsi, _rsi)
         array.push(rGap, _dist)
         array.push(rSym, (_me ? "◆ " : "") + f_label(_sym))
         array.push(rVer, _v)
@@ -262,9 +265,12 @@ lvlSep = input.float(1.5, "Levels closer than this % are the same level", minval
 lvlAtr = input.float(1.0, "...or this many ATRs apart, whichever is wider", minval = 0.0, maxval = 5.0, step = 0.1, tooltip = "A fixed percentage packs four levels onto one shelf on a volatile name and spreads them too far on a quiet one. One ATR is roughly a day's range, so levels inside it are the same shelf.", group = "6. Levels & targets")
 resCol = input.color(#c62828, "Level above price", group = "6. Levels & targets")
 supCol2 = input.color(#2e7d32, "Level below price", group = "6. Levels & targets")
+trOn   = input.bool(true, "Trendlines through the last two turns", tooltip = "One line through the last two pivot highs and one through the last two pivot lows. Converging lines are a wedge; the break of one is the signal.", group = "6. Levels & targets")
+trHiC  = input.color(#c62828, "Trendline through highs", group = "6. Levels & targets")
+trLoC  = input.color(#2e7d32, "Trendline through lows", group = "6. Levels & targets")
 boxOn  = input.bool(true, "Consolidation ranges", group = "6. Levels & targets")
 rngN   = input.int(20, "Bars that make a range", minval = 5, maxval = 120, group = "6. Levels & targets")
-rngW   = input.float(18.0, "A range is no wider than this %", minval = 2.0, maxval = 40.0, step = 0.5, group = "6. Levels & targets")
+rngW   = input.float(25.0, "A range is no wider than this %", minval = 2.0, maxval = 40.0, step = 0.5, group = "6. Levels & targets")
 boxCol = input.color(#1565c0, "Range fill", group = "6. Levels & targets")
 
 // Turning points, kept as they confirm. A level is only a level because price
@@ -280,6 +286,28 @@ if array.size(pvs) > 250
     array.shift(pvs)
 
 atrV = ta.atr(14)
+var float thA = na
+var float thB = na
+var int   txA = na
+var int   txB = na
+var float tlA = na
+var float tlB = na
+var int   lxA = na
+var int   lxB = na
+if not na(_ph)
+    thB := thA
+    txB := txA
+    thA := _ph
+    txA := bar_index - pvN
+if not na(_pl)
+    tlB := tlA
+    lxB := lxA
+    tlA := _pl
+    lxA := bar_index - pvN
+
+var line trH = na
+var line trL = na
+
 rgH = ta.highest(high, rngN)
 rgL = ta.lowest(low, rngN)
 rgH2 = ta.highest(high, rngN * 2)
@@ -297,8 +325,8 @@ var label supB1 = na
 var label supB2 = na
 var label supB3 = na
 
-[stMe, dpMe, bkMe, pxMe, ogMe, mdMe, bhMe, ddMe, loMe, hiMe] = request.security(syminfo.tickerid, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(syminfo.tickerid, stMe, dpMe, bkMe, pxMe, ogMe, mdMe, bhMe, ddMe, loMe, hiMe, true)
+[stMe, dpMe, bkMe, pxMe, ogMe, mdMe, bhMe, ddMe, loMe, hiMe, rsMe] = request.security(syminfo.tickerid, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(syminfo.tickerid, stMe, dpMe, bkMe, pxMe, ogMe, mdMe, bhMe, ddMe, loMe, hiMe, rsMe, true)
 
 plot(d200on and not na(ddMe) ? ddMe : na, "200-day average", color = d200col, linewidth = 2)
 plot(d50on and not na(mdMe) ? mdMe : na, "50-day average", color = d50col, linewidth = 1)
@@ -332,46 +360,46 @@ if barstate.islast
     if _ok3
         supL3 := line.new(bar_index - 2, sup3, bar_index, sup3, extend = extend.both, color = color.new(supCol, 55), width = 1, style = line.style_dotted)
         supB3 := label.new(bar_index, sup3, "5-yr low  " + str.tostring(sup3, format.mintick), style = label.style_label_left, color = color.new(supCol, 55), textcolor = color.white, size = size.small)
-[st01, dp01, bk01, px01, og01, md01, bh01, dd01, lo01, hi01] = request.security(sym01, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym01, st01, dp01, bk01, px01, og01, md01, bh01, dd01, lo01, hi01, false)
-[st02, dp02, bk02, px02, og02, md02, bh02, dd02, lo02, hi02] = request.security(sym02, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym02, st02, dp02, bk02, px02, og02, md02, bh02, dd02, lo02, hi02, false)
-[st03, dp03, bk03, px03, og03, md03, bh03, dd03, lo03, hi03] = request.security(sym03, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym03, st03, dp03, bk03, px03, og03, md03, bh03, dd03, lo03, hi03, false)
-[st04, dp04, bk04, px04, og04, md04, bh04, dd04, lo04, hi04] = request.security(sym04, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym04, st04, dp04, bk04, px04, og04, md04, bh04, dd04, lo04, hi04, false)
-[st05, dp05, bk05, px05, og05, md05, bh05, dd05, lo05, hi05] = request.security(sym05, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym05, st05, dp05, bk05, px05, og05, md05, bh05, dd05, lo05, hi05, false)
-[st06, dp06, bk06, px06, og06, md06, bh06, dd06, lo06, hi06] = request.security(sym06, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym06, st06, dp06, bk06, px06, og06, md06, bh06, dd06, lo06, hi06, false)
-[st07, dp07, bk07, px07, og07, md07, bh07, dd07, lo07, hi07] = request.security(sym07, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym07, st07, dp07, bk07, px07, og07, md07, bh07, dd07, lo07, hi07, false)
-[st08, dp08, bk08, px08, og08, md08, bh08, dd08, lo08, hi08] = request.security(sym08, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym08, st08, dp08, bk08, px08, og08, md08, bh08, dd08, lo08, hi08, false)
-[st09, dp09, bk09, px09, og09, md09, bh09, dd09, lo09, hi09] = request.security(sym09, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym09, st09, dp09, bk09, px09, og09, md09, bh09, dd09, lo09, hi09, false)
-[st10, dp10, bk10, px10, og10, md10, bh10, dd10, lo10, hi10] = request.security(sym10, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym10, st10, dp10, bk10, px10, og10, md10, bh10, dd10, lo10, hi10, false)
-[st11, dp11, bk11, px11, og11, md11, bh11, dd11, lo11, hi11] = request.security(sym11, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym11, st11, dp11, bk11, px11, og11, md11, bh11, dd11, lo11, hi11, false)
-[st12, dp12, bk12, px12, og12, md12, bh12, dd12, lo12, hi12] = request.security(sym12, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym12, st12, dp12, bk12, px12, og12, md12, bh12, dd12, lo12, hi12, false)
-[st13, dp13, bk13, px13, og13, md13, bh13, dd13, lo13, hi13] = request.security(sym13, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym13, st13, dp13, bk13, px13, og13, md13, bh13, dd13, lo13, hi13, false)
-[st14, dp14, bk14, px14, og14, md14, bh14, dd14, lo14, hi14] = request.security(sym14, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym14, st14, dp14, bk14, px14, og14, md14, bh14, dd14, lo14, hi14, false)
-[st15, dp15, bk15, px15, og15, md15, bh15, dd15, lo15, hi15] = request.security(sym15, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym15, st15, dp15, bk15, px15, og15, md15, bh15, dd15, lo15, hi15, false)
-[st16, dp16, bk16, px16, og16, md16, bh16, dd16, lo16, hi16] = request.security(sym16, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym16, st16, dp16, bk16, px16, og16, md16, bh16, dd16, lo16, hi16, false)
-[st17, dp17, bk17, px17, og17, md17, bh17, dd17, lo17, hi17] = request.security(sym17, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym17, st17, dp17, bk17, px17, og17, md17, bh17, dd17, lo17, hi17, false)
-[st18, dp18, bk18, px18, og18, md18, bh18, dd18, lo18, hi18] = request.security(sym18, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym18, st18, dp18, bk18, px18, og18, md18, bh18, dd18, lo18, hi18, false)
-[st19, dp19, bk19, px19, og19, md19, bh19, dd19, lo19, hi19] = request.security(sym19, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym19, st19, dp19, bk19, px19, og19, md19, bh19, dd19, lo19, hi19, false)
-[st20, dp20, bk20, px20, og20, md20, bh20, dd20, lo20, hi20] = request.security(sym20, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
-f_push(sym20, st20, dp20, bk20, px20, og20, md20, bh20, dd20, lo20, hi20, false)
+[st01, dp01, bk01, px01, og01, md01, bh01, dd01, lo01, hi01, rs01] = request.security(sym01, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym01, st01, dp01, bk01, px01, og01, md01, bh01, dd01, lo01, hi01, rs01, false)
+[st02, dp02, bk02, px02, og02, md02, bh02, dd02, lo02, hi02, rs02] = request.security(sym02, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym02, st02, dp02, bk02, px02, og02, md02, bh02, dd02, lo02, hi02, rs02, false)
+[st03, dp03, bk03, px03, og03, md03, bh03, dd03, lo03, hi03, rs03] = request.security(sym03, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym03, st03, dp03, bk03, px03, og03, md03, bh03, dd03, lo03, hi03, rs03, false)
+[st04, dp04, bk04, px04, og04, md04, bh04, dd04, lo04, hi04, rs04] = request.security(sym04, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym04, st04, dp04, bk04, px04, og04, md04, bh04, dd04, lo04, hi04, rs04, false)
+[st05, dp05, bk05, px05, og05, md05, bh05, dd05, lo05, hi05, rs05] = request.security(sym05, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym05, st05, dp05, bk05, px05, og05, md05, bh05, dd05, lo05, hi05, rs05, false)
+[st06, dp06, bk06, px06, og06, md06, bh06, dd06, lo06, hi06, rs06] = request.security(sym06, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym06, st06, dp06, bk06, px06, og06, md06, bh06, dd06, lo06, hi06, rs06, false)
+[st07, dp07, bk07, px07, og07, md07, bh07, dd07, lo07, hi07, rs07] = request.security(sym07, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym07, st07, dp07, bk07, px07, og07, md07, bh07, dd07, lo07, hi07, rs07, false)
+[st08, dp08, bk08, px08, og08, md08, bh08, dd08, lo08, hi08, rs08] = request.security(sym08, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym08, st08, dp08, bk08, px08, og08, md08, bh08, dd08, lo08, hi08, rs08, false)
+[st09, dp09, bk09, px09, og09, md09, bh09, dd09, lo09, hi09, rs09] = request.security(sym09, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym09, st09, dp09, bk09, px09, og09, md09, bh09, dd09, lo09, hi09, rs09, false)
+[st10, dp10, bk10, px10, og10, md10, bh10, dd10, lo10, hi10, rs10] = request.security(sym10, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym10, st10, dp10, bk10, px10, og10, md10, bh10, dd10, lo10, hi10, rs10, false)
+[st11, dp11, bk11, px11, og11, md11, bh11, dd11, lo11, hi11, rs11] = request.security(sym11, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym11, st11, dp11, bk11, px11, og11, md11, bh11, dd11, lo11, hi11, rs11, false)
+[st12, dp12, bk12, px12, og12, md12, bh12, dd12, lo12, hi12, rs12] = request.security(sym12, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym12, st12, dp12, bk12, px12, og12, md12, bh12, dd12, lo12, hi12, rs12, false)
+[st13, dp13, bk13, px13, og13, md13, bh13, dd13, lo13, hi13, rs13] = request.security(sym13, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym13, st13, dp13, bk13, px13, og13, md13, bh13, dd13, lo13, hi13, rs13, false)
+[st14, dp14, bk14, px14, og14, md14, bh14, dd14, lo14, hi14, rs14] = request.security(sym14, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym14, st14, dp14, bk14, px14, og14, md14, bh14, dd14, lo14, hi14, rs14, false)
+[st15, dp15, bk15, px15, og15, md15, bh15, dd15, lo15, hi15, rs15] = request.security(sym15, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym15, st15, dp15, bk15, px15, og15, md15, bh15, dd15, lo15, hi15, rs15, false)
+[st16, dp16, bk16, px16, og16, md16, bh16, dd16, lo16, hi16, rs16] = request.security(sym16, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym16, st16, dp16, bk16, px16, og16, md16, bh16, dd16, lo16, hi16, rs16, false)
+[st17, dp17, bk17, px17, og17, md17, bh17, dd17, lo17, hi17, rs17] = request.security(sym17, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym17, st17, dp17, bk17, px17, og17, md17, bh17, dd17, lo17, hi17, rs17, false)
+[st18, dp18, bk18, px18, og18, md18, bh18, dd18, lo18, hi18, rs18] = request.security(sym18, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym18, st18, dp18, bk18, px18, og18, md18, bh18, dd18, lo18, hi18, rs18, false)
+[st19, dp19, bk19, px19, og19, md19, bh19, dd19, lo19, hi19, rs19] = request.security(sym19, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym19, st19, dp19, bk19, px19, og19, md19, bh19, dd19, lo19, hi19, rs19, false)
+[st20, dp20, bk20, px20, og20, md20, bh20, dd20, lo20, hi20, rs20] = request.security(sym20, scanTf, f_state(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+f_push(sym20, st20, dp20, bk20, px20, og20, md20, bh20, dd20, lo20, hi20, rs20, false)
 
 // ═══════════════════════════════════════════════════════════════
 // THE PANEL
@@ -383,6 +411,9 @@ pPos = sPos == "Top Left" ? position.top_left : sPos == "Bottom Right" ? positio
 pSz  = sSize == "Tiny" ? size.tiny : sSize == "Normal" ? size.normal : size.small
 
 var table sc = table.new(pPos, 3, 42, border_width = 1)
+
+f_rs(float _v) =>
+    na(_v) ? "" : "   " + str.tostring(_v, "#")
 
 f_cell(int _c, int _r, string _s, color _bg, color _tx) =>
     table.cell(sc, _c, _r, _s, text_color = _tx, bgcolor = _bg, text_halign = text.align_left, text_size = pSz)
@@ -401,6 +432,12 @@ if barstate.islast
     array.clear(lvLb)
     array.clear(lvBx)
     array.clear(lvOut)
+    line.delete(trH)
+    line.delete(trL)
+    if trOn and not na(thA) and not na(thB) and txA > txB
+        trH := line.new(txB, thB, txA, thA, extend = extend.right, color = trHiC, width = 2)
+    if trOn and not na(tlA) and not na(tlB) and lxA > lxB
+        trL := line.new(lxB, tlB, lxA, tlA, extend = extend.right, color = trLoC, width = 2)
 
     // Nearest turning points first, so the levels drawn are the ones price has
     // to deal with next, not the loudest ones on the chart.
@@ -465,7 +502,7 @@ if barstate.islast
             _buys := _buys + 1
     _mName = chartMkt == 2 ? "INDIA" : chartMkt == 3 ? "CRYPTO" : "US"
     f_cell(0, 0, "STAGE SCANNER · " + _mName, color.new(#1a237e, 0), color.white)
-    f_cell(1, 0, _buys > 0 ? "✅ " + str.tostring(_buys) + " BUY" : "⛔ 0 buy", _buys > 0 ? color.new(#00c853, 0) : color.new(color.gray, 30), color.white)
+    f_cell(1, 0, _buys > 0 ? "✅ " + str.tostring(_buys) + " BUY   RSI" : "⛔ 0 buy   RSI", _buys > 0 ? color.new(#00c853, 0) : color.new(color.gray, 30), color.white)
     _tfBad = scanTf != "D" and scanTf != "1D"
     f_cell(2, 0, _tfBad ? "⚠ " + scanTf + " — the 200-day is now 200 " + scanTf + " bars" : str.tostring(_n) + " " + _mName + " on " + scanTf + (_buys > 0 ? " — green rows are the buys" : " — nothing to buy yet; each row says what it needs") + "   ·   ◆ is this chart" + (array.get(rMiss, 0) > 0 ? "   ·   ⚠ " + str.tostring(array.get(rMiss, 0)) + " symbol(s) not resolving — check the list" : ""), _tfBad ? color.new(#b71c1c, 0) : color.new(#1a237e, 0), color.white)
     _r = 1
@@ -475,7 +512,7 @@ if barstate.islast
             _bg = _v == 3 ? color.new(#00e676, 0) : _v == 2 ? color.new(#1b5e20, 0) : _v == 1 ? color.new(#37474f, 0) : color.new(#b71c1c, 0)
             _tx = _v == 3 ? color.black : color.white
             f_cell(0, _r, array.get(rSym, _i), _bg, _tx)
-            f_cell(1, _r, _v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : _v == 1 ? "👁 watch" : array.get(rStg, _i) == 4 ? "⛔ SELL" : "⛔ no", _bg, _tx)
+            f_cell(1, _r, (_v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : _v == 1 ? "👁 watch" : array.get(rStg, _i) == 4 ? "⛔ SELL" : "⛔ no") + f_rs(array.get(rRsi, _i)), _bg, _tx)
             f_cell(2, _r, array.get(rWhy, _i), _bg, _tx)
             _r := _r + 1
     float _up1 = na
@@ -532,16 +569,17 @@ if barstate.islast
                 _bg = _v == 3 ? color.new(#00e676, 0) : _v == 2 ? color.new(#1b5e20, 0) : color.new(#37474f, 0)
                 _tx = _v == 3 ? color.black : color.white
                 f_cell(0, _r, array.get(rSym, _i), _bg, _tx)
-                f_cell(1, _r, _v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : "👁 watch", _bg, _tx)
+                f_cell(1, _r, (_v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : "👁 watch") + f_rs(array.get(rRsi, _i)), _bg, _tx)
                 f_cell(2, _r, array.get(rWhy, _i), _bg, _tx)
                 _r := _r + 1
     for _i = 0 to (_n > 0 ? _n - 1 : 0)
         if showAll and _n > 0 and _r < 41 and array.get(rVer, _i) == 0 and not array.get(rMe, _i)
             f_cell(0, _r, array.get(rSym, _i), color.new(#b71c1c, 0), color.white)
-            f_cell(1, _r, array.get(rStg, _i) == 4 ? "⛔ SELL" : "⛔ no", color.new(#b71c1c, 0), color.white)
+            f_cell(1, _r, (array.get(rStg, _i) == 4 ? "⛔ SELL" : "⛔ no") + f_rs(array.get(rRsi, _i)), color.new(#b71c1c, 0), color.white)
             f_cell(2, _r, array.get(rWhy, _i), color.new(#b71c1c, 0), color.white)
             _r := _r + 1
     array.set(rMiss, 0, 0)
+    array.clear(rRsi)
     array.clear(rStg)
     array.clear(rMe)
     array.clear(rGap)
