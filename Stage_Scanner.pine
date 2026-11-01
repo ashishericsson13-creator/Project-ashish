@@ -256,14 +256,14 @@ supMax  = input.float(40.0, "Only draw supports within this % of price", minval 
 plot(w200on and not na(w200) ? w200 : na, "200-week average", color = w200col, linewidth = 2)
 
 lvlOn  = input.bool(true, "Key price levels", group = "6. Levels & targets")
-pvN    = input.int(10, "Pivot strength — bars either side of a turn", minval = 2, maxval = 60, group = "6. Levels & targets")
-lvlMax = input.int(5, "How many levels to draw", minval = 2, maxval = 12, group = "6. Levels & targets")
+pvN    = input.int(5, "Pivot strength — bars either side of a turn", minval = 2, maxval = 60, group = "6. Levels & targets")
+lvlMax = input.int(4, "Levels to draw ON EACH SIDE of price", minval = 1, maxval = 10, group = "6. Levels & targets")
 lvlSep = input.float(1.5, "Levels closer than this % are the same level", minval = 0.1, maxval = 10.0, step = 0.1, group = "6. Levels & targets")
 resCol = input.color(#c62828, "Level above price", group = "6. Levels & targets")
 supCol2 = input.color(#2e7d32, "Level below price", group = "6. Levels & targets")
 boxOn  = input.bool(true, "Consolidation ranges", group = "6. Levels & targets")
 rngN   = input.int(20, "Bars that make a range", minval = 5, maxval = 120, group = "6. Levels & targets")
-rngW   = input.float(12.0, "A range is no wider than this %", minval = 2.0, maxval = 40.0, step = 0.5, group = "6. Levels & targets")
+rngW   = input.float(18.0, "A range is no wider than this %", minval = 2.0, maxval = 40.0, step = 0.5, group = "6. Levels & targets")
 boxCol = input.color(#1565c0, "Range fill", group = "6. Levels & targets")
 
 // Turning points, kept as they confirm. A level is only a level because price
@@ -275,7 +275,7 @@ if not na(_ph)
     array.push(pvs, _ph)
 if not na(_pl)
     array.push(pvs, _pl)
-if array.size(pvs) > 150
+if array.size(pvs) > 250
     array.shift(pvs)
 
 rgH = ta.highest(high, rngN)
@@ -402,29 +402,35 @@ if barstate.islast
     // to deal with next, not the loudest ones on the chart.
     _np = array.size(pvs)
     _seen = array.new<bool>(math.max(_np, 1), false)
-    for _k = 0 to (_np > 0 ? _np - 1 : 0)
-        if _np > 0 and array.size(lvOut) < lvlMax
-            _pick = -1
-            _near = 1.0e12
-            for _i = 0 to _np - 1
-                if not array.get(_seen, _i)
-                    _d = math.abs(array.get(pvs, _i) - close)
-                    if _d < _near
-                        _near := _d
-                        _pick := _i
-            if _pick >= 0
-                array.set(_seen, _pick, true)
-                _lv = array.get(pvs, _pick)
-                _dup = false
-                for _j = 0 to (array.size(lvOut) > 0 ? array.size(lvOut) - 1 : 0)
-                    if array.size(lvOut) > 0 and _lv > 0 and math.abs(array.get(lvOut, _j) - _lv) / _lv * 100 < lvlSep
-                        _dup := true
-                if not _dup and _lv > 0
-                    array.push(lvOut, _lv)
-                    if lvlOn
-                        _c = _lv > close ? resCol : supCol2
-                        array.push(lvLn, line.new(bar_index - 2, _lv, bar_index, _lv, extend = extend.both, color = color.new(_c, 40), width = 1, style = line.style_solid))
-                        array.push(lvLb, label.new(bar_index, _lv, str.tostring(_lv, format.mintick), style = label.style_label_left, color = color.new(_c, 20), textcolor = color.white, size = size.tiny))
+    for _side = 0 to 1
+        array.fill(_seen, false)
+        _got = 0
+        for _k = 0 to (_np > 0 ? _np - 1 : 0)
+            if _np > 0 and _got < lvlMax
+                _pick = -1
+                _near = 1.0e12
+                for _i = 0 to _np - 1
+                    _c0 = array.get(pvs, _i)
+                    _fits = _side == 0 ? _c0 > close : _c0 < close
+                    if not array.get(_seen, _i) and _fits
+                        _d = math.abs(_c0 - close)
+                        if _d < _near
+                            _near := _d
+                            _pick := _i
+                if _pick >= 0
+                    array.set(_seen, _pick, true)
+                    _lv = array.get(pvs, _pick)
+                    _dup = false
+                    for _j = 0 to (array.size(lvOut) > 0 ? array.size(lvOut) - 1 : 0)
+                        if array.size(lvOut) > 0 and _lv > 0 and math.abs(array.get(lvOut, _j) - _lv) / _lv * 100 < lvlSep
+                            _dup := true
+                    if not _dup and _lv > 0
+                        array.push(lvOut, _lv)
+                        _got := _got + 1
+                        if lvlOn
+                            _c = _lv > close ? resCol : supCol2
+                            array.push(lvLn, line.new(bar_index - 2, _lv, bar_index, _lv, extend = extend.both, color = color.new(_c, 40), width = 1, style = line.style_solid))
+                            array.push(lvLb, label.new(bar_index, _lv, str.tostring(_lv, format.mintick), style = label.style_label_left, color = color.new(_c, 20), textcolor = color.white, size = size.tiny))
 
     // The stretches where price went nowhere. A breakout only means something
     // against one of these, which is why they are worth shading.
@@ -434,7 +440,7 @@ if barstate.islast
         for _i = 0 to 299
             if _skip > 0
                 _skip := _skip - 1
-            else if _found < 2
+            else if _found < 3
                 _bh = rgH[_i]
                 _bl = rgL[_i]
                 if not na(_bl) and _bl > 0 and not na(_bh) and (_bh - _bl) / _bl * 100 <= rngW
