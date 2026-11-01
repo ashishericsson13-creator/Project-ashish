@@ -259,6 +259,7 @@ lvlOn  = input.bool(true, "Key price levels", group = "6. Levels & targets")
 pvN    = input.int(5, "Pivot strength — bars either side of a turn", minval = 2, maxval = 60, group = "6. Levels & targets")
 lvlMax = input.int(4, "Levels to draw ON EACH SIDE of price", minval = 1, maxval = 10, group = "6. Levels & targets")
 lvlSep = input.float(1.5, "Levels closer than this % are the same level", minval = 0.1, maxval = 10.0, step = 0.1, group = "6. Levels & targets")
+lvlAtr = input.float(1.0, "...or this many ATRs apart, whichever is wider", minval = 0.0, maxval = 5.0, step = 0.1, tooltip = "A fixed percentage packs four levels onto one shelf on a volatile name and spreads them too far on a quiet one. One ATR is roughly a day's range, so levels inside it are the same shelf.", group = "6. Levels & targets")
 resCol = input.color(#c62828, "Level above price", group = "6. Levels & targets")
 supCol2 = input.color(#2e7d32, "Level below price", group = "6. Levels & targets")
 boxOn  = input.bool(true, "Consolidation ranges", group = "6. Levels & targets")
@@ -278,8 +279,11 @@ if not na(_pl)
 if array.size(pvs) > 250
     array.shift(pvs)
 
+atrV = ta.atr(14)
 rgH = ta.highest(high, rngN)
 rgL = ta.lowest(low, rngN)
+rgH2 = ta.highest(high, rngN * 2)
+rgL2 = ta.lowest(low, rngN * 2)
 
 var array<line>  lvLn = array.new<line>()
 var array<label> lvLb = array.new<label>()
@@ -400,6 +404,7 @@ if barstate.islast
 
     // Nearest turning points first, so the levels drawn are the ones price has
     // to deal with next, not the loudest ones on the chart.
+    _sepPct = math.max(lvlSep, na(atrV) or close <= 0 ? 0.0 : atrV / close * 100 * lvlAtr)
     _np = array.size(pvs)
     _seen = array.new<bool>(math.max(_np, 1), false)
     for _side = 0 to 1
@@ -422,7 +427,7 @@ if barstate.islast
                     _lv = array.get(pvs, _pick)
                     _dup = false
                     for _j = 0 to (array.size(lvOut) > 0 ? array.size(lvOut) - 1 : 0)
-                        if array.size(lvOut) > 0 and _lv > 0 and math.abs(array.get(lvOut, _j) - _lv) / _lv * 100 < lvlSep
+                        if array.size(lvOut) > 0 and _lv > 0 and math.abs(array.get(lvOut, _j) - _lv) / _lv * 100 < _sepPct
                             _dup := true
                     if not _dup and _lv > 0
                         array.push(lvOut, _lv)
@@ -441,12 +446,16 @@ if barstate.islast
             if _skip > 0
                 _skip := _skip - 1
             else if _found < 3
-                _bh = rgH[_i]
-                _bl = rgL[_i]
+                _h2 = rgH2[_i]
+                _l2 = rgL2[_i]
+                _wide = not na(_l2) and _l2 > 0 and not na(_h2) and (_h2 - _l2) / _l2 * 100 <= rngW
+                _bh = _wide ? _h2 : rgH[_i]
+                _bl = _wide ? _l2 : rgL[_i]
+                _len = _wide ? rngN * 2 : rngN
                 if not na(_bl) and _bl > 0 and not na(_bh) and (_bh - _bl) / _bl * 100 <= rngW
-                    array.push(lvBx, box.new(bar_index - _i - rngN + 1, _bh, bar_index - _i, _bl, border_color = color.new(boxCol, 35), bgcolor = color.new(boxCol, 85)))
+                    array.push(lvBx, box.new(bar_index - _i - _len + 1, _bh, bar_index - _i, _bl, border_color = color.new(boxCol, 35), bgcolor = color.new(boxCol, 85)))
                     _found := _found + 1
-                    _skip := rngN
+                    _skip := _len
 
     table.clear(sc, 0, 0, 2, 41)
     _n = array.size(rSym)
