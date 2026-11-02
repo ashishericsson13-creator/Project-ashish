@@ -212,15 +212,22 @@ f_bench() =>
     var int   _ftdAgo = -1
     var bool  _recl = false
     _d50 = ta.sma(close, 50)
-    if not na(_attLo) and low < _attLo
+    _corr = not na(_d50) and close < _d50
+    if not _corr
+        _att := 0
+        _attLo := na
+    else if _att == 0
+        // still falling: follow the low down and wait for the first up close
+        _attLo := na(_attLo) ? low : math.min(_attLo, low)
+        if close > close[1]
+            _att := 1
+            _attLo := low
+    else if low < _attLo
         _att := 0
         _attLo := low
         _ftdAgo := -1
-    else if _att >= 1
+    else
         _att := _att + 1
-    else if close > close[1]
-        _att := 1
-        _attLo := low
     _pct = close[1] > 0 ? (close - close[1]) / close[1] * 100 : 0.0
     _ftd = _att >= ftdDay and _pct >= ftdPct and volume > volume[1]
     if _ftd
@@ -240,6 +247,7 @@ f_bench() =>
 [bNow, bOld, bAtt, bFtd, bPct, bD50, bAtLo, bRecl] = request.security(benchPick, scanTf, f_bench(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
 mktConf = not na(bFtd) and bFtd >= 0
 mktAtt  = not na(bAtt) and bAtt >= 1 and not mktConf
+mktDft  = not mktConf and not mktAtt and not na(bD50) and not na(bNow) and bNow >= bD50
 mktUnd  = not na(bD50) and not na(bNow) and bNow < bD50
 
 // 3 = buy, 2 = stage 2 with no entry, 1 = watchlist, 0 = no.
@@ -598,8 +606,10 @@ if barstate.islast
                 else if na(_dn2) or _lv > _dn2
                     _dn2 := _lv
     // Past the last level drawn, the year's extreme is the only thing left.
-    _upT = na(_up2) and not na(hiMe) and hiMe > close * 1.005 ? hiMe : _up2
-    _dnT = na(_dn2) and not na(loMe) and loMe < close * 0.995 ? loMe : _dn2
+    _upFb = not na(hiMe) and hiMe > close * 1.005 and (na(_up1) or math.abs(hiMe - _up1) / _up1 * 100 > 1.0)
+    _dnFb = not na(loMe) and loMe < close * 0.995 and (na(_dn1) or math.abs(loMe - _dn1) / _dn1 * 100 > 1.0)
+    _upT = na(_up2) and _upFb ? hiMe : _up2
+    _dnT = na(_dn2) and _dnFb ? loMe : _dn2
     if _r < 41 and close > 0
         _pct1 = na(_up1) ? "" : " (+" + str.tostring((_up1 - close) / close * 100, "#.#") + "%)"
         _pct2 = na(_upT) ? "" : " (+" + str.tostring((_upT - close) / close * 100, "#.#") + "%)"
@@ -623,10 +633,11 @@ if barstate.islast
             _bUp := _sg == 2 ? _bUp + 1 : _bUp
             _bDn := _sg == 4 ? _bDn + 1 : _bDn
     if _r < 41
-        _mBg = mktConf ? color.new(#00e676, 0) : mktAtt ? color.new(#f9a825, 0) : color.new(#b71c1c, 0)
+        _mBg = mktConf ? color.new(#00e676, 0) : mktAtt or mktDft ? color.new(#f9a825, 0) : color.new(#b71c1c, 0)
         _mTx = mktConf ? color.black : color.white
-        _mWord = mktConf ? "✅ GO" : mktAtt ? "◷ WAIT" : "⛔ CASH"
+        _mWord = mktConf ? "✅ GO" : mktAtt or mktDft ? "◷ WAIT" : "⛔ CASH"
         _mWhy = (mktConf ? "CONFIRMED UPTREND — follow-through day was " + str.tostring(bFtd) + " bars back and still stands. Buy, but start small and add only if the first buys work"
+              : mktDft ? "NO FOLLOW-THROUGH — the index is back over its 50-day but no day since has gained over " + str.tostring(ftdPct, "#.##") + "% on heavier volume. Nothing has confirmed, so no new buys yet"
               : mktAtt ? "RALLY ATTEMPT, DAY " + str.tostring(bAtt) + " — from day " + str.tostring(ftdDay) + " a gain over " + str.tostring(ftdPct, "#.##") + "% on heavier volume is the follow-through. Undercut " + str.tostring(bAtLo, format.mintick) + " and the count restarts"
               : "IN CORRECTION — no rally attempt yet. No new buys, raise cash, cut any loss at 7-8%")
               + (mktUnd ? (mktConf and bRecl == 0 ? "   ·   it has not reclaimed its 50-day yet, so keep size small" : "   ·   index under its 50-day") : "")
