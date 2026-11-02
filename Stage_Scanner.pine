@@ -194,6 +194,10 @@ chartBase = f_base(syminfo.ticker)
 
 // The three benchmarks, declared ahead of f_push because it reads them.
 benchPick = chartMkt == 2 ? rsBenc2 : chartMkt == 3 ? rsBenc3 : rsBench
+peOn   = input.bool(true, "Valuation row for this chart's symbol", tooltip = "P/E needs a financial request per symbol and Pine allows 40 requests in total. The scan already spends 23, so the twenty list rows cannot each carry one without cutting the list to about seventeen names.", group = "8. Valuation")
+epsTTM = request.financial(syminfo.tickerid, "EARNINGS_PER_SHARE_BASIC", "TTM", ignore_invalid_symbol = true)
+peV    = not na(epsTTM) and epsTTM > 0 ? close / epsTTM : na
+
 ftdPct = input.float(1.25, "A follow-through day needs the index up this much (%)", minval = 0.3, maxval = 5.0, step = 0.05, group = "7. Market direction")
 ftdDay = input.int(4, "...on day 4 of the rally attempt or later", minval = 2, maxval = 15, group = "7. Market direction")
 ftdOn  = input.bool(true, "Hold new buys until the market confirms", tooltip = "O'Neil's M. Three stocks in four follow the index, so a buy signal in a market that has not confirmed is a buy signal with the odds against it.", group = "7. Market direction")
@@ -565,6 +569,14 @@ if barstate.islast
             f_cell(1, _r, (_v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : _v == 1 ? (array.get(rStg, _i) == 9 ? "👁 new" : "👁 watch") : array.get(rStg, _i) == 4 ? "⛔ SELL" : "⛔ no") + f_rs(array.get(rRsi, _i)), _bg, _tx)
             f_cell(2, _r, array.get(rWhy, _i), _bg, _tx)
             _r := _r + 1
+    if peOn and _r < 41
+        _pBg = color.new(#4527a0, 0)
+        f_cell(0, _r, "◆ VALUATION", _pBg, color.white)
+        f_cell(1, _r, na(peV) ? "no P/E" : "P/E " + str.tostring(peV, "#.#"), _pBg, color.white)
+        f_cell(2, _r, na(epsTTM) ? "no earnings figures published for this symbol — an index, a fund or a crypto pair has none"
+             : epsTTM <= 0 ? "loss-making: EPS " + str.tostring(epsTTM, "#.##") + " over the last twelve months, so there is no P/E to quote"
+             : "earns " + str.tostring(epsTTM, "#.##") + " a share over the last twelve months, priced at " + str.tostring(close, format.mintick), _pBg, color.white)
+        _r := _r + 1
     float _up1 = na
     float _up2 = na
     float _dn1 = na
