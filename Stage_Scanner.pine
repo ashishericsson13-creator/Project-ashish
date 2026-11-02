@@ -206,6 +206,7 @@ f_bench() =>
     var float _attLo = na
     var int   _att = 0
     var int   _ftdAgo = -1
+    var bool  _recl = false
     _d50 = ta.sma(close, 50)
     if not na(_attLo) and low < _attLo
         _att := 0
@@ -220,11 +221,19 @@ f_bench() =>
     _ftd = _att >= ftdDay and _pct >= ftdPct and volume > volume[1]
     if _ftd
         _ftdAgo := 0
+        _recl := false
     else if _ftdAgo >= 0
         _ftdAgo := _ftdAgo + 1
-    [close, close[rsLen], _att, _ftdAgo, _pct, _d50, _attLo]
+    // A follow-through has to take the index back over its 50-day to mean
+    // anything, and losing it again ends the uptrend it confirmed.
+    if _ftdAgo >= 0 and not na(_d50) and close > _d50
+        _recl := true
+    if _ftdAgo >= 0 and _recl and not na(_d50) and close < _d50
+        _ftdAgo := -1
+        _recl := false
+    [close, close[rsLen], _att, _ftdAgo, _pct, _d50, _attLo, _recl ? 1 : 0]
 
-[bNow, bOld, bAtt, bFtd, bPct, bD50, bAtLo] = request.security(benchPick, scanTf, f_bench(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+[bNow, bOld, bAtt, bFtd, bPct, bD50, bAtLo, bRecl] = request.security(benchPick, scanTf, f_bench(), ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
 mktConf = not na(bFtd) and bFtd >= 0
 mktAtt  = not na(bAtt) and bAtt >= 1 and not mktConf
 mktUnd  = not na(bD50) and not na(bNow) and bNow < bD50
@@ -608,7 +617,7 @@ if barstate.islast
         _mWhy = (mktConf ? "CONFIRMED UPTREND — follow-through day was " + str.tostring(bFtd) + " bars back and still stands. Buy, but start small and add only if the first buys work"
               : mktAtt ? "RALLY ATTEMPT, DAY " + str.tostring(bAtt) + " — from day " + str.tostring(ftdDay) + " a gain over " + str.tostring(ftdPct, "#.##") + "% on heavier volume is the follow-through. Undercut " + str.tostring(bAtLo, format.mintick) + " and the count restarts"
               : "IN CORRECTION — no rally attempt yet. No new buys, raise cash, cut any loss at 7-8%")
-              + (mktUnd ? "   ·   index under its 50-day" : "")
+              + (mktUnd ? (mktConf and bRecl == 0 ? "   ·   it has not reclaimed its 50-day yet, so keep size small" : "   ·   index under its 50-day") : "")
               + "   ·   breadth " + str.tostring(_bUp) + " advancing / " + str.tostring(_bDn) + " declining of " + str.tostring(_n)
         f_cell(0, _r, "★ MARKET · " + f_label(benchPick), _mBg, _mTx)
         f_cell(1, _r, _mWord, _mBg, _mTx)
