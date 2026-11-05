@@ -290,6 +290,7 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
              : _st == 4 ? "NO — Stage 4, stay away" + _btm
              : not na(_hi) ? "NO — nothing to buy under " + str.tostring(_hi, format.mintick) + ", the year's high, " + str.tostring((_hi - _px) / _px * 100, "#.#") + "% above" + _btm
              : "NO — above a stalled average" + _btm
+        _trig := _v == 2 and _hold ? _trig + "   ·   ⚠ market unconfirmed" : _trig
         // how far the trigger is, so the list can lead with the nearest
         _dist = _v == 2 and not na(_bhi) ? math.abs(_bhi - _px) / _px * 100 : _v == 2 and not na(_gap) and _gap > 0 ? _gap : 999.0
         array.push(rMe, _me)
