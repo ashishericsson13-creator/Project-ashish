@@ -155,7 +155,7 @@ f_state() =>
     // A falling 200-day can only be 4, or 1 once higher highs and higher lows
     // are both in. It can never be 3: that would quote a top's trigger on a
     // stock that is still in a downtrend.
-    _stage = _abv and _up and _hh and _hl ? 2 : _dn and not (_hh and _hl) ? 4 : _dn ? 1 : _abv ? 3 : 1
+    _stage = _abv and _up and _hh and _hl ? 2 : _dn and not (_hh and _hl) ? 4 : _dn ? 1 : _up and not _abv and not (_hh and _hl) ? 34 : _abv ? 3 : 1
     _dip  = _abv and not na(_d50) and low <= _d50 * (1 + dipNear / 100) and (na(_vx) or _vx <= dipVol)
     _bHi  = ta.highest(high, baseN)[1]
     _bLo  = ta.lowest(low, baseN)[1]
@@ -194,6 +194,12 @@ chartBase = f_base(syminfo.ticker)
 
 // The three benchmarks, declared ahead of f_push because it reads them.
 benchPick = chartMkt == 2 ? rsBenc2 : chartMkt == 3 ? rsBenc3 : rsBench
+vixOn  = input.bool(true, "Fear gauge row", group = "8. Valuation")
+vixUS  = input.symbol("CBOE:VIX", "Fear gauge — US and crypto", group = "8. Valuation")
+vixIN  = input.symbol("NSE:INDIAVIX", "Fear gauge — India", group = "8. Valuation")
+vixPick = chartMkt == 2 ? vixIN : vixUS
+[vixV, vixAv] = request.security(vixPick, "D", [close, ta.sma(close, 20)], ignore_invalid_symbol = true, lookahead = barmerge.lookahead_off)
+
 peOn   = input.bool(true, "Valuation row for this chart's symbol", tooltip = "P/E needs a financial request per symbol and Pine allows 40 requests in total. The scan already spends 23, so the twenty list rows cannot each carry one without cutting the list to about seventeen names.", group = "8. Valuation")
 epsTTM = request.financial(syminfo.tickerid, "EARNINGS_PER_SHARE_BASIC", "TTM", ignore_invalid_symbol = true)
 peV    = not na(epsTTM) and epsTTM > 0 ? close / epsTTM : na
@@ -285,6 +291,7 @@ f_push(string _sym, int _st, int _dp, int _bk, float _px, float _og, float _d50,
              : _v == 1 and not na(_d200) and _d200 <= _px ? "over the 200-day " + str.tostring(_d200, format.mintick) + " already — wait for it to stop falling and turn up" + _btm
              : _v == 1 and not na(_d200) ? "buy only over the 200-day " + str.tostring(_d200, format.mintick) + ", " + str.tostring(math.abs(_d200 - _px) / _px * 100, "#.#") + "% " + (_d200 > _px ? "above" : "below") + ", once it flattens" + _btm
              : _v == 1 ? "basing — needs the 200-day to turn up and price to clear it" + _btm
+             : _st == 34 and not na(_d200) ? "NO — it has broken under a 200-day that is still rising (" + str.tostring(_d200, format.mintick) + "). That is a top coming apart, not a base. The average has to roll over and then flatten before this is worth anything" + _btm
              : _st == 4 and not na(_d200) and _d200 <= _px ? "NO — over the 200-day " + str.tostring(_d200, format.mintick) + " already, but it is still falling and the last high was lower" + _btm
              : _st == 4 and not na(_d200) ? "NO — needs a higher low, then a close over the 200-day " + str.tostring(_d200, format.mintick) + _btm
              : _st == 4 ? "NO — Stage 4, stay away" + _btm
@@ -569,13 +576,49 @@ if barstate.islast
     _tfBad = scanTf != "D" and scanTf != "1D"
     f_cell(2, 0, _tfBad ? "⚠ " + scanTf + " — the 200-day is now 200 " + scanTf + " bars" : str.tostring(_n) + " " + _mName + " on " + scanTf + (_buys > 0 ? " — green rows are the buys" : " — nothing to buy yet; each row says what it needs") + "   ·   ◆ is this chart" + (array.get(rMiss, 0) > 0 ? "   ·   ⚠ " + str.tostring(array.get(rMiss, 0)) + " symbol(s) not resolving — check the list" : ""), _tfBad ? color.new(#b71c1c, 0) : color.new(#1a237e, 0), color.white)
     _r = 1
+    // Rule 1: three stocks in four follow the index, so count them.
+    _bUp = 0
+    _bDn = 0
+    for _i = 0 to (_n > 0 ? _n - 1 : 0)
+        if _n > 0
+            _sg = array.get(rStg, _i)
+            _bUp := _sg == 2 ? _bUp + 1 : _bUp
+            _bDn := _sg == 4 ? _bDn + 1 : _bDn
+    if _r < 41
+        _mBg = mktConf ? color.new(#00e676, 0) : mktAtt or mktDft ? color.new(#f9a825, 0) : color.new(#b71c1c, 0)
+        _mTx = mktConf ? color.black : color.white
+        _mWord = mktConf ? "✅ GO" : mktAtt or mktDft ? "◷ WAIT" : "⛔ CASH"
+        _mWhy = (mktConf ? "CONFIRMED UPTREND — follow-through day was " + str.tostring(bFtd) + " bars back and still stands. Buy, but start small and add only if the first buys work"
+              : mktDft ? "NO FOLLOW-THROUGH — the index is back over its 50-day but no day since has gained over " + str.tostring(ftdPct, "#.##") + "% on heavier volume. Nothing has confirmed, so no new buys yet"
+              : mktAtt ? "RALLY ATTEMPT, DAY " + str.tostring(bAtt) + " — from day " + str.tostring(ftdDay) + " a gain over " + str.tostring(ftdPct, "#.##") + "% on heavier volume is the follow-through. Undercut " + str.tostring(bAtLo, format.mintick) + " and the count restarts"
+              : "IN CORRECTION — no rally attempt yet. No new buys, raise cash, cut any loss at 7-8%")
+              + (mktUnd ? (mktConf and bRecl == 0 ? "   ·   it has not reclaimed its 50-day yet, so keep size small" : "   ·   index under its 50-day") : "")
+              + "   ·   breadth " + str.tostring(_bUp) + " advancing / " + str.tostring(_bDn) + " declining of " + str.tostring(_n)
+        f_cell(0, _r, "★ MARKET · " + f_label(benchPick), _mBg, _mTx)
+        f_cell(1, _r, _mWord, _mBg, _mTx)
+        f_cell(2, _r, _mWhy, _mBg, _mTx)
+        _r := _r + 1
+    if vixOn and _r < 41
+        _vHot = not na(vixV) and not na(vixAv) and vixV > vixAv
+        _vBg = na(vixV) ? color.new(color.gray, 20) : vixV >= 40 ? color.new(#6a1b9a, 0) : vixV >= 28 ? color.new(#bf360c, 0) : vixV >= 20 ? color.new(#f9a825, 0) : vixV >= 14 ? color.new(#37474f, 0) : color.new(#0277bd, 0)
+        _vTx = not na(vixV) and vixV >= 20 and vixV < 28 ? color.black : color.white
+        f_cell(0, _r, "★ FEAR · " + f_label(vixPick), _vBg, _vTx)
+        f_cell(1, _r, na(vixV) ? "—" : str.tostring(vixV, "#.#"), _vBg, _vTx)
+        f_cell(2, _r, na(vixV) ? "no volatility index available for this market"
+             : (vixV >= 40 ? "PANIC — this is the zone capitulation lows get made in, but a high reading alone has never been the signal"
+             : vixV >= 28 ? "FEAR — buying has paid better from here than from calm, once the index stops falling"
+             : vixV >= 20 ? "NERVOUS — above its normal band, risk is being repriced"
+             : vixV >= 14 ? "NORMAL — nothing unusual being priced"
+             : "COMPLACENT — protection is cheap and nobody wants it. Tops form in this zone")
+             + (_vHot ? "   ·   rising, above its own 20-day" : "   ·   easing, under its own 20-day"), _vBg, _vTx)
+        _r := _r + 1
     for _i = 0 to (_n > 0 ? _n - 1 : 0)
         if _n > 0 and array.get(rMe, _i)
             _v = array.get(rVer, _i)
             _bg = _v == 3 ? color.new(#00e676, 0) : _v == 2 ? color.new(#1b5e20, 0) : _v == 1 ? color.new(#37474f, 0) : color.new(#b71c1c, 0)
             _tx = _v == 3 ? color.black : color.white
             f_cell(0, _r, array.get(rSym, _i), _bg, _tx)
-            f_cell(1, _r, (_v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : _v == 1 ? (array.get(rStg, _i) == 9 ? "👁 new" : "👁 watch") : array.get(rStg, _i) == 4 ? "⛔ SELL" : "⛔ no") + f_rs(array.get(rRsi, _i)), _bg, _tx)
+            f_cell(1, _r, (_v == 3 ? "✅ BUY" : _v == 2 ? "► hold" : _v == 1 ? (array.get(rStg, _i) == 9 ? "👁 new" : "👁 watch") : array.get(rStg, _i) == 4 or array.get(rStg, _i) == 34 ? "⛔ SELL" : "⛔ no") + f_rs(array.get(rRsi, _i)), _bg, _tx)
             f_cell(2, _r, array.get(rWhy, _i), _bg, _tx)
             _r := _r + 1
     if peOn and _r < 41
@@ -625,28 +668,6 @@ if barstate.islast
         f_cell(1, _r, na(_dn1) ? "no floor" : str.tostring(_dn1, format.mintick), color.new(#bf360c, 0), color.white)
         f_cell(2, _r, na(_dn1) ? "nothing under it on this chart — it is at the bottom of its own range" : "loses " + str.tostring(_dn1, format.mintick) + _pct3 + " → then " + (na(_dnT) ? "nothing below in range" : str.tostring(_dnT, format.mintick) + _pct4), color.new(#bf360c, 0), color.white)
         _r := _r + 1
-    // Rule 1: three stocks in four follow the index, so count them.
-    _bUp = 0
-    _bDn = 0
-    for _i = 0 to (_n > 0 ? _n - 1 : 0)
-        if _n > 0
-            _sg = array.get(rStg, _i)
-            _bUp := _sg == 2 ? _bUp + 1 : _bUp
-            _bDn := _sg == 4 ? _bDn + 1 : _bDn
-    if _r < 41
-        _mBg = mktConf ? color.new(#00e676, 0) : mktAtt or mktDft ? color.new(#f9a825, 0) : color.new(#b71c1c, 0)
-        _mTx = mktConf ? color.black : color.white
-        _mWord = mktConf ? "✅ GO" : mktAtt or mktDft ? "◷ WAIT" : "⛔ CASH"
-        _mWhy = (mktConf ? "CONFIRMED UPTREND — follow-through day was " + str.tostring(bFtd) + " bars back and still stands. Buy, but start small and add only if the first buys work"
-              : mktDft ? "NO FOLLOW-THROUGH — the index is back over its 50-day but no day since has gained over " + str.tostring(ftdPct, "#.##") + "% on heavier volume. Nothing has confirmed, so no new buys yet"
-              : mktAtt ? "RALLY ATTEMPT, DAY " + str.tostring(bAtt) + " — from day " + str.tostring(ftdDay) + " a gain over " + str.tostring(ftdPct, "#.##") + "% on heavier volume is the follow-through. Undercut " + str.tostring(bAtLo, format.mintick) + " and the count restarts"
-              : "IN CORRECTION — no rally attempt yet. No new buys, raise cash, cut any loss at 7-8%")
-              + (mktUnd ? (mktConf and bRecl == 0 ? "   ·   it has not reclaimed its 50-day yet, so keep size small" : "   ·   index under its 50-day") : "")
-              + "   ·   breadth " + str.tostring(_bUp) + " advancing / " + str.tostring(_bDn) + " declining of " + str.tostring(_n)
-        f_cell(0, _r, "★ MARKET · " + f_label(benchPick), _mBg, _mTx)
-        f_cell(1, _r, _mWord, _mBg, _mTx)
-        f_cell(2, _r, _mWhy, _mBg, _mTx)
-        _r := _r + 1
     // 3 then 2 then 1; a flat no only when asked for
     _done = array.new<bool>(math.max(_n, 1), false)
     for _want = 3 to 1
@@ -670,7 +691,7 @@ if barstate.islast
     for _i = 0 to (_n > 0 ? _n - 1 : 0)
         if showAll and _n > 0 and _r < 41 and array.get(rVer, _i) == 0 and not array.get(rMe, _i)
             f_cell(0, _r, array.get(rSym, _i), color.new(#b71c1c, 0), color.white)
-            f_cell(1, _r, (array.get(rStg, _i) == 4 ? "⛔ SELL" : "⛔ no") + f_rs(array.get(rRsi, _i)), color.new(#b71c1c, 0), color.white)
+            f_cell(1, _r, (array.get(rStg, _i) == 4 or array.get(rStg, _i) == 34 ? "⛔ SELL" : "⛔ no") + f_rs(array.get(rRsi, _i)), color.new(#b71c1c, 0), color.white)
             f_cell(2, _r, array.get(rWhy, _i), color.new(#b71c1c, 0), color.white)
             _r := _r + 1
     array.set(rMiss, 0, 0)
